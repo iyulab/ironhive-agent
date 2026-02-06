@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>IronHive Agent - Reusable agent layer for AI-powered CLI tools</Description>
+    <!-- Disable CA1716: "Loop" namespace conflicts with reserved keyword in some languages -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.Extensions.AI -->
+    <PackageReference Include="Ironbees.Core" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NetEscapades.Configuration.Yaml" />
+
+    <!-- OpenAI SDK -->
+    <PackageReference Include="OpenAI" />
+
+    <!-- DI -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+
+    <!-- Diff -->
+    <PackageReference Include="DiffPlex" />
+
+    <!-- Glob -->
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+
+    <!-- IndexThinking (token management, reasoning) -->
+    <PackageReference Include="IndexThinking" />
+
+    <!-- MemoryIndexer (conversation memory, session management) -->
+    <PackageReference Include="MemoryIndexer" />
+    <PackageReference Include="MemoryIndexer.Sdk" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Submodules (will be replaced with NuGet packages later) -->
+    <ProjectReference Include="..\..\submodules\TokenMeter\src\TokenMeter\TokenMeter.csproj" />
+    <ProjectReference Include="..\..\submodules\ToolCallParser\src\ToolCallParser\ToolCallParser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IronHive (LLM abstraction) -->
+    <PackageReference Include="IronHive.Abstractions" />
+    <PackageReference Include="IronHive.Core" />
+  </ItemGroup>
+
+</Project>

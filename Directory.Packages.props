@@ -1,0 +1,39 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Microsoft.Extensions.AI -->
+    <PackageVersion Include="Ironbees.Core" Version="0.4.2" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
+    <!-- OpenAI SDK -->
+    <PackageVersion Include="ModelContextProtocol" Version="0.7.0-preview.1" />
+    <PackageVersion Include="OpenAI" Version="2.8.0" />
+    <!-- DI -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.2" />
+    <!-- Diff -->
+    <PackageVersion Include="DiffPlex" Version="1.9.0" />
+    <!-- Glob -->
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.2" />
+    <!-- YAML Config -->
+    <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
+    <!-- IndexThinking (token management, reasoning extraction) -->
+    <PackageVersion Include="IndexThinking" Version="0.15.0" />
+    <!-- MemoryIndexer (conversation memory, session management) -->
+    <PackageVersion Include="MemoryIndexer" Version="0.13.0" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.13.0" />
+    <!-- IronHive (LLM abstraction) -->
+    <PackageVersion Include="IronHive.Abstractions" Version="0.3.0" />
+    <PackageVersion Include="IronHive.Core" Version="0.3.0" />
+    <!-- Testing -->
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Xunit.SkippableFact" Version="1.5.61" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+</Project>

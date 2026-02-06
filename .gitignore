@@ -1,0 +1,46 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vscode/
+.idea/
+
+# Build outputs
+publish/
+artifacts/
+dist/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+
+# Local config (never commit secrets)
+.env
+.env.local
+
+# local only
+claudedocs/
+dev-docs/
+CLAUDE.md
+nul
