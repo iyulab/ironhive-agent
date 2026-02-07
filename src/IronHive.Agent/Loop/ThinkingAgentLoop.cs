@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using IronHive.Agent.Context;
 using IronHive.Agent.Tracking;
 using IndexThinking.Agents;
 using IndexThinking.Client;
@@ -16,6 +17,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     private readonly ThinkingChatClient _thinkingClient;
     private readonly AgentOptions _options;
     private readonly IUsageTracker? _usageTracker;
+    private readonly ContextManager? _contextManager;
     private readonly List<ChatMessage> _history = [];
 
     public ThinkingAgentLoop(
@@ -23,7 +25,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         IThinkingTurnManager turnManager,
         AgentOptions? options = null,
         ThinkingChatClientOptions? thinkingOptions = null,
-        IUsageTracker? usageTracker = null)
+        IUsageTracker? usageTracker = null,
+        ContextManager? contextManager = null)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(turnManager);
@@ -35,6 +38,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         _options = options ?? new AgentOptions();
         _usageTracker = usageTracker;
+        _contextManager = contextManager;
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))
@@ -55,8 +59,14 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         _history.Add(new ChatMessage(ChatRole.User, prompt));
 
+        // Set goal from first user message if context manager is present
+        _contextManager?.SetGoalFromHistory(_history);
+
+        // Prepare history (compact if needed, inject goal reminder)
+        var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
+
         var chatOptions = CreateChatOptions();
-        var response = await _thinkingClient.GetResponseAsync(_history, chatOptions, cancellationToken);
+        var response = await _thinkingClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
 
         // Add assistant response to history
         _history.AddRange(response.Messages);
@@ -89,11 +99,17 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         _history.Add(new ChatMessage(ChatRole.User, prompt));
 
+        // Set goal from first user message if context manager is present
+        _contextManager?.SetGoalFromHistory(_history);
+
+        // Prepare history (compact if needed, inject goal reminder)
+        var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
+
         var chatOptions = CreateChatOptions();
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
 
-        await foreach (var update in _thinkingClient.GetStreamingResponseAsync(_history, chatOptions, cancellationToken))
+        await foreach (var update in _thinkingClient.GetStreamingResponseAsync(historyToSend, chatOptions, cancellationToken))
         {
             // Extract thinking content from AdditionalProperties if available
             var thinkingDelta = ExtractStreamingThinking(update);
@@ -142,6 +158,31 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             }
         }
         _history.Add(assistantMessage);
+    }
+
+    /// <summary>
+    /// Prepares history for sending to the model.
+    /// Applies context management (compaction, goal reminder) if available.
+    /// </summary>
+    private async Task<IReadOnlyList<ChatMessage>> PrepareHistoryForSendingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_contextManager is null)
+        {
+            return _history.AsReadOnly();
+        }
+
+        var preparedHistory = await _contextManager.PrepareHistoryAsync(_history, cancellationToken);
+
+        // If history was modified (compaction or goal reminder injection),
+        // update our internal history to stay in sync
+        if (!ReferenceEquals(preparedHistory, _history))
+        {
+            _history.Clear();
+            _history.AddRange(preparedHistory);
+        }
+
+        return preparedHistory;
     }
 
     private static string? ExtractStreamingThinking(ChatResponseUpdate update)

@@ -103,14 +103,14 @@ public class ModeToolFilter : IModeToolFilter
 {
     private readonly IPermissionEvaluator _permissionEvaluator;
 
-    // Read-only tools allowed in Planning mode
-    private static readonly HashSet<string> ReadOnlyTools =
-    [
-        "read_file",
-        "glob",
-        "grep",
-        "list_directory"
-    ];
+    // Read-only tools allowed in Planning mode (both PascalCase and snake_case for compatibility)
+    private static readonly HashSet<string> ReadOnlyTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ReadFile", "read_file",
+        "GlobFiles", "glob",
+        "GrepFiles", "grep",
+        "ListDirectory", "list_directory"
+    };
 
     /// <summary>
     /// Creates a new ModeToolFilter with default configuration.
@@ -164,7 +164,7 @@ public class ModeToolFilter : IModeToolFilter
     /// <inheritdoc />
     public RiskAssessment AssessRisk(string toolName, IDictionary<string, object?>? arguments)
     {
-        return toolName switch
+        return NormalizeToolName(toolName) switch
         {
             "read_file" => AssessReadRisk(arguments),
             "write_file" => AssessWriteRisk(arguments),
@@ -172,6 +172,22 @@ public class ModeToolFilter : IModeToolFilter
             "shell" or "execute_command" => AssessShellRisk(arguments),
             _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) => AssessMcpToolRisk(toolName),
             _ => RiskAssessment.Safe
+        };
+    }
+
+    // Maps PascalCase tool names to snake_case for consistent risk assessment
+    private static string NormalizeToolName(string toolName)
+    {
+        return toolName switch
+        {
+            "ReadFile" => "read_file",
+            "WriteFile" => "write_file",
+            "DeleteFile" => "delete_file",
+            "ExecuteCommand" => "execute_command",
+            "GlobFiles" => "glob_files",
+            "GrepFiles" => "grep_files",
+            "ListDirectory" => "list_directory",
+            _ => toolName
         };
     }
 

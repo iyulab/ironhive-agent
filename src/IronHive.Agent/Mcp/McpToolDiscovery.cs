@@ -86,9 +86,9 @@ public class McpToolDiscovery : IDisposable
                         await _pluginManager.ConnectAsync(name, config, cancellationToken);
                         isConnected = true;
                     }
-                    catch
+                    catch (Exception)
                     {
-                        // Skip plugins that can't be connected
+                        // Connection failed — skip plugin and continue discovery
                         continue;
                     }
                 }
@@ -175,8 +175,9 @@ public class McpToolDiscovery : IDisposable
             {
                 await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
             }
-            catch
+            catch (Exception)
             {
+                // Connection failed — tool not available
                 return null;
             }
         }
@@ -210,8 +211,9 @@ public class McpToolDiscovery : IDisposable
             await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
             return true;
         }
-        catch
+        catch (Exception)
         {
+            // Connection failed — plugin not available
             return false;
         }
     }

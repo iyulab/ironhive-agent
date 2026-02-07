@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/IronHive.Agent/IronHive.Agent.csproj" />
+    <Project Path="src/IronHive.DeepResearch/IronHive.DeepResearch.csproj" />
   </Folder>
   <Folder Name="/submodules/" />
   <Folder Name="/submodules/TokenMeter/" />
@@ -11,7 +12,15 @@
   <Folder Name="/submodules/ToolCallParser/src/">
     <Project Path="submodules/ToolCallParser/src/ToolCallParser/ToolCallParser.csproj" />
   </Folder>
+  <Folder Name="/submodules/ironhive/">
+    <Project Path="submodules/ironhive/src/IronHive.Abstractions/IronHive.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/submodules/ironbees/">
+    <Project Path="submodules/ironbees/src/Ironbees.Core/Ironbees.Core.csproj" />
+    <Project Path="submodules/ironbees/src/Ironbees.Autonomous/Ironbees.Autonomous.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IronHive.Agent.Tests/IronHive.Agent.Tests.csproj" />
+    <Project Path="tests/IronHive.DeepResearch.Tests/IronHive.DeepResearch.Tests.csproj" />
   </Folder>
 </Solution>

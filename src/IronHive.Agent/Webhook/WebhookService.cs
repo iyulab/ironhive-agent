@@ -77,11 +77,13 @@ public class WebhookService : IWebhookService, IDisposable
 {
     private readonly WebhookConfig _config;
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsHttpClient;
     private readonly List<WebhookEndpoint> _activeEndpoints;
 
     public WebhookService(WebhookConfig? config = null, HttpClient? httpClient = null)
     {
         _config = config ?? new WebhookConfig();
+        _ownsHttpClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
         _activeEndpoints = _config.Endpoints
             .Where(e => e.Enabled && !string.IsNullOrEmpty(e.Url))
@@ -138,8 +140,10 @@ public class WebhookService : IWebhookService, IDisposable
 
         if (_config.AsyncDelivery)
         {
-            // Fire-and-forget: start tasks but don't wait
-            _ = Task.WhenAll(tasks);
+            // Fire-and-forget: start tasks but observe exceptions
+            _ = Task.WhenAll(tasks).ContinueWith(
+                t => Debug.WriteLine($"Webhook delivery failed: {t.Exception?.Message}"),
+                TaskContinuationOptions.OnlyOnFaulted);
             return [];
         }
         else
@@ -253,7 +257,11 @@ public class WebhookService : IWebhookService, IDisposable
 
     public void Dispose()
     {
-        _httpClient.Dispose();
+        if (_ownsHttpClient)
+        {
+            _httpClient.Dispose();
+        }
+
         GC.SuppressFinalize(this);
     }
 }

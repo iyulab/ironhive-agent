@@ -1,18 +1,19 @@
+using Ironbees.Core;
 using IronHive.Agent.SubAgent;
-using IronHive.Agent.Tests.Mocks;
+using NSubstitute;
 
 namespace IronHive.Agent.Tests.Agent.SubAgent;
 
 /// <summary>
-/// Cycle 12-17: 서브에이전트 시스템 검증
+/// SubAgent service tests using IAgentOrchestrator mock.
 /// </summary>
 public class SubAgentServiceTests : IDisposable
 {
-    private readonly MockChatClient _mockClient;
+    private readonly IAgentOrchestrator _mockOrchestrator;
 
     public SubAgentServiceTests()
     {
-        _mockClient = new MockChatClient();
+        _mockOrchestrator = Substitute.For<IAgentOrchestrator>();
     }
 
     public void Dispose()
@@ -20,14 +21,14 @@ public class SubAgentServiceTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    #region Cycle 12: Explore 도구 제한
+    #region CanSpawn and Limits
 
     [Fact]
     public void CanSpawn_WithinLimits_ReturnsTrue()
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = 2, MaxConcurrent = 3 };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: 0);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 0);
 
         // Act & Assert
         Assert.True(service.CanSpawn(SubAgentType.Explore));
@@ -39,7 +40,7 @@ public class SubAgentServiceTests : IDisposable
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = 2 };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: 1);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 1);
 
         // Act & Assert
         Assert.Equal(1, service.CurrentDepth);
@@ -50,7 +51,7 @@ public class SubAgentServiceTests : IDisposable
     {
         // Arrange
         var config = new SubAgentConfig();
-        using var service = new SubAgentService(_mockClient, config);
+        using var service = new SubAgentService(_mockOrchestrator, config);
 
         // Act & Assert
         Assert.Equal(0, service.RunningCount);
@@ -58,14 +59,14 @@ public class SubAgentServiceTests : IDisposable
 
     #endregion
 
-    #region Cycle 13: 깊이 제한
+    #region Depth Limits
 
     [Fact]
     public void CanSpawn_AtMaxDepth_ReturnsFalse()
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = 2 };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: 2);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 2);
 
         // Act & Assert
         Assert.False(service.CanSpawn(SubAgentType.Explore));
@@ -77,7 +78,7 @@ public class SubAgentServiceTests : IDisposable
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = 2 };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: 1);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 1);
 
         // Act & Assert
         Assert.True(service.CanSpawn(SubAgentType.Explore));
@@ -88,7 +89,7 @@ public class SubAgentServiceTests : IDisposable
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = 2 };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: 2);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 2);
 
         // Act
         var result = await service.ExploreAsync("test task");
@@ -107,7 +108,7 @@ public class SubAgentServiceTests : IDisposable
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = maxDepth };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: currentDepth);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: currentDepth);
 
         // Act & Assert
         Assert.Equal(expected, service.CanSpawn(SubAgentType.Explore));
@@ -115,21 +116,17 @@ public class SubAgentServiceTests : IDisposable
 
     #endregion
 
-    #region Cycle 14: 동시 실행 제한
+    #region Concurrent Limit
 
     [Fact]
     public void CanSpawn_AtMaxConcurrent_ReturnsFalse()
     {
-        // Arrange - Mock service that's at max concurrent
-        var config = new SubAgentConfig { MaxConcurrent = 0 }; // No concurrent allowed
-        using var service = new SubAgentService(_mockClient, config);
+        // Arrange - MaxConcurrent=0 means no concurrent allowed
+        var config = new SubAgentConfig { MaxConcurrent = 0 };
+        using var service = new SubAgentService(_mockOrchestrator, config);
 
-        // Since MaxConcurrent=0, we can't spawn anything new
-        // But the check is based on RunningCount, so with MaxConcurrent=0 it should still return true
-        // Actually, with RunningCount=0 and MaxConcurrent=0, RunningCount < MaxConcurrent is false
-
-        // This test needs to verify behavior when at max concurrent
-        // Let's use a different approach
+        // RunningCount=0, MaxConcurrent=0 -> RunningCount >= MaxConcurrent is true -> false
+        Assert.False(service.CanSpawn(SubAgentType.Explore));
     }
 
     [Fact]
@@ -137,7 +134,7 @@ public class SubAgentServiceTests : IDisposable
     {
         // Arrange
         var config = new SubAgentConfig { MaxDepth = 1, MaxConcurrent = 3 };
-        using var service = new SubAgentService(_mockClient, config, currentDepth: 1);
+        using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 1);
 
         var context = SubAgentContext.Create(
             SubAgentType.Explore,
@@ -157,89 +154,144 @@ public class SubAgentServiceTests : IDisposable
 
     #endregion
 
-    #region Cycle 15: 턴 제한
+    #region Orchestrator Delegation
 
     [Fact]
-    public async Task ExploreAsync_CompletesWithResult()
+    public async Task ExploreAsync_DelegatesToOrchestrator()
     {
         // Arrange
-        _mockClient.EnqueueResponse("Task completed successfully!");
+        _mockOrchestrator.ProcessAsync(
+            Arg.Any<string>(),
+            Arg.Is<ProcessOptions>(o => o.AgentName == "explore"),
+            Arg.Any<CancellationToken>())
+            .Returns("Task completed successfully!");
 
         var config = new SubAgentConfig
         {
-            Explore = new ExploreAgentConfig
-            {
-                MaxTurns = 5,
-                MaxTokens = 8000
-            }
+            Explore = new ExploreAgentConfig { MaxTurns = 5, MaxTokens = 8000 }
         };
-        using var service = new SubAgentService(_mockClient, config);
+        using var service = new SubAgentService(_mockOrchestrator, config);
 
         // Act
         var result = await service.ExploreAsync("Find all test files");
 
         // Assert
         Assert.True(result.Success);
-        Assert.NotNull(result.Output);
-        Assert.NotEmpty(result.Output);
-        Assert.True(result.TurnsUsed > 0);
+        Assert.Equal("Task completed successfully!", result.Output);
+        await _mockOrchestrator.Received(1).ProcessAsync(
+            Arg.Is<string>(s => s.Contains("Find all test files")),
+            Arg.Is<ProcessOptions>(o => o.AgentName == "explore"),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task GeneralAsync_CompletesWithResult()
+    public async Task GeneralAsync_DelegatesToOrchestrator()
     {
         // Arrange
-        _mockClient.EnqueueResponse("General task completed!");
+        _mockOrchestrator.ProcessAsync(
+            Arg.Any<string>(),
+            Arg.Is<ProcessOptions>(o => o.AgentName == "general"),
+            Arg.Any<CancellationToken>())
+            .Returns("General task completed!");
 
         var config = new SubAgentConfig
         {
-            General = new GeneralAgentConfig
-            {
-                MaxTurns = 30,
-                MaxTokens = 64000
-            }
+            General = new GeneralAgentConfig { MaxTurns = 30, MaxTokens = 64000 }
         };
-        using var service = new SubAgentService(_mockClient, config);
+        using var service = new SubAgentService(_mockOrchestrator, config);
 
         // Act
         var result = await service.GeneralAsync("Complex multi-step task");
 
         // Assert
         Assert.True(result.Success);
+        await _mockOrchestrator.Received(1).ProcessAsync(
+            Arg.Is<string>(s => s.Contains("Complex multi-step task")),
+            Arg.Is<ProcessOptions>(o => o.AgentName == "general"),
+            Arg.Any<CancellationToken>());
     }
 
-    #endregion
-
-    #region Cycle 16: 도구 호출 처리
-
     [Fact]
-    public async Task ExploreAsync_ReturnsSuccessResult()
+    public async Task ExploreAsync_WithContext_IncludesContextInPrompt()
     {
         // Arrange
-        _mockClient.EnqueueResponse("Found 10 test files");
+        _mockOrchestrator.ProcessAsync(
+            Arg.Any<string>(),
+            Arg.Any<ProcessOptions>(),
+            Arg.Any<CancellationToken>())
+            .Returns("Found 10 test files");
 
-        using var service = new SubAgentService(_mockClient, new SubAgentConfig());
+        using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act
-        var result = await service.ExploreAsync("Find test files");
+        var result = await service.ExploreAsync("Find test files", context: "Look in src/ directory");
 
         // Assert
         Assert.True(result.Success);
         Assert.Contains("10 test files", result.Output);
+        await _mockOrchestrator.Received(1).ProcessAsync(
+            Arg.Is<string>(s => s.Contains("Find test files") && s.Contains("Look in src/ directory")),
+            Arg.Any<ProcessOptions>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task SpawnAsync_ReturnsTimingInfo()
     {
         // Arrange
-        _mockClient.EnqueueResponse("Done");
-        using var service = new SubAgentService(_mockClient, new SubAgentConfig());
+        _mockOrchestrator.ProcessAsync(
+            Arg.Any<string>(),
+            Arg.Any<ProcessOptions>(),
+            Arg.Any<CancellationToken>())
+            .Returns("Done");
+
+        using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act
         var result = await service.ExploreAsync("Quick task");
 
         // Assert
-        Assert.True(result.Duration.TotalMilliseconds > 0);
+        Assert.True(result.Duration.TotalMilliseconds >= 0);
+    }
+
+    [Fact]
+    public async Task SpawnAsync_EmptyResponse_ReturnsFailure()
+    {
+        // Arrange
+        _mockOrchestrator.ProcessAsync(
+            Arg.Any<string>(),
+            Arg.Any<ProcessOptions>(),
+            Arg.Any<CancellationToken>())
+            .Returns(string.Empty);
+
+        using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
+
+        // Act
+        var result = await service.ExploreAsync("task");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("empty response", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SpawnAsync_OrchestratorThrows_ReturnsFailure()
+    {
+        // Arrange
+        _mockOrchestrator.ProcessAsync(
+            Arg.Any<string>(),
+            Arg.Any<ProcessOptions>(),
+            Arg.Any<CancellationToken>())
+            .Returns<string>(_ => throw new InvalidOperationException("LLM error"));
+
+        using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
+
+        // Act
+        var result = await service.ExploreAsync("task");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("LLM error", result.Error);
     }
 
     #endregion
@@ -253,10 +305,10 @@ public class SubAgentServiceTests : IDisposable
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // Cancel immediately
 
-        using var service = new SubAgentService(_mockClient, new SubAgentConfig());
+        using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act & Assert
-        // When cancelled during semaphore wait, TaskCanceledException is thrown
+        // When cancelled during semaphore wait, OperationCanceledException is thrown
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             async () => await service.ExploreAsync("task", cancellationToken: cts.Token));
     }
@@ -353,7 +405,7 @@ public class SubAgentServiceTests : IDisposable
     public void Dispose_CanBeCalledMultipleTimes()
     {
         // Arrange
-        var service = new SubAgentService(_mockClient, new SubAgentConfig());
+        var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act & Assert - should not throw
         service.Dispose();

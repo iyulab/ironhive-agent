@@ -1,5 +1,9 @@
 using Ironbees.Core;
+using Ironbees.Core.Conversation;
 using Ironbees.Core.Embeddings;
+using IronHive.Agent.Mcp;
+using IronHive.Agent.Permissions;
+using IronHive.Agent.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,22 +48,46 @@ public static class IronbeesServiceCollectionExtensions
             };
         });
 
-        // Register framework adapter
+        // Register framework adapter with tool execution loop support
         services.AddSingleton<ILLMFrameworkAdapter>(sp =>
         {
-            if (options.ChatClientFactory != null)
+            var clientFactory = options.ChatClientFactory;
+            if (clientFactory is null)
             {
-                return new ChatClientFrameworkAdapter(options.ChatClientFactory);
+                var chatClient = sp.GetService<IChatClient>();
+                if (chatClient is null)
+                {
+                    throw new InvalidOperationException(
+                        "No IChatClient available. Either configure ChatClientFactory in IronbeesOptions or register IChatClient in DI.");
+                }
+                clientFactory = _ => chatClient;
             }
 
-            var chatClient = sp.GetService<IChatClient>();
-            if (chatClient != null)
+            var permissionEvaluator = sp.GetService<IPermissionEvaluator>();
+
+            // Dynamic tool factory: resolves tools at invocation time (supports MCP hot reload)
+            Func<IList<AITool>>? toolsFactory = null;
+            if (options.EnableToolExecution)
             {
-                return new ChatClientFrameworkAdapter(chatClient);
+                var workingDirectory = options.WorkingDirectory;
+                toolsFactory = () =>
+                {
+                    var builtIn = BuiltInTools.GetAll(workingDirectory);
+                    var mcpManager = sp.GetService<IMcpPluginManager>();
+                    if (mcpManager is not null)
+                    {
+                        var mcpTools = mcpManager.GetToolsAsync().GetAwaiter().GetResult();
+                        return builtIn.Concat(mcpTools).ToList();
+                    }
+                    return builtIn;
+                };
             }
 
-            throw new InvalidOperationException(
-                "No IChatClient available. Either configure ChatClientFactory in IronbeesOptions or register IChatClient in DI.");
+            return new ChatClientFrameworkAdapter(
+                clientFactory,
+                toolsFactory,
+                permissionEvaluator,
+                options.MaxToolTurns);
         });
 
         // Register orchestrator
@@ -78,11 +106,19 @@ public static class IronbeesServiceCollectionExtensions
                 options.AgentsDirectory);
         });
 
+        // Register ConversationStore if configured
+        if (options.ConversationsDirectory is not null)
+        {
+            services.AddSingleton<IConversationStore>(sp =>
+                new FileSystemConversationStore(options.ConversationsDirectory));
+        }
+
         // Register OrchestratedAgentLoop
         services.AddTransient<OrchestratedAgentLoop>(sp =>
         {
             var orchestrator = sp.GetRequiredService<IAgentOrchestrator>();
-            return new OrchestratedAgentLoop(orchestrator, options.DefaultAgentName);
+            var conversationStore = sp.GetService<IConversationStore>();
+            return new OrchestratedAgentLoop(orchestrator, options.DefaultAgentName, conversationStore);
         });
 
         return services;
@@ -152,6 +188,28 @@ public class IronbeesOptions
     /// If null, IChatClient will be resolved from DI.
     /// </summary>
     public Func<ModelConfig, IChatClient>? ChatClientFactory { get; set; }
+
+    /// <summary>
+    /// Enable tool execution loop in the framework adapter.
+    /// When true, agents can execute tools autonomously.
+    /// </summary>
+    public bool EnableToolExecution { get; set; }
+
+    /// <summary>
+    /// Working directory for built-in tools.
+    /// </summary>
+    public string? WorkingDirectory { get; set; }
+
+    /// <summary>
+    /// Maximum tool execution turns to prevent infinite loops.
+    /// </summary>
+    public int MaxToolTurns { get; set; } = 20;
+
+    /// <summary>
+    /// Directory for conversation persistence.
+    /// If null, conversation store is not registered.
+    /// </summary>
+    public string? ConversationsDirectory { get; set; }
 }
 
 /// <summary>

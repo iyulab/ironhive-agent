@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Deep Research module - autonomous research agent system</Description>
+    <PackageTags>DeepResearch;Agent;Research</PackageTags>
+    <!-- ironhive-flux에서 마이그레이션된 코드 - 코드 분석 경고를 점진적으로 수정 예정 -->
+    <NoWarn>$(NoWarn);CA1305;CA1507;CA1510;CA1512;CA1514;CA1716;CA1805;CA1816;CA1822;CA1848;CA1850;CA1854;CA1859;CA1860;CA1861;CA1862;CA1864;CA1869;CA1870;IDE0011;IDE0028;IDE0290;IDE0300;IDE0301;IDE0303;IDE0305</NoWarn>
+  </PropertyGroup>
+
+  <!-- 테스트 프로젝트에서 internal 타입 접근 허용 -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="IronHive.DeepResearch.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IronHive (IMessageGenerator 어댑터용) - submodule project reference -->
+    <ProjectReference Include="..\..\submodules\ironhive\src\IronHive.Abstractions\IronHive.Abstractions.csproj" />
+
+    <!-- Ironbees Autonomous (자율 실행 오케스트레이션) -->
+    <ProjectReference Include="..\..\submodules\ironbees\src\Ironbees.Autonomous\Ironbees.Autonomous.csproj" />
+
+    <!-- Microsoft.Extensions.AI (IChatClient 어댑터용) -->
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+
+    <!-- WebFlux (콘텐츠 추출) -->
+    <PackageReference Include="WebFlux" />
+
+    <!-- HTTP & Resilience -->
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Polly" />
+    <PackageReference Include="Polly.Extensions" />
+
+    <!-- Caching -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+
+    <!-- Logging -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

@@ -44,13 +44,16 @@ public class ExploreAgentConfig
 
     /// <summary>
     /// Tools allowed for Explore agent (read-only tools).
+    /// Now managed via YAML agent capabilities (agents/explore/agent.yaml).
+    /// Retained for backwards compatibility with external consumers.
     /// </summary>
+    [Obsolete("Use YAML agent capabilities instead (agents/explore/agent.yaml).")]
     public List<string> AllowedTools { get; set; } =
     [
-        "read_file",
-        "list_directory",
-        "glob",
-        "grep"
+        "ReadFile",
+        "ListDirectory",
+        "GlobFiles",
+        "GrepFiles"
     ];
 }
 

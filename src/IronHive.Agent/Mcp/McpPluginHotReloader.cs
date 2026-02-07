@@ -13,6 +13,7 @@ public class McpPluginHotReloader : IAsyncDisposable
     private McpPluginsConfig _currentConfig;
     private bool _disposed;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
+    private readonly CancellationTokenSource _disposeCts = new();
 
     /// <summary>
     /// Event raised when plugins are reloaded.
@@ -74,8 +75,11 @@ public class McpPluginHotReloader : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                // Log but don't fail - other plugins may still work
-                System.Diagnostics.Debug.WriteLine($"Failed to connect plugin '{name}': {ex.Message}");
+                // Log but don't fail — other plugins may still work
+                ReloadError?.Invoke(this, new PluginReloadEventArgs
+                {
+                    ErrorMessage = $"Failed to connect plugin '{name}': {ex.Message}"
+                });
             }
         }
     }
@@ -144,7 +148,10 @@ public class McpPluginHotReloader : IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to connect plugin '{name}': {ex.Message}");
+                        ReloadError?.Invoke(this, new PluginReloadEventArgs
+                        {
+                            ErrorMessage = $"Failed to connect plugin '{name}': {ex.Message}"
+                        });
                     }
                 }
             }
@@ -172,12 +179,20 @@ public class McpPluginHotReloader : IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginName, nameof(pluginName));
 
-        if (_excludedPlugins.Add(pluginName))
+        await _reloadLock.WaitAsync(cancellationToken);
+        try
         {
-            if (_pluginManager.ConnectedPlugins.Contains(pluginName))
+            if (_excludedPlugins.Add(pluginName))
             {
-                await _pluginManager.DisconnectAsync(pluginName, cancellationToken);
+                if (_pluginManager.ConnectedPlugins.Contains(pluginName))
+                {
+                    await _pluginManager.DisconnectAsync(pluginName, cancellationToken);
+                }
             }
+        }
+        finally
+        {
+            _reloadLock.Release();
         }
     }
 
@@ -191,12 +206,20 @@ public class McpPluginHotReloader : IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginName, nameof(pluginName));
 
-        if (_excludedPlugins.Remove(pluginName))
+        await _reloadLock.WaitAsync(cancellationToken);
+        try
         {
-            if (_currentConfig.Plugins.TryGetValue(pluginName, out var config) && _currentConfig.AutoConnect)
+            if (_excludedPlugins.Remove(pluginName))
             {
-                await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
+                if (_currentConfig.Plugins.TryGetValue(pluginName, out var config) && _currentConfig.AutoConnect)
+                {
+                    await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
+                }
             }
+        }
+        finally
+        {
+            _reloadLock.Release();
         }
     }
 
@@ -244,21 +267,20 @@ public class McpPluginHotReloader : IAsyncDisposable
         _ = Task.Run(async () =>
         {
             // Small delay to allow file write to complete
-            await Task.Delay(100);
+            await Task.Delay(100, _disposeCts.Token);
 
-            try
-            {
-                var newConfig = McpPluginsConfigLoader.LoadFromDefault(_watchDirectory);
-                await ReloadAsync(newConfig);
-            }
-            catch (Exception ex)
+            var newConfig = McpPluginsConfigLoader.LoadFromDefault(_watchDirectory);
+            await ReloadAsync(newConfig, _disposeCts.Token);
+        }, _disposeCts.Token).ContinueWith(t =>
+        {
+            if (t.Exception is { } ex && ex.InnerException is not OperationCanceledException)
             {
                 ReloadError?.Invoke(this, new PluginReloadEventArgs
                 {
-                    ErrorMessage = ex.Message
+                    ErrorMessage = ex.InnerException?.Message ?? ex.Message
                 });
             }
-        });
+        }, TaskScheduler.Default);
     }
 
     private static bool ConfigEquals(McpPluginConfig a, McpPluginConfig b)
@@ -323,7 +345,25 @@ public class McpPluginHotReloader : IAsyncDisposable
 
         _disposed = true;
 
+        // Cancel any pending file-change reload tasks
+        await _disposeCts.CancelAsync();
+
         _watcher?.Dispose();
+
+        // Disconnect all connected plugins
+        foreach (var name in _pluginManager.ConnectedPlugins.ToList())
+        {
+            try
+            {
+                await _pluginManager.DisconnectAsync(name);
+            }
+            catch (Exception)
+            {
+                // Best effort cleanup during dispose
+            }
+        }
+
+        _disposeCts.Dispose();
         _reloadLock.Dispose();
 
         GC.SuppressFinalize(this);

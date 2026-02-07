@@ -239,9 +239,9 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
 
             return CreateSummaryWithImportant(important, summary);
         }
-        catch
+        catch (Exception)
         {
-            // Fallback to truncation on error
+            // LLM summarization failed — fallback to truncation is intentional
             return TruncateMessagesWithImportant(important, regular, targetTokens);
         }
     }

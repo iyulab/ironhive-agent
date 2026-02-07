@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using IronHive.Agent.Context;
+using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Tracking;
 using Microsoft.Extensions.AI;
 
@@ -17,18 +18,21 @@ public class AgentLoop : IAgentLoop
     private readonly AgentOptions _options;
     private readonly IUsageTracker? _usageTracker;
     private readonly ContextManager? _contextManager;
+    private readonly IErrorRecoveryService? _errorRecovery;
     private readonly List<ChatMessage> _history = [];
 
     public AgentLoop(
         IChatClient chatClient,
         AgentOptions? options = null,
         IUsageTracker? usageTracker = null,
-        ContextManager? contextManager = null)
+        ContextManager? contextManager = null,
+        IErrorRecoveryService? errorRecovery = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _options = options ?? new AgentOptions();
         _usageTracker = usageTracker;
         _contextManager = contextManager;
+        _errorRecovery = errorRecovery;
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))
@@ -56,7 +60,38 @@ public class AgentLoop : IAgentLoop
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
         var chatOptions = CreateChatOptions();
-        var response = await _chatClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
+        ChatResponse response;
+
+        try
+        {
+            response = await _chatClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (_errorRecovery is null)
+            {
+                throw;
+            }
+
+            _errorRecovery.RecordError(ex);
+            var analysis = _errorRecovery.AnalyzeException(ex);
+
+            // Auto-retry once for transient errors with a delay
+            if (analysis.RecommendedAction is RecoveryAction.WaitAndRetry or RecoveryAction.Retry
+                && analysis.RetryDelay is not null)
+            {
+                await Task.Delay(analysis.RetryDelay.Value, cancellationToken);
+                response = await _chatClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
+            }
+            else
+            {
+                throw;
+            }
+        }
 
         // Add assistant response to history
         _history.AddRange(response.Messages);
@@ -97,7 +132,22 @@ public class AgentLoop : IAgentLoop
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
 
-        await foreach (var update in _chatClient.GetStreamingResponseAsync(historyToSend, chatOptions, cancellationToken))
+        IAsyncEnumerable<ChatResponseUpdate> stream;
+        try
+        {
+            stream = _chatClient.GetStreamingResponseAsync(historyToSend, chatOptions, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _errorRecovery?.RecordError(ex);
+            throw;
+        }
+
+        await foreach (var update in stream)
         {
             // Yield and collect text content
             if (!string.IsNullOrEmpty(update.Text))
@@ -156,8 +206,9 @@ public class AgentLoop : IAgentLoop
 
         var preparedHistory = await _contextManager.PrepareHistoryAsync(_history, cancellationToken);
 
-        // If history was compacted, update our internal history
-        if (preparedHistory.Count < _history.Count)
+        // If history was modified (compaction or goal reminder injection),
+        // update our internal history to stay in sync
+        if (!ReferenceEquals(preparedHistory, _history))
         {
             _history.Clear();
             _history.AddRange(preparedHistory);

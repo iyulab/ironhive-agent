@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- ironhive-flux에서 마이그레이션된 테스트 - 코드 분석 경고를 점진적으로 수정 예정 -->
+    <NoWarn>$(NoWarn);CA1001;CA1304;CA1305;CA1311;CA1507;CA1510;CA1512;CA1514;CA1707;CA1716;CA1805;CA1816;CA1822;CA1848;CA1850;CA1852;CA1854;CA1859;CA1860;CA1861;CA1862;CA1864;CA1869;CA1870;CA2208;IDE0011;IDE0028;IDE0290;IDE0300;IDE0301;IDE0303;IDE0305</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\IronHive.DeepResearch\IronHive.DeepResearch.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+</Project>

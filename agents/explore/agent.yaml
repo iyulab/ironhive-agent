@@ -1,0 +1,17 @@
+name: explore
+description: "Read-only agent for code exploration and file search"
+version: "0.1.0"
+system_prompt_file: system-prompt.md
+model:
+  deployment: "${MODEL_ID}"
+  temperature: 0.1
+  max_tokens: 16000
+capabilities:
+  - ReadFile
+  - ListDirectory
+  - GlobFiles
+  - GrepFiles
+tags:
+  - search
+  - read-only
+  - exploration

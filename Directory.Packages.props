@@ -4,12 +4,12 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Microsoft.Extensions.AI -->
-    <PackageVersion Include="Ironbees.Core" Version="0.4.2" />
+    <!-- Ironbees.Core - now using submodule project reference -->
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.2.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.2.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
     <!-- OpenAI SDK -->
-    <PackageVersion Include="ModelContextProtocol" Version="0.7.0-preview.1" />
+    <PackageVersion Include="ModelContextProtocol" Version="0.8.0-preview.1" />
     <PackageVersion Include="OpenAI" Version="2.8.0" />
     <!-- DI -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
@@ -21,13 +21,21 @@
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.15.0" />
+    <PackageVersion Include="IndexThinking" Version="0.16.0" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.13.0" />
-    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.13.0" />
-    <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.3.0" />
-    <PackageVersion Include="IronHive.Core" Version="0.3.0" />
+    <PackageVersion Include="MemoryIndexer" Version="0.13.1" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.13.1" />
+    <!-- IronHive (LLM abstraction) - now using submodule project references -->
+    <!-- DeepResearch dependencies -->
+    <PackageVersion Include="WebFlux" Version="0.2.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.2.0" />
+    <PackageVersion Include="Polly" Version="8.6.5" />
+    <PackageVersion Include="Polly.Extensions" Version="8.6.5" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageVersion Include="FluentAssertions" Version="8.8.0" />
+    <PackageVersion Include="Moq" Version="4.20.72" />
     <!-- Testing -->
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />

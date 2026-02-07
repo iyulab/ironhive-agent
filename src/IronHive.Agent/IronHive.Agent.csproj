@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <!-- Microsoft.Extensions.AI -->
-    <PackageReference Include="Ironbees.Core" />
+    <ProjectReference Include="..\..\submodules\ironbees\src\Ironbees.Core\Ironbees.Core.csproj" />
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
@@ -43,9 +43,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- IronHive (LLM abstraction) -->
-    <PackageReference Include="IronHive.Abstractions" />
-    <PackageReference Include="IronHive.Core" />
+    <!-- IronHive (LLM abstraction) - submodule project reference -->
+    <ProjectReference Include="..\..\submodules\ironhive\src\IronHive.Abstractions\IronHive.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

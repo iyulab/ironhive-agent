@@ -1,0 +1,11 @@
+name: general
+description: "General-purpose agent with full tool access for complex tasks"
+version: "0.1.0"
+system_prompt_file: system-prompt.md
+model:
+  deployment: "${MODEL_ID}"
+  temperature: 0.3
+  max_tokens: 64000
+tags:
+  - general
+  - multi-step

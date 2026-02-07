@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Ironbees.Core;
+using Ironbees.Core.Conversation;
 using IronHive.Agent.Loop;
 using Microsoft.Extensions.AI;
 
@@ -8,21 +9,32 @@ namespace IronHive.Agent.Ironbees;
 /// <summary>
 /// IAgentLoop implementation that delegates to Ironbees IAgentOrchestrator.
 /// Enables multi-agent orchestration through the standard IAgentLoop interface.
+/// Supports conversation persistence via IConversationStore.
 /// </summary>
 public class OrchestratedAgentLoop : IAgentLoop
 {
     private readonly IAgentOrchestrator _orchestrator;
     private readonly string? _preferredAgentName;
+    private readonly IConversationStore? _conversationStore;
+    private readonly string _conversationId;
 
     /// <summary>
     /// Creates a new OrchestratedAgentLoop.
     /// </summary>
     /// <param name="orchestrator">The Ironbees orchestrator to use.</param>
     /// <param name="preferredAgentName">Optional agent name to always use instead of auto-selection.</param>
-    public OrchestratedAgentLoop(IAgentOrchestrator orchestrator, string? preferredAgentName = null)
+    /// <param name="conversationStore">Optional conversation store for history persistence.</param>
+    /// <param name="conversationId">Optional conversation ID. If null, a new ID is generated.</param>
+    public OrchestratedAgentLoop(
+        IAgentOrchestrator orchestrator,
+        string? preferredAgentName = null,
+        IConversationStore? conversationStore = null,
+        string? conversationId = null)
     {
         _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         _preferredAgentName = preferredAgentName;
+        _conversationStore = conversationStore;
+        _conversationId = conversationId ?? Guid.NewGuid().ToString("N");
     }
 
     /// <inheritdoc />
@@ -30,15 +42,25 @@ public class OrchestratedAgentLoop : IAgentLoop
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        string response;
+        var options = new ProcessOptions
+        {
+            ConversationId = _conversationId,
+            AgentName = _preferredAgentName
+        };
 
-        if (!string.IsNullOrEmpty(_preferredAgentName))
+        var response = await _orchestrator.ProcessAsync(prompt, options, cancellationToken);
+
+        // Store conversation if store is available
+        if (_conversationStore is not null)
         {
-            response = await _orchestrator.ProcessAsync(prompt, _preferredAgentName, cancellationToken);
-        }
-        else
-        {
-            response = await _orchestrator.ProcessAsync(prompt, cancellationToken);
+            await _conversationStore.AppendMessageAsync(
+                _conversationId,
+                new ConversationMessage { Role = "user", Content = prompt },
+                cancellationToken);
+            await _conversationStore.AppendMessageAsync(
+                _conversationId,
+                new ConversationMessage { Role = "assistant", Content = response },
+                cancellationToken);
         }
 
         return new AgentResponse
@@ -55,16 +77,13 @@ public class OrchestratedAgentLoop : IAgentLoop
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        IAsyncEnumerable<string> stream;
+        var options = new ProcessOptions
+        {
+            ConversationId = _conversationId,
+            AgentName = _preferredAgentName
+        };
 
-        if (!string.IsNullOrEmpty(_preferredAgentName))
-        {
-            stream = _orchestrator.StreamAsync(prompt, _preferredAgentName, cancellationToken);
-        }
-        else
-        {
-            stream = _orchestrator.StreamAsync(prompt, cancellationToken);
-        }
+        var stream = _orchestrator.StreamAsync(prompt, options, cancellationToken);
 
         await foreach (var chunk in stream.WithCancellation(cancellationToken))
         {
@@ -92,29 +111,46 @@ public class OrchestratedAgentLoop : IAgentLoop
         => _orchestrator.SelectAgentAsync(input, cancellationToken);
 
     /// <inheritdoc />
-    /// <remarks>
-    /// OrchestratedAgentLoop does not support history management.
-    /// The orchestrator manages its own internal state.
-    /// </remarks>
-    public IReadOnlyList<ChatMessage> History => [];
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// OrchestratedAgentLoop does not support history management.
-    /// </remarks>
-    public void ClearHistory()
+    public IReadOnlyList<ChatMessage> History
     {
-        // No-op: orchestrator manages its own state
+        get
+        {
+            if (_conversationStore is null)
+            {
+                return [];
+            }
+
+            var state = _conversationStore.LoadAsync(_conversationId).GetAwaiter().GetResult();
+            if (state is null)
+            {
+                return [];
+            }
+
+            return state.Messages
+                .Select(m => m.ToChatMessage())
+                .ToList();
+        }
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// OrchestratedAgentLoop does not support session restoration.
-    /// Use standard AgentLoop or ThinkingAgentLoop for session support.
-    /// </remarks>
+    public void ClearHistory()
+    {
+        _conversationStore?.DeleteAsync(_conversationId).GetAwaiter().GetResult();
+    }
+
+    /// <inheritdoc />
     public void InitializeHistory(IEnumerable<ChatMessage> messages)
     {
-        // No-op: orchestrator manages its own state
-        // Consider logging a warning if messages are non-empty
+        if (_conversationStore is null)
+        {
+            return;
+        }
+
+        foreach (var msg in messages)
+        {
+            var conversationMsg = ConversationMessage.FromChatMessage(msg);
+            _conversationStore.AppendMessageAsync(_conversationId, conversationMsg)
+                .GetAwaiter().GetResult();
+        }
     }
 }
