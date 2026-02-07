@@ -1,6 +1,7 @@
 using IronHive.Abstractions.Messages;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Adapters;
+using IronHive.DeepResearch.Autonomous;
 using IronHive.DeepResearch.Content;
 using IronHive.DeepResearch.Options;
 using IronHive.DeepResearch.Orchestration;
@@ -77,6 +78,11 @@ public static class ServiceCollectionExtensions
         // === Phase 8: 오케스트레이터 및 통합 ===
         services.AddSingleton<ResearchOrchestrator>();
         services.AddSingleton<IDeepResearcher, DeepResearcher>();
+
+        // === Phase 9: Autonomous 오케스트레이션 (Ironbees.Autonomous 통합) ===
+        services.AddSingleton<ResearchTaskExecutor>();
+        services.AddSingleton<ResearchOracleVerifier>();
+        services.AddSingleton<AutonomousResearchRunner>();
 
         return services;
     }

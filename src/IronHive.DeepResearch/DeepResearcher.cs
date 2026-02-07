@@ -69,7 +69,8 @@ public class DeepResearcher : IDeepResearcher
             StartedAt = DateTimeOffset.UtcNow
         };
 
-        var session = new ResearchSession(state, _orchestrator, _logger);
+        var session = new ResearchSession(state, _orchestrator, _logger,
+            onDispose: () => _sessions.TryRemove(state.SessionId, out _));
         _sessions[state.SessionId] = session;
 
         // 초기 계획 생성
@@ -115,17 +116,20 @@ public class ResearchSession : IResearchSession
     private readonly ResearchState _state;
     private readonly ResearchOrchestrator _orchestrator;
     private readonly ILogger _logger;
+    private readonly Action? _onDispose;
     private bool _isDisposed;
     private bool _isComplete;
 
     public ResearchSession(
         ResearchState state,
         ResearchOrchestrator orchestrator,
-        ILogger logger)
+        ILogger logger,
+        Action? onDispose = null)
     {
         _state = state;
         _orchestrator = orchestrator;
         _logger = logger;
+        _onDispose = onDispose;
     }
 
     /// <inheritdoc />
@@ -232,6 +236,7 @@ public class ResearchSession : IResearchSession
         if (_isDisposed) return ValueTask.CompletedTask;
 
         _isDisposed = true;
+        _onDispose?.Invoke();
         _logger.LogDebug("세션 해제: {SessionId}", SessionId);
 
         return ValueTask.CompletedTask;
