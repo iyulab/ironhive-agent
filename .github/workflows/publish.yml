@@ -115,25 +115,6 @@ jobs:
           echo "No packages to publish"
         fi
 
-    - name: Create GitHub Release
-      if: ${{ (steps.check_version.outputs.should_publish == 'true' || inputs.force_publish) && github.event_name == 'push' }}
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.extract_version.outputs.version }}
-        name: Release v${{ steps.extract_version.outputs.version }}
-        body: |
-          ## IronHive Agent v${{ steps.extract_version.outputs.version }}
-
-          ### Published Packages
-
-          - [IronHive.Agent ${{ steps.extract_version.outputs.version }}](https://www.nuget.org/packages/IronHive.Agent/${{ steps.extract_version.outputs.version }})
-          - [IronHive.DeepResearch ${{ steps.extract_version.outputs.version }}](https://www.nuget.org/packages/IronHive.DeepResearch/${{ steps.extract_version.outputs.version }})
-        draft: false
-        prerelease: ${{ contains(steps.extract_version.outputs.version, 'preview') || contains(steps.extract_version.outputs.version, 'beta') || contains(steps.extract_version.outputs.version, 'alpha') }}
-        files: ./packages/*.nupkg
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Summary
       if: always()
       run: |

@@ -9,7 +9,7 @@
     <PackageVersion Include="Ironbees.Core" Version="0.6.0" />
     <PackageVersion Include="Ironbees.Autonomous" Version="0.6.0" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
-    <PackageVersion Include="TokenMeter" Version="0.2.0" />
+    <PackageVersion Include="TokenMeter" Version="0.3.0" />
     <!-- ToolCallParser (multi-provider tool call parsing) -->
     <PackageVersion Include="ToolCallParser" Version="0.1.0" />
     <!-- Microsoft.Extensions.AI -->
