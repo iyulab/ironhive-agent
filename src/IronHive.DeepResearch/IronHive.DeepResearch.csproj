@@ -13,11 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- IronHive (IMessageGenerator 어댑터용) - submodule project reference -->
-    <ProjectReference Include="..\..\submodules\ironhive\src\IronHive.Abstractions\IronHive.Abstractions.csproj" />
+    <!-- IronHive (IMessageGenerator 어댑터용) -->
+    <PackageReference Include="IronHive.Abstractions" />
 
     <!-- Ironbees Autonomous (자율 실행 오케스트레이션) -->
-    <ProjectReference Include="..\..\submodules\ironbees\src\Ironbees.Autonomous\Ironbees.Autonomous.csproj" />
+    <PackageReference Include="Ironbees.Autonomous" />
 
     <!-- Microsoft.Extensions.AI (IChatClient 어댑터용) -->
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />

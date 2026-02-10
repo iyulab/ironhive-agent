@@ -162,7 +162,7 @@ public class SubAgentServiceTests : IDisposable
         // Arrange
         _mockOrchestrator.ProcessAsync(
             Arg.Any<string>(),
-            Arg.Is<ProcessOptions>(o => o.AgentName == "explore"),
+            Arg.Is("explore"),
             Arg.Any<CancellationToken>())
             .Returns("Task completed successfully!");
 
@@ -180,7 +180,7 @@ public class SubAgentServiceTests : IDisposable
         Assert.Equal("Task completed successfully!", result.Output);
         await _mockOrchestrator.Received(1).ProcessAsync(
             Arg.Is<string>(s => s.Contains("Find all test files")),
-            Arg.Is<ProcessOptions>(o => o.AgentName == "explore"),
+            Arg.Is("explore"),
             Arg.Any<CancellationToken>());
     }
 
@@ -190,7 +190,7 @@ public class SubAgentServiceTests : IDisposable
         // Arrange
         _mockOrchestrator.ProcessAsync(
             Arg.Any<string>(),
-            Arg.Is<ProcessOptions>(o => o.AgentName == "general"),
+            Arg.Is("general"),
             Arg.Any<CancellationToken>())
             .Returns("General task completed!");
 
@@ -207,7 +207,7 @@ public class SubAgentServiceTests : IDisposable
         Assert.True(result.Success);
         await _mockOrchestrator.Received(1).ProcessAsync(
             Arg.Is<string>(s => s.Contains("Complex multi-step task")),
-            Arg.Is<ProcessOptions>(o => o.AgentName == "general"),
+            Arg.Is("general"),
             Arg.Any<CancellationToken>());
     }
 
@@ -217,7 +217,7 @@ public class SubAgentServiceTests : IDisposable
         // Arrange
         _mockOrchestrator.ProcessAsync(
             Arg.Any<string>(),
-            Arg.Any<ProcessOptions>(),
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>())
             .Returns("Found 10 test files");
 
@@ -231,7 +231,7 @@ public class SubAgentServiceTests : IDisposable
         Assert.Contains("10 test files", result.Output);
         await _mockOrchestrator.Received(1).ProcessAsync(
             Arg.Is<string>(s => s.Contains("Find test files") && s.Contains("Look in src/ directory")),
-            Arg.Any<ProcessOptions>(),
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -241,7 +241,7 @@ public class SubAgentServiceTests : IDisposable
         // Arrange
         _mockOrchestrator.ProcessAsync(
             Arg.Any<string>(),
-            Arg.Any<ProcessOptions>(),
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>())
             .Returns("Done");
 
@@ -260,7 +260,7 @@ public class SubAgentServiceTests : IDisposable
         // Arrange
         _mockOrchestrator.ProcessAsync(
             Arg.Any<string>(),
-            Arg.Any<ProcessOptions>(),
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>())
             .Returns(string.Empty);
 
@@ -280,7 +280,7 @@ public class SubAgentServiceTests : IDisposable
         // Arrange
         _mockOrchestrator.ProcessAsync(
             Arg.Any<string>(),
-            Arg.Any<ProcessOptions>(),
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>())
             .Returns<string>(_ => throw new InvalidOperationException("LLM error"));
 

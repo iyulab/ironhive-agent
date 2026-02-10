@@ -7,8 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Ironbees (multi-agent orchestration) -->
+    <PackageReference Include="Ironbees.Core" />
     <!-- Microsoft.Extensions.AI -->
-    <ProjectReference Include="..\..\submodules\ironbees\src\Ironbees.Core\Ironbees.Core.csproj" />
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
@@ -37,14 +38,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Submodules (will be replaced with NuGet packages later) -->
-    <ProjectReference Include="..\..\submodules\TokenMeter\src\TokenMeter\TokenMeter.csproj" />
-    <ProjectReference Include="..\..\submodules\ToolCallParser\src\ToolCallParser\ToolCallParser.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- IronHive (LLM abstraction) - submodule project reference -->
-    <ProjectReference Include="..\..\submodules\ironhive\src\IronHive.Abstractions\IronHive.Abstractions.csproj" />
+    <!-- TokenMeter (token counting, multi-provider pricing) -->
+    <PackageReference Include="TokenMeter" />
+    <!-- ToolCallParser (multi-provider tool call parsing) -->
+    <PackageReference Include="ToolCallParser" />
+    <!-- IronHive (LLM abstraction) -->
+    <PackageReference Include="IronHive.Abstractions" />
   </ItemGroup>
 
 </Project>

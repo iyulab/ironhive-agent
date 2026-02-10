@@ -40,7 +40,9 @@ logs/
 .env.local
 
 # local only
+CLAUDE.md
 claudedocs/
 dev-docs/
 nul
 local-tests/
+.serena/

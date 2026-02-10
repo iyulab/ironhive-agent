@@ -42,13 +42,9 @@ public class OrchestratedAgentLoop : IAgentLoop
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        var options = new ProcessOptions
-        {
-            ConversationId = _conversationId,
-            AgentName = _preferredAgentName
-        };
-
-        var response = await _orchestrator.ProcessAsync(prompt, options, cancellationToken);
+        var response = _preferredAgentName is not null
+            ? await _orchestrator.ProcessAsync(prompt, _preferredAgentName, cancellationToken)
+            : await _orchestrator.ProcessAsync(prompt, cancellationToken);
 
         // Store conversation if store is available
         if (_conversationStore is not null)
@@ -77,13 +73,9 @@ public class OrchestratedAgentLoop : IAgentLoop
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        var options = new ProcessOptions
-        {
-            ConversationId = _conversationId,
-            AgentName = _preferredAgentName
-        };
-
-        var stream = _orchestrator.StreamAsync(prompt, options, cancellationToken);
+        var stream = _preferredAgentName is not null
+            ? _orchestrator.StreamAsync(prompt, _preferredAgentName, cancellationToken)
+            : _orchestrator.StreamAsync(prompt, cancellationToken);
 
         await foreach (var chunk in stream.WithCancellation(cancellationToken))
         {

@@ -122,13 +122,7 @@ public sealed class SubAgentService : ISubAgentService, IDisposable
             var agentName = agentContext.Type == SubAgentType.Explore ? "explore" : "general";
 
             var prompt = BuildUserPrompt(agentContext);
-            var options = new ProcessOptions
-            {
-                AgentName = agentName,
-                MaxHistoryTurns = agentContext.MaxTurns
-            };
-
-            var result = await _orchestrator.ProcessAsync(prompt, options, cancellationToken);
+            var result = await _orchestrator.ProcessAsync(prompt, agentName, cancellationToken);
 
             stopwatch.Stop();
 
