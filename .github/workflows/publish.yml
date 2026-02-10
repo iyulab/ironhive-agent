@@ -1,0 +1,149 @@
+name: Publish to NuGet
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Directory.Build.props'
+
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Force NuGet publish (bypass version check)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: nuget-production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore IronHive.Agent.slnx
+
+    - name: Build
+      run: dotnet build IronHive.Agent.slnx --configuration Release --no-restore
+
+    - name: Run tests
+      run: dotnet test IronHive.Agent.slnx --configuration Release --no-build --verbosity normal
+
+    - name: Extract version from Directory.Build.props
+      id: extract_version
+      run: |
+        VERSION=$(grep -oP '<Version>\K[^<]+' Directory.Build.props)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Check if any package needs publishing
+      id: check_version
+      if: ${{ !inputs.force_publish }}
+      run: |
+        VERSION="${{ steps.extract_version.outputs.version }}"
+        echo "Checking version $VERSION on NuGet.org..."
+
+        PACKAGES=(
+          "IronHive.Agent"
+          "IronHive.DeepResearch"
+        )
+
+        NEEDS_PUBLISH=false
+        for PACKAGE in "${PACKAGES[@]}"; do
+          EXISTS=$(dotnet nuget search "$PACKAGE" --exact-match --take 1 --source https://api.nuget.org/v3/index.json | grep -c "$PACKAGE | $VERSION" || true)
+          if [ "$EXISTS" -eq "0" ]; then
+            echo "$PACKAGE version $VERSION not found - needs publishing"
+            NEEDS_PUBLISH=true
+          else
+            echo "$PACKAGE version $VERSION already exists"
+          fi
+        done
+
+        if [ "$NEEDS_PUBLISH" = true ]; then
+          echo "should_publish=true" >> $GITHUB_OUTPUT
+          echo "At least one package needs publishing"
+        else
+          echo "should_publish=false" >> $GITHUB_OUTPUT
+          echo "All packages version $VERSION already exist on NuGet.org"
+        fi
+
+    - name: Pack all NuGet packages
+      if: ${{ steps.check_version.outputs.should_publish == 'true' || inputs.force_publish }}
+      run: |
+        mkdir -p ./packages
+
+        echo "Packing IronHive.Agent..."
+        dotnet pack src/IronHive.Agent/IronHive.Agent.csproj \
+          --configuration Release \
+          --no-build \
+          --output ./packages
+
+        echo "Packing IronHive.DeepResearch..."
+        dotnet pack src/IronHive.DeepResearch/IronHive.DeepResearch.csproj \
+          --configuration Release \
+          --no-build \
+          --output ./packages
+
+        echo "All packages created"
+        ls -lh ./packages/
+
+    - name: Publish to NuGet.org
+      if: ${{ steps.check_version.outputs.should_publish == 'true' || inputs.force_publish }}
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: |
+        if [ -d "./packages" ]; then
+          dotnet nuget push "./packages/*.nupkg" \
+            --api-key $NUGET_API_KEY \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+          echo "Successfully published packages to NuGet.org"
+        else
+          echo "No packages to publish"
+        fi
+
+    - name: Create GitHub Release
+      if: ${{ (steps.check_version.outputs.should_publish == 'true' || inputs.force_publish) && github.event_name == 'push' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.extract_version.outputs.version }}
+        name: Release v${{ steps.extract_version.outputs.version }}
+        body: |
+          ## IronHive Agent v${{ steps.extract_version.outputs.version }}
+
+          ### Published Packages
+
+          - [IronHive.Agent ${{ steps.extract_version.outputs.version }}](https://www.nuget.org/packages/IronHive.Agent/${{ steps.extract_version.outputs.version }})
+          - [IronHive.DeepResearch ${{ steps.extract_version.outputs.version }}](https://www.nuget.org/packages/IronHive.DeepResearch/${{ steps.extract_version.outputs.version }})
+        draft: false
+        prerelease: ${{ contains(steps.extract_version.outputs.version, 'preview') || contains(steps.extract_version.outputs.version, 'beta') || contains(steps.extract_version.outputs.version, 'alpha') }}
+        files: ./packages/*.nupkg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "## Publish Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Force Publish**: ${{ inputs.force_publish || 'false' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.check_version.outputs.should_publish }}" == "true" ] || [ "${{ inputs.force_publish }}" == "true" ]; then
+          echo "- **Status**: Published" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status**: Skipped (version already exists)" >> $GITHUB_STEP_SUMMARY
+        fi

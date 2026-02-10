@@ -1,0 +1,51 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        dotnet-version: ['10.0.x']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET ${{ matrix.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+
+    - name: Restore dependencies
+      run: dotnet restore IronHive.Agent.slnx
+
+    - name: Build
+      run: dotnet build IronHive.Agent.slnx --configuration Release --no-restore
+
+    - name: Test Agent
+      run: dotnet test tests/IronHive.Agent.Tests/IronHive.Agent.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=agent-test-results.trx"
+
+    - name: Test DeepResearch
+      run: dotnet test tests/IronHive.DeepResearch.Tests/IronHive.DeepResearch.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=deepresearch-test-results.trx"
+
+    - name: Publish test results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: '**/*-test-results.trx'
+        check_name: 'Test Results'
