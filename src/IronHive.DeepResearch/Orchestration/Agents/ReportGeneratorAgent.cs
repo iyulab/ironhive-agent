@@ -76,10 +76,10 @@ public class ReportGeneratorAgent
             outline.Sections.Count, outline.Sections.Count);
         var citations = citationContext.Citations.Values.OrderBy(c => c.Number).ToList();
 
-        // 4. 보고서 조립 (본문만)
+        // 4. 보고서 조립
         ReportProgress(progress, ReportGenerationPhase.AssemblingReport,
             outline.Sections.Count, outline.Sections.Count);
-        var report = AssembleReport(outline, sections, options);
+        var report = AssembleReport(outline, sections, citations, options);
 
         var completedAt = DateTimeOffset.UtcNow;
 
@@ -234,11 +234,12 @@ public class ReportGeneratorAgent
     }
 
     /// <summary>
-    /// 보고서 조립 (본문만, 출처는 ResearchResult에서 별도 제공)
+    /// 보고서 조립
     /// </summary>
-    private string AssembleReport(
+    private static string AssembleReport(
         ReportOutline outline,
         List<ReportSection> sections,
+        List<Citation> citations,
         ReportGenerationOptions options)
     {
         var sb = new StringBuilder();
@@ -253,6 +254,27 @@ public class ReportGeneratorAgent
             sb.AppendLine($"## {section.Title}");
             sb.AppendLine();
             sb.AppendLine(section.Content);
+            sb.AppendLine();
+        }
+
+        // 참고문헌
+        if (options.IncludeReferences && citations.Count > 0)
+        {
+            sb.AppendLine("## 참고문헌");
+            sb.AppendLine();
+            foreach (var citation in citations)
+            {
+                var entry = options.CitationStyle switch
+                {
+                    CitationStyle.AuthorYear =>
+                        $"- {citation.Author ?? "Unknown"} ({citation.PublishedDate?.Year ?? DateTime.Now.Year}). [{citation.Title}]({citation.Url})",
+                    CitationStyle.InlineUrl =>
+                        $"- [{citation.Title}]({citation.Url})",
+                    _ =>
+                        $"- [{citation.Number}] {citation.Title}. {citation.Url}"
+                };
+                sb.AppendLine(entry);
+            }
             sb.AppendLine();
         }
 
