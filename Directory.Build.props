@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Ignore NU1903 (known vulnerability in transitive dependency from ironhive) -->
-    <NoWarn>$(NoWarn);NU1903</NoWarn>
+    <!-- Ignore NU5104 (stable package with prerelease dependency: ModelContextProtocol has no stable release yet) -->
+    <NoWarn>$(NoWarn);NU1903;NU5104</NoWarn>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
   </PropertyGroup>
