@@ -8,7 +8,7 @@ namespace IronHive.DeepResearch.Autonomous;
 /// Wraps ResearchOrchestrator as an ITaskExecutor for Autonomous orchestration.
 /// Each ExecuteAsync call runs a full research pipeline (single iteration mode).
 /// </summary>
-public class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequest, AutonomousResearchResult>
+public partial class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequest, AutonomousResearchResult>
 {
     private readonly ResearchOrchestrator _orchestrator;
     private readonly ILogger<ResearchTaskExecutor>? _logger;
@@ -32,7 +32,10 @@ public class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequest, Aut
     {
         try
         {
-            _logger?.LogInformation("Research task executor starting: {Query}", request.Prompt);
+            if (_logger is not null)
+            {
+                LogResearchTaskExecutorStarting(_logger, request.Prompt);
+            }
 
             onOutput?.Invoke(new TaskOutput
             {
@@ -56,7 +59,10 @@ public class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequest, Aut
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Research task executor failed");
+            if (_logger is not null)
+            {
+                LogResearchTaskExecutorFailed(_logger, ex);
+            }
 
             onOutput?.Invoke(new TaskOutput
             {
@@ -72,6 +78,17 @@ public class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequest, Aut
     /// <inheritdoc />
     public ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
         return ValueTask.CompletedTask;
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research task executor starting: {Query}")]
+    private static partial void LogResearchTaskExecutorStarting(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Research task executor failed")]
+    private static partial void LogResearchTaskExecutorFailed(ILogger logger, Exception? exception);
+
+    #endregion
 }

@@ -79,3 +79,7 @@ trim_trailing_whitespace = false
 # Submodules - disable naming rules (they have their own conventions)
 [submodules/**/*.cs]
 dotnet_naming_rule.private_fields_should_be_camel_case.severity = none
+
+# Test projects: allow underscores in test method names (e.g., Method_Should_Work)
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none

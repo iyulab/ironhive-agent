@@ -488,7 +488,9 @@ internal class MockTextGenerationService : ITextGenerationService
         _callCount++;
 
         if (_failure != null)
+        {
             throw _failure;
+        }
 
         return Task.FromResult(new TextGenerationResult
         {
@@ -504,7 +506,9 @@ internal class MockTextGenerationService : ITextGenerationService
         _callCount++;
 
         if (_failure != null)
+        {
             throw _failure;
+        }
 
         if (_structuredResponses.TryGetValue(typeof(T), out var queue) && queue.Count > 0)
         {

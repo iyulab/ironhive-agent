@@ -13,7 +13,7 @@ namespace IronHive.DeepResearch.Search.Providers;
 /// Tavily Search API 프로바이더
 /// https://docs.tavily.com/
 /// </summary>
-public class TavilySearchProvider : ISearchProvider, IDisposable
+public partial class TavilySearchProvider : ISearchProvider, IDisposable
 {
     private bool _disposed;
     private readonly HttpClient _httpClient;
@@ -57,7 +57,7 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
         var cacheKey = _cache.GenerateKey(query);
         if (_cache.TryGet(cacheKey, out var cached) && cached != null)
         {
-            _logger.LogInformation("Returning cached result for query: {Query}", query.Query);
+            LogReturningCachedResult(_logger, query.Query);
             return cached;
         }
 
@@ -73,8 +73,7 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
             ExcludeDomains = query.ExcludeDomains?.ToList()
         };
 
-        _logger.LogInformation("Executing Tavily search: {Query}, Depth: {Depth}",
-            query.Query, request.SearchDepth);
+        LogExecutingSearch(_logger, query.Query, request.SearchDepth);
 
         // 3. API 호출
         var response = await _httpClient.PostAsJsonAsync(
@@ -86,8 +85,7 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("Tavily API error: {StatusCode} - {Error}",
-                response.StatusCode, error);
+            LogApiError(_logger, response.StatusCode, error);
             throw new HttpRequestException($"Tavily API error: {response.StatusCode} - {error}");
         }
 
@@ -103,10 +101,9 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
         var result = MapToSearchResult(tavilyResponse, query);
 
         // 5. 캐시 저장
-        _cache.Set(cacheKey, result, TimeSpan.FromHours(1));
+        _cache.SetEntry(cacheKey, result, TimeSpan.FromHours(1));
 
-        _logger.LogInformation("Tavily search completed: {ResultCount} results",
-            result.Sources.Count);
+        LogSearchCompleted(_logger, result.Sources.Count);
 
         return result;
     }
@@ -116,7 +113,7 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
         CancellationToken cancellationToken = default)
     {
         var queryList = queries.ToList();
-        _logger.LogInformation("Executing batch search: {Count} queries", queryList.Count);
+        LogExecutingBatchSearch(_logger, queryList.Count);
 
         // 병렬 실행 (최대 N개 동시)
         using var semaphore = new SemaphoreSlim(_options.MaxParallelSearches);
@@ -129,7 +126,7 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Search failed for query: {Query}", query.Query);
+                LogSearchFailed(_logger, ex, query.Query);
                 // 실패한 쿼리는 빈 결과 반환
                 return new SearchResult
                 {
@@ -182,13 +179,39 @@ public class TavilySearchProvider : ISearchProvider, IDisposable
     private static DateTimeOffset? ParseDate(string? dateStr)
     {
         if (string.IsNullOrEmpty(dateStr))
+        {
             return null;
+        }
 
         if (DateTimeOffset.TryParse(dateStr, out var date))
+        {
             return date;
+        }
 
         return null;
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Returning cached result for query: {Query}")]
+    private static partial void LogReturningCachedResult(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Executing Tavily search: {Query}, Depth: {Depth}")]
+    private static partial void LogExecutingSearch(ILogger logger, string query, string depth);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Tavily API error: {StatusCode} - {Error}")]
+    private static partial void LogApiError(ILogger logger, System.Net.HttpStatusCode statusCode, string error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tavily search completed: {ResultCount} results")]
+    private static partial void LogSearchCompleted(ILogger logger, int resultCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Executing batch search: {Count} queries")]
+    private static partial void LogExecutingBatchSearch(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Search failed for query: {Query}")]
+    private static partial void LogSearchFailed(ILogger logger, Exception? exception, string query);
+
+    #endregion
 }
 
 #region Tavily API Models

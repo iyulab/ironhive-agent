@@ -3,8 +3,7 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- Relax naming rules for tests (allow underscores in test method names) -->
-    <NoWarn>$(NoWarn);CA1707;CA1725</NoWarn>
+
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +12,7 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="FluentAssertions" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
   </ItemGroup>

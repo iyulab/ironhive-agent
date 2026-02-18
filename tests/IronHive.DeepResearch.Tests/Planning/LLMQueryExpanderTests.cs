@@ -9,6 +9,9 @@ namespace IronHive.Flux.Tests.DeepResearch.Planning;
 
 public class LLMQueryExpanderTests
 {
+    private static readonly string[] s_techKeyTopics = ["배터리 밀도", "충전 인프라"];
+    private static readonly string[] s_econKeyTopics = ["시장 점유율", "투자 규모"];
+
     private readonly LLMQueryExpander _expander;
     private readonly MockTextGenerationService _mockService;
 
@@ -88,13 +91,13 @@ public class LLMQueryExpanderTests
                 {
                     name = "기술적 관점",
                     description = "배터리 및 충전 기술 발전",
-                    keyTopics = new[] { "배터리 밀도", "충전 인프라" }
+                    keyTopics = s_techKeyTopics
                 },
                 new
                 {
                     name = "경제적 관점",
                     description = "시장 규모 및 투자 동향",
-                    keyTopics = new[] { "시장 점유율", "투자 규모" }
+                    keyTopics = s_econKeyTopics
                 }
             }
         });
@@ -280,6 +283,11 @@ public class LLMQueryExpanderTests
 /// </summary>
 internal class MockTextGenerationService : ITextGenerationService
 {
+    private static readonly System.Text.Json.JsonSerializerOptions s_caseInsensitiveOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private object? _structuredResponse;
     private Exception? _exception;
 
@@ -301,7 +309,9 @@ internal class MockTextGenerationService : ITextGenerationService
         CancellationToken cancellationToken = default)
     {
         if (_exception != null)
+        {
             throw _exception;
+        }
 
         return Task.FromResult(new TextGenerationResult
         {
@@ -315,18 +325,18 @@ internal class MockTextGenerationService : ITextGenerationService
         CancellationToken cancellationToken = default) where T : class
     {
         if (_exception != null)
+        {
             throw _exception;
+        }
 
         if (_structuredResponse == null)
+        {
             return Task.FromResult<T?>(null);
+        }
 
         // JSON 직렬화 후 역직렬화로 타입 변환
         var json = System.Text.Json.JsonSerializer.Serialize(_structuredResponse);
-        var result = System.Text.Json.JsonSerializer.Deserialize<T>(json,
-            new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+        var result = System.Text.Json.JsonSerializer.Deserialize<T>(json, s_caseInsensitiveOptions);
 
         return Task.FromResult(result);
     }

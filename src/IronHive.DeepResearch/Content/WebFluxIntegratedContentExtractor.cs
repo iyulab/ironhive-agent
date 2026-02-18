@@ -14,7 +14,7 @@ namespace IronHive.DeepResearch.Content;
 /// WebFlux 패키지 기반 콘텐츠 추출기
 /// WebFlux의 ICrawler와 IContentExtractor를 사용하여 고품질 콘텐츠 추출 제공
 /// </summary>
-public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, IDisposable
+public partial class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, IDisposable
 {
     private bool _disposed;
     private readonly IServiceProvider _serviceProvider;
@@ -40,7 +40,7 @@ public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, I
     {
         options ??= new DeepResearchExtractionOptions();
 
-        _logger.LogInformation("WebFlux 콘텐츠 추출 시작: {Url}", url);
+        LogWebFluxExtractionStarting(_logger, url);
 
         try
         {
@@ -80,19 +80,18 @@ public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, I
             // 3. WebFlux ExtractedContent → DeepResearch ExtractedContent 변환
             var result = MapToDeepResearchContent(webFluxExtracted, url, options);
 
-            _logger.LogInformation("WebFlux 콘텐츠 추출 완료: {Url}, Length: {Length}",
-                url, result.Content?.Length ?? 0);
+            LogWebFluxExtractionCompleted(_logger, url, result.Content?.Length ?? 0);
 
             return result;
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("콘텐츠 추출 타임아웃: {Url}", url);
+            LogExtractionTimeout(_logger, url);
             return CreateFailedResult(url, "요청 타임아웃");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "WebFlux 콘텐츠 추출 실패: {Url}", url);
+            LogWebFluxExtractionFailed(_logger, ex, url);
             return CreateFailedResult(url, ex.Message);
         }
     }
@@ -103,7 +102,7 @@ public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, I
         CancellationToken cancellationToken = default)
     {
         var urlList = urls.ToList();
-        _logger.LogInformation("WebFlux 배치 콘텐츠 추출 시작: {Count}개 URL", urlList.Count);
+        LogWebFluxBatchExtractionStarting(_logger, urlList.Count);
 
         var tasks = urlList.Select(async url =>
         {
@@ -121,8 +120,7 @@ public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, I
         var results = await Task.WhenAll(tasks);
 
         var successCount = results.Count(r => r.Success);
-        _logger.LogInformation("WebFlux 배치 콘텐츠 추출 완료: {Success}/{Total} 성공",
-            successCount, results.Length);
+        LogWebFluxBatchExtractionCompleted(_logger, successCount, results.Length);
 
         return results;
     }
@@ -219,7 +217,9 @@ public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, I
     private static string TruncateAtSentenceBoundary(string content, int maxLength)
     {
         if (content.Length <= maxLength)
+        {
             return content;
+        }
 
         var truncated = content[..maxLength];
         var lastSentenceEnd = truncated.LastIndexOfAny(['.', '!', '?', '\n']);
@@ -252,4 +252,26 @@ public class WebFluxIntegratedContentExtractor : DeepResearchContentExtractor, I
             ExtractedAt = DateTimeOffset.UtcNow
         };
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 콘텐츠 추출 시작: {Url}")]
+    private static partial void LogWebFluxExtractionStarting(ILogger logger, string url);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 콘텐츠 추출 완료: {Url}, Length: {Length}")]
+    private static partial void LogWebFluxExtractionCompleted(ILogger logger, string url, int length);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "콘텐츠 추출 타임아웃: {Url}")]
+    private static partial void LogExtractionTimeout(ILogger logger, string url);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "WebFlux 콘텐츠 추출 실패: {Url}")]
+    private static partial void LogWebFluxExtractionFailed(ILogger logger, Exception? exception, string url);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 배치 콘텐츠 추출 시작: {Count}개 URL")]
+    private static partial void LogWebFluxBatchExtractionStarting(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 배치 콘텐츠 추출 완료: {Success}/{Total} 성공")]
+    private static partial void LogWebFluxBatchExtractionCompleted(ILogger logger, int success, int total);
+
+    #endregion
 }

@@ -6,23 +6,21 @@ using IronHive.DeepResearch.Options;
 using IronHive.DeepResearch.Search.Caching;
 using IronHive.DeepResearch.Search.Providers;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace IronHive.Flux.Tests.DeepResearch.Search.Providers;
 
 public class TavilySearchProviderTests
 {
-    private readonly Mock<ISearchResultCache> _mockCache;
+    private readonly ISearchResultCache _mockCache;
     private readonly DeepResearchOptions _options;
 
     public TavilySearchProviderTests()
     {
-        _mockCache = new Mock<ISearchResultCache>();
-        _mockCache.Setup(c => c.GenerateKey(It.IsAny<SearchQuery>()))
-            .Returns<SearchQuery>(q => $"test-key-{q.Query.GetHashCode()}");
-        _mockCache.Setup(c => c.TryGet(It.IsAny<string>(), out It.Ref<SearchResult?>.IsAny))
-            .Returns(false);
+        _mockCache = Substitute.For<ISearchResultCache>();
+        _mockCache.GenerateKey(Arg.Any<SearchQuery>())
+            .Returns(callInfo => $"test-key-{callInfo.Arg<SearchQuery>().Query.GetHashCode()}");
 
         _options = new DeepResearchOptions
         {
@@ -99,8 +97,12 @@ public class TavilySearchProviderTests
             Answer = "cached answer"
         };
 
-        _mockCache.Setup(c => c.TryGet(It.IsAny<string>(), out cachedResult))
-            .Returns(true);
+        _mockCache.TryGet(Arg.Any<string>(), out Arg.Any<SearchResult?>())
+            .Returns(callInfo =>
+            {
+                callInfo[1] = cachedResult;
+                return true;
+            });
 
         var httpClient = CreateMockHttpClient(CreateSuccessResponse());
         var provider = CreateProvider(httpClient);
@@ -129,10 +131,10 @@ public class TavilySearchProviderTests
         await provider.SearchAsync(query);
 
         // Assert
-        _mockCache.Verify(c => c.Set(
-            It.IsAny<string>(),
-            It.IsAny<SearchResult>(),
-            It.IsAny<TimeSpan>()), Times.Once);
+        _mockCache.Received(1).SetEntry(
+            Arg.Any<string>(),
+            Arg.Any<SearchResult>(),
+            Arg.Any<TimeSpan>());
     }
 
     [Fact]
@@ -256,7 +258,7 @@ public class TavilySearchProviderTests
     {
         return new TavilySearchProvider(
             httpClient,
-            _mockCache.Object,
+            _mockCache,
             _options,
             NullLogger<TavilySearchProvider>.Instance);
     }

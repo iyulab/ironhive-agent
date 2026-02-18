@@ -11,7 +11,7 @@ namespace IronHive.DeepResearch.Orchestration.Agents;
 /// <summary>
 /// 검색 실행 조율 에이전트
 /// </summary>
-public class SearchCoordinatorAgent
+public partial class SearchCoordinatorAgent
 {
     private readonly SearchProviderFactory _providerFactory;
     private readonly DeepResearchOptions _options;
@@ -39,8 +39,7 @@ public class SearchCoordinatorAgent
         options ??= CreateDefaultOptions();
         var startedAt = DateTimeOffset.UtcNow;
 
-        _logger.LogInformation("검색 실행 시작: {QueryCount}개 쿼리, 최대 병렬 {MaxParallel}개",
-            queries.Count, options.MaxParallelSearches);
+        LogSearchExecutionStarting(_logger, queries.Count, options.MaxParallelSearches);
 
         var searchQueries = queries
             .Select(ConvertToSearchQuery)
@@ -73,12 +72,11 @@ public class SearchCoordinatorAgent
 
         if (newQueries.Count == 0)
         {
-            _logger.LogInformation("실행할 새로운 쿼리 없음");
+            LogNoNewQueriesToExecute(_logger);
             return CreateEmptyResult();
         }
 
-        _logger.LogInformation("새로운 쿼리 {NewCount}개 실행 (기존 {ExistingCount}개 제외)",
-            newQueries.Count, plan.InitialQueries.Count - newQueries.Count);
+        LogNewQueriesExecuting(_logger, newQueries.Count, plan.InitialQueries.Count - newQueries.Count);
 
         var result = await ExecuteSearchesAsync(
             newQueries, options, progress, cancellationToken);
@@ -106,7 +104,7 @@ public class SearchCoordinatorAgent
 
         options ??= CreateDefaultOptions();
 
-        _logger.LogInformation("후속 검색 실행: {QueryCount}개 쿼리", followUpQueries.Count);
+        LogFollowUpSearchExecuting(_logger, followUpQueries.Count);
 
         var result = await ExecuteSearchesAsync(
             followUpQueries, options, progress, cancellationToken);
@@ -118,7 +116,7 @@ public class SearchCoordinatorAgent
     }
 
     private async Task<SearchExecutionResult> ExecuteSearchQueriesAsync(
-        IReadOnlyList<SearchQuery> queries,
+        List<SearchQuery> queries,
         SearchExecutionOptions options,
         IProgress<SearchBatchProgress>? progress,
         CancellationToken cancellationToken)
@@ -208,11 +206,9 @@ public class SearchCoordinatorAgent
 
         var completedAt = DateTimeOffset.UtcNow;
 
-        _logger.LogInformation(
-            "검색 실행 완료: 성공 {SuccessCount}개, 실패 {FailCount}개, 소스 {SourceCount}개, 소요 시간 {Duration}ms",
-            successfulResults.Count, failedSearches.Count,
-            successfulResults.Sum(r => r.Sources.Count),
-            (completedAt - startedAt).TotalMilliseconds);
+        var totalSources = successfulResults.Sum(r => r.Sources.Count);
+        LogSearchExecutionCompleted(_logger, successfulResults.Count, failedSearches.Count,
+            totalSources, (completedAt - startedAt).TotalMilliseconds);
 
         return new SearchExecutionResult
         {
@@ -245,8 +241,7 @@ public class SearchCoordinatorAgent
 
                 var result = await provider.SearchAsync(query, linkedCts.Token);
 
-                _logger.LogDebug("쿼리 성공: {Query}, 소스 {Count}개",
-                    TruncateQuery(query.Query), result.Sources.Count);
+                LogQuerySucceeded(_logger, query.Query, result.Sources.Count);
 
                 return new QueryExecutionResult { Success = true, Result = result };
             }
@@ -259,14 +254,12 @@ public class SearchCoordinatorAgent
             {
                 // 타임아웃
                 lastException = new TimeoutException($"Query timed out after {options.QueryTimeout.TotalSeconds}s");
-                _logger.LogWarning("쿼리 타임아웃: {Query} (시도 {Retry}/{MaxRetry})",
-                    TruncateQuery(query.Query), retryCount + 1, options.MaxRetriesPerQuery + 1);
+                LogQueryTimeout(_logger, query.Query, retryCount + 1, options.MaxRetriesPerQuery + 1);
             }
             catch (HttpRequestException ex) when (IsRateLimited(ex))
             {
                 lastException = ex;
-                _logger.LogWarning("Rate limit 감지: {Query}, 대기 후 재시도",
-                    TruncateQuery(query.Query));
+                LogRateLimitDetected(_logger, query.Query);
 
                 // Rate limit 대기
                 var waitTime = CalculateRateLimitWait(retryCount, options);
@@ -280,13 +273,12 @@ public class SearchCoordinatorAgent
             catch (HttpRequestException ex) when (IsServerError(ex))
             {
                 lastException = ex;
-                _logger.LogWarning("서버 에러: {Query}, {Message}",
-                    TruncateQuery(query.Query), ex.Message);
+                LogServerError(_logger, query.Query, ex.Message);
             }
             catch (Exception ex)
             {
                 lastException = ex;
-                _logger.LogWarning(ex, "쿼리 실패: {Query}", TruncateQuery(query.Query));
+                LogQueryFailed(_logger, ex, query.Query);
 
                 // 재시도 불가능한 에러
                 if (!IsRetryableError(ex))
@@ -339,7 +331,7 @@ public class SearchCoordinatorAgent
         };
     }
 
-    private void UpdateState(ResearchState state, SearchExecutionResult result)
+    private static void UpdateState(ResearchState state, SearchExecutionResult result)
     {
         // 실행된 쿼리 추가
         foreach (var searchResult in result.SuccessfulResults)
@@ -480,11 +472,6 @@ public class SearchCoordinatorAgent
             .Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static string TruncateQuery(string query, int maxLength = 50)
-    {
-        return query.Length <= maxLength ? query : query[..(maxLength - 3)] + "...";
-    }
-
     /// <summary>
     /// 단일 쿼리 실행 결과 (내부용)
     /// </summary>
@@ -494,4 +481,38 @@ public class SearchCoordinatorAgent
         public SearchResult? Result { get; init; }
         public FailedSearch? Failure { get; init; }
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "검색 실행 시작: {QueryCount}개 쿼리, 최대 병렬 {MaxParallel}개")]
+    private static partial void LogSearchExecutionStarting(ILogger logger, int queryCount, int maxParallel);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "실행할 새로운 쿼리 없음")]
+    private static partial void LogNoNewQueriesToExecute(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "새로운 쿼리 {NewCount}개 실행 (기존 {ExistingCount}개 제외)")]
+    private static partial void LogNewQueriesExecuting(ILogger logger, int newCount, int existingCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "후속 검색 실행: {QueryCount}개 쿼리")]
+    private static partial void LogFollowUpSearchExecuting(ILogger logger, int queryCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "검색 실행 완료: 성공 {SuccessCount}개, 실패 {FailCount}개, 소스 {SourceCount}개, 소요 시간 {Duration}ms")]
+    private static partial void LogSearchExecutionCompleted(ILogger logger, int successCount, int failCount, int sourceCount, double duration);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "쿼리 성공: {Query}, 소스 {Count}개")]
+    private static partial void LogQuerySucceeded(ILogger logger, string query, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 타임아웃: {Query} (시도 {Retry}/{MaxRetry})")]
+    private static partial void LogQueryTimeout(ILogger logger, string query, int retry, int maxRetry);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rate limit 감지: {Query}, 대기 후 재시도")]
+    private static partial void LogRateLimitDetected(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "서버 에러: {Query}, {Message}")]
+    private static partial void LogServerError(ILogger logger, string query, string message);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 실패: {Query}")]
+    private static partial void LogQueryFailed(ILogger logger, Exception? exception, string query);
+
+    #endregion
 }

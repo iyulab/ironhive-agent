@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Models.Analysis;
@@ -13,7 +14,7 @@ namespace IronHive.DeepResearch.Orchestration.Agents;
 /// <summary>
 /// 보고서 생성 에이전트: 아웃라인 생성, 섹션 작성, 인용 처리
 /// </summary>
-public class ReportGeneratorAgent
+public partial class ReportGeneratorAgent
 {
     private readonly ITextGenerationService _textService;
     private readonly DeepResearchOptions _researchOptions;
@@ -41,14 +42,13 @@ public class ReportGeneratorAgent
         options ??= CreateDefaultOptions(state);
         var startedAt = DateTimeOffset.UtcNow;
 
-        _logger.LogInformation("보고서 생성 시작: Finding {FindingCount}개, 소스 {SourceCount}개",
-            state.Findings.Count, state.CollectedSources.Count);
+        LogReportGenerationStarting(_logger, state.Findings.Count, state.CollectedSources.Count);
 
         // 1. 아웃라인 생성
         ReportProgress(progress, ReportGenerationPhase.GeneratingOutline, 0, 0);
         var outline = await GenerateOutlineAsync(state, options, cancellationToken);
         state.Outline = outline;
-        _logger.LogDebug("아웃라인 생성 완료: {SectionCount}개 섹션", outline.Sections.Count);
+        LogOutlineGenerated(_logger, outline.Sections.Count);
 
         // 2. 섹션별 콘텐츠 생성
         var sections = new List<ReportSection>();
@@ -68,7 +68,7 @@ public class ReportGeneratorAgent
             sections.Add(section);
             state.GeneratedSections.Add(section);
 
-            _logger.LogDebug("섹션 생성 완료: {Title}", section.Title);
+            LogSectionGenerated(_logger, section.Title);
         }
 
         // 3. 인용 처리
@@ -86,8 +86,7 @@ public class ReportGeneratorAgent
         ReportProgress(progress, ReportGenerationPhase.Completed,
             outline.Sections.Count, outline.Sections.Count);
 
-        _logger.LogInformation("보고서 생성 완료: {SectionCount}개 섹션, {CitationCount}개 인용, 소요 시간 {Duration}ms",
-            sections.Count, citations.Count, (completedAt - startedAt).TotalMilliseconds);
+        LogReportGenerationCompleted(_logger, sections.Count, citations.Count, (completedAt - startedAt).TotalMilliseconds);
 
         return new ReportGenerationResult
         {
@@ -145,7 +144,7 @@ public class ReportGeneratorAgent
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "아웃라인 생성 실패, 기본 아웃라인 사용");
+            LogOutlineGenerationFailed(_logger, ex);
             return CreateDefaultOutline(state, options);
         }
     }
@@ -209,7 +208,7 @@ public class ReportGeneratorAgent
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "섹션 생성 실패: {Title}", outlineSection.Title);
+            LogSectionGenerationFailed(_logger, ex, outlineSection.Title);
 
             return new ReportSection
             {
@@ -245,13 +244,13 @@ public class ReportGeneratorAgent
         var sb = new StringBuilder();
 
         // 제목
-        sb.AppendLine($"# {outline.Title}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {outline.Title}");
         sb.AppendLine();
 
         // 섹션들
         foreach (var section in sections.OrderBy(s => s.Order))
         {
-            sb.AppendLine($"## {section.Title}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {section.Title}");
             sb.AppendLine();
             sb.AppendLine(section.Content);
             sb.AppendLine();
@@ -417,6 +416,8 @@ public class ReportGeneratorAgent
         return sectionWords.Intersect(findingWords, StringComparer.OrdinalIgnoreCase).Any();
     }
 
+    private static readonly char[] KeywordSeparators = [' ', ',', '.', ':', ';', '!', '?'];
+
     private static HashSet<string> GetKeywords(string text)
     {
         var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -427,7 +428,7 @@ public class ReportGeneratorAgent
         };
 
         return text
-            .Split(new[] { ' ', ',', '.', ':', ';', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+            .Split(KeywordSeparators, StringSplitOptions.RemoveEmptyEntries)
             .Where(w => w.Length > 2 && !stopWords.Contains(w))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
@@ -468,7 +469,7 @@ public class ReportGeneratorAgent
         return content;
     }
 
-    private ReportOutline CreateDefaultOutline(ResearchState state, ReportGenerationOptions options)
+    private static ReportOutline CreateDefaultOutline(ResearchState state, ReportGenerationOptions options)
     {
         var sections = new List<OutlineSection>();
         var order = 1;
@@ -537,7 +538,7 @@ public class ReportGeneratorAgent
         };
     }
 
-    private ReportGenerationOptions CreateDefaultOptions(ResearchState state)
+    private static ReportGenerationOptions CreateDefaultOptions(ResearchState state)
     {
         return new ReportGenerationOptions
         {
@@ -568,6 +569,28 @@ public class ReportGeneratorAgent
             CurrentSection = currentSection
         });
     }
+
+    #endregion
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "보고서 생성 시작: Finding {FindingCount}개, 소스 {SourceCount}개")]
+    private static partial void LogReportGenerationStarting(ILogger logger, int findingCount, int sourceCount);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "아웃라인 생성 완료: {SectionCount}개 섹션")]
+    private static partial void LogOutlineGenerated(ILogger logger, int sectionCount);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "섹션 생성 완료: {Title}")]
+    private static partial void LogSectionGenerated(ILogger logger, string title);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "보고서 생성 완료: {SectionCount}개 섹션, {CitationCount}개 인용, 소요 시간 {Duration}ms")]
+    private static partial void LogReportGenerationCompleted(ILogger logger, int sectionCount, int citationCount, double duration);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "아웃라인 생성 실패, 기본 아웃라인 사용")]
+    private static partial void LogOutlineGenerationFailed(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "섹션 생성 실패: {Title}")]
+    private static partial void LogSectionGenerationFailed(ILogger logger, Exception? exception, string title);
 
     #endregion
 }

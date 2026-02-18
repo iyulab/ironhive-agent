@@ -1,5 +1,6 @@
 using System.Net;
 using IronHive.Agent.Webhook;
+using Microsoft.Extensions.Logging;
 
 namespace IronHive.Agent.Tests.Webhook;
 
@@ -221,6 +222,38 @@ public class WebhookServiceTests
         Assert.Contains("X-Custom-Header", handler.LastRequest.Headers.Select(h => h.Key));
     }
 
+    [Fact]
+    public async Task SendAsync_AsyncDeliveryFailure_LogsWarning()
+    {
+        var config = new WebhookConfig
+        {
+            AsyncDelivery = true,
+            Endpoints =
+            [
+                new WebhookEndpoint
+                {
+                    Url = "https://example.com/webhook",
+                    RetryCount = 0
+                }
+            ]
+        };
+
+        var handler = new FailingHttpMessageHandler();
+        var httpClient = new HttpClient(handler);
+        var logger = new TestLogger();
+        var service = new WebhookService(config, httpClient, logger);
+
+        // Fire-and-forget returns empty immediately
+        var results = await service.SendAsync(WebhookEventType.SessionStarted);
+        Assert.Empty(results);
+
+        // Wait briefly for the fire-and-forget task to complete
+        await Task.Delay(500);
+
+        // Logger should have captured the warning
+        Assert.True(logger.WarningLogged, "Expected a warning to be logged for async delivery failure");
+    }
+
     private sealed class MockHttpMessageHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _statusCode;
@@ -239,6 +272,40 @@ public class WebhookServiceTests
             CallCount++;
             LastRequest = request;
             return Task.FromResult(new HttpResponseMessage(_statusCode));
+        }
+    }
+
+    private sealed class FailingHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            // Throw an unexpected exception type that DeliverToEndpointAsync won't catch,
+            // causing the task to fault and trigger the ContinueWith(OnlyOnFaulted) path
+            throw new InvalidOperationException("Simulated unexpected failure");
+        }
+    }
+
+    private sealed class TestLogger : ILogger<WebhookService>
+    {
+        public bool WarningLogged { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                WarningLogged = true;
+            }
         }
     }
 }

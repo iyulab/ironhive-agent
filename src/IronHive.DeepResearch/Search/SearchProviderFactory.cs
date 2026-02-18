@@ -7,7 +7,7 @@ namespace IronHive.DeepResearch.Search;
 /// <summary>
 /// 검색 프로바이더 팩토리
 /// </summary>
-public class SearchProviderFactory
+public partial class SearchProviderFactory
 {
     private readonly Dictionary<string, ISearchProvider> _providers;
     private readonly DeepResearchOptions _options;
@@ -22,8 +22,11 @@ public class SearchProviderFactory
         _options = options;
         _logger = logger;
 
-        _logger.LogInformation("SearchProviderFactory initialized with {Count} providers: {Providers}",
-            _providers.Count, string.Join(", ", _providers.Keys));
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            var providerNames = string.Join(", ", _providers.Keys);
+            LogFactoryInitialized(_logger, _providers.Count, providerNames);
+        }
     }
 
     /// <summary>
@@ -49,8 +52,7 @@ public class SearchProviderFactory
             return provider;
         }
 
-        _logger.LogError("Search provider not found: {ProviderId}. Available: {Available}",
-            providerId, string.Join(", ", _providers.Keys));
+        LogProviderNotFound(_logger, providerId, string.Join(", ", _providers.Keys));
         throw new InvalidOperationException(
             $"Search provider '{providerId}' not found. Available providers: {string.Join(", ", _providers.Keys)}");
     }
@@ -92,8 +94,7 @@ public class SearchProviderFactory
 
         if (providers.Count == 0)
         {
-            _logger.LogWarning("No provider found for capability {Capability}, using default",
-                capability);
+            LogNoProviderForCapability(_logger, capability);
             return GetDefaultProvider();
         }
 
@@ -106,4 +107,17 @@ public class SearchProviderFactory
 
         return providers[0];
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "SearchProviderFactory initialized with {Count} providers: {Providers}")]
+    private static partial void LogFactoryInitialized(ILogger logger, int count, string providers);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Search provider not found: {ProviderId}. Available: {Available}")]
+    private static partial void LogProviderNotFound(ILogger logger, string providerId, string available);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No provider found for capability {Capability}, using default")]
+    private static partial void LogNoProviderForCapability(ILogger logger, SearchCapabilities capability);
+
+    #endregion
 }

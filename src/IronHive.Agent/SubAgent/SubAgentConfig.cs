@@ -41,20 +41,6 @@ public class ExploreAgentConfig
     /// Maximum context tokens.
     /// </summary>
     public int MaxTokens { get; set; } = 16_000;
-
-    /// <summary>
-    /// Tools allowed for Explore agent (read-only tools).
-    /// Now managed via YAML agent capabilities (agents/explore/agent.yaml).
-    /// Retained for backwards compatibility with external consumers.
-    /// </summary>
-    [Obsolete("Use YAML agent capabilities instead (agents/explore/agent.yaml).")]
-    public List<string> AllowedTools { get; set; } =
-    [
-        "ReadFile",
-        "ListDirectory",
-        "GlobFiles",
-        "GrepFiles"
-    ];
 }
 
 /// <summary>

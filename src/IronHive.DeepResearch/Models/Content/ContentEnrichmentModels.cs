@@ -146,7 +146,7 @@ public record ContentEnrichmentOptions
     /// <summary>
     /// 링크 추출 여부
     /// </summary>
-    public bool ExtractLinks { get; init; } = false;
+    public bool ExtractLinks { get; init; }
 
     /// <summary>
     /// 실패 시 계속 진행

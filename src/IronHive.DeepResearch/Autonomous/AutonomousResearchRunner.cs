@@ -9,7 +9,7 @@ namespace IronHive.DeepResearch.Autonomous;
 /// Wires ResearchTaskExecutor + ResearchOracleVerifier into an AutonomousOrchestrator
 /// for oracle-driven iterative research with automatic sufficiency checking.
 /// </summary>
-public class AutonomousResearchRunner
+public partial class AutonomousResearchRunner
 {
     private readonly ResearchTaskExecutor _executor;
     private readonly ResearchOracleVerifier _verifier;
@@ -35,9 +35,10 @@ public class AutonomousResearchRunner
         CancellationToken cancellationToken = default)
     {
         var maxIterations = GetMaxIterations(request);
-        _logger?.LogInformation(
-            "Autonomous research starting: {Query}, max iterations: {Max}",
-            request.Query, maxIterations);
+        if (_logger is not null)
+        {
+            LogAutonomousResearchStarting(_logger, request.Query, maxIterations);
+        }
 
         // Wrap executor to capture typed results (AutonomousOrchestrator only exposes string output)
         var capturingExecutor = new ResultCapturingExecutor(_executor);
@@ -60,9 +61,10 @@ public class AutonomousResearchRunner
         await orchestrator.StartAsync(cancellationToken: cancellationToken);
 
         var iterationCount = orchestrator.GetHistory().Count;
-        _logger?.LogInformation(
-            "Autonomous research completed after {Iterations} iteration(s)",
-            iterationCount);
+        if (_logger is not null)
+        {
+            LogAutonomousResearchCompleted(_logger, iterationCount);
+        }
 
         // Return the last captured typed result
         if (capturingExecutor.LastResult?.InnerResult is { } innerResult)
@@ -70,7 +72,11 @@ public class AutonomousResearchRunner
             return innerResult;
         }
 
-        _logger?.LogWarning("No typed result captured, returning empty result");
+        if (_logger is not null)
+        {
+            LogNoTypedResultCaptured(_logger);
+        }
+
         return CreateEmptyResult(request);
     }
 
@@ -111,6 +117,19 @@ public class AutonomousResearchRunner
             IsPartial = true
         };
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autonomous research starting: {Query}, max iterations: {Max}")]
+    private static partial void LogAutonomousResearchStarting(ILogger logger, string query, int max);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autonomous research completed after {Iterations} iteration(s)")]
+    private static partial void LogAutonomousResearchCompleted(ILogger logger, int iterations);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No typed result captured, returning empty result")]
+    private static partial void LogNoTypedResultCaptured(ILogger logger);
+
+    #endregion
 
     /// <summary>
     /// Wraps ResearchTaskExecutor to capture the last typed result,

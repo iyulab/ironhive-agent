@@ -9,7 +9,7 @@ namespace IronHive.DeepResearch.Autonomous;
 /// for Autonomous orchestration.
 /// Uses the research result's sufficiency metadata to determine completion.
 /// </summary>
-public class ResearchOracleVerifier : IOracleVerifier
+public partial class ResearchOracleVerifier : IOracleVerifier
 {
     private readonly ILogger<ResearchOracleVerifier>? _logger;
 
@@ -34,7 +34,11 @@ public class ResearchOracleVerifier : IOracleVerifier
 
         if (string.IsNullOrWhiteSpace(executionOutput))
         {
-            _logger?.LogWarning("Research produced empty output");
+            if (_logger is not null)
+            {
+                LogResearchProducedEmptyOutput(_logger);
+            }
+
             return Task.FromResult(OracleVerdict.ContinueToNextIteration(
                 "Research produced empty output, retry needed.",
                 confidence: 0.1));
@@ -49,7 +53,11 @@ public class ResearchOracleVerifier : IOracleVerifier
 
         if (confidence >= 0.8)
         {
-            _logger?.LogInformation("Research sufficient (confidence: {Confidence:P0})", confidence);
+            if (_logger is not null)
+            {
+                LogResearchSufficient(_logger, confidence);
+            }
+
             return Task.FromResult(OracleVerdict.GoalAchieved(
                 $"Research report is comprehensive: {reportLength} chars, has sections: {hasSections}, has references: {hasReferences}",
                 confidence));
@@ -57,13 +65,21 @@ public class ResearchOracleVerifier : IOracleVerifier
 
         if (confidence >= 0.5)
         {
-            _logger?.LogInformation("Research partially sufficient (confidence: {Confidence:P0}), continuing", confidence);
+            if (_logger is not null)
+            {
+                LogResearchPartiallySufficient(_logger, confidence);
+            }
+
             return Task.FromResult(OracleVerdict.ContinueToNextIteration(
                 $"Research partially complete: {reportLength} chars. Need more depth or sources.",
                 confidence));
         }
 
-        _logger?.LogInformation("Research insufficient (confidence: {Confidence:P0}), continuing", confidence);
+        if (_logger is not null)
+        {
+            LogResearchInsufficient(_logger, confidence);
+        }
+
         return Task.FromResult(OracleVerdict.ContinueToNextIteration(
             $"Research insufficient: short report ({reportLength} chars). Need significantly more content.",
             confidence));
@@ -82,6 +98,22 @@ public class ResearchOracleVerifier : IOracleVerifier
             Has citations: {executionOutput?.Contains('[') ?? false}
             """;
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Research produced empty output")]
+    private static partial void LogResearchProducedEmptyOutput(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research sufficient (confidence: {Confidence:P0})")]
+    private static partial void LogResearchSufficient(ILogger logger, double confidence);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research partially sufficient (confidence: {Confidence:P0}), continuing")]
+    private static partial void LogResearchPartiallySufficient(ILogger logger, double confidence);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research insufficient (confidence: {Confidence:P0}), continuing")]
+    private static partial void LogResearchInsufficient(ILogger logger, double confidence);
+
+    #endregion
 
     private static double CalculateConfidence(int reportLength, bool hasSections, bool hasReferences)
     {

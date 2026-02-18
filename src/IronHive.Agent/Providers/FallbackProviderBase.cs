@@ -11,6 +11,7 @@ public abstract class FallbackProviderBase<TProvider> : IAsyncDisposable, IDispo
     private readonly TProvider[] _providers;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private volatile TProvider? _activeProvider;
+    private int _disposed;
 
     /// <summary>
     /// Gets the array of providers.
@@ -103,6 +104,11 @@ public abstract class FallbackProviderBase<TProvider> : IAsyncDisposable, IDispo
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
+        {
+            return;
+        }
+
         foreach (var provider in _providers)
         {
             await provider.DisposeAsync();
@@ -115,6 +121,11 @@ public abstract class FallbackProviderBase<TProvider> : IAsyncDisposable, IDispo
     /// <inheritdoc />
     public void Dispose()
     {
+        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
+        {
+            return;
+        }
+
         foreach (var provider in _providers)
         {
             if (provider is IDisposable disposable)

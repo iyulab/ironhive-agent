@@ -16,7 +16,7 @@ public class ResearchState
 
     // 현재 진행 상태
     public ResearchPhase CurrentPhase { get; set; } = ResearchPhase.Planning;
-    public int CurrentIteration { get; set; } = 0;
+    public int CurrentIteration { get; set; }
 
     // 수집된 데이터
     public List<SearchQuery> ExecutedQueries { get; } = [];

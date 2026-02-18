@@ -97,7 +97,7 @@ public class QueryPlannerAgentTests
 
         // Assert
         result.InitialQueries.Should().HaveCount(2);
-        result.InitialQueries.Select(q => q.Query.ToLower())
+        result.InitialQueries.Select(q => q.Query.ToLower(System.Globalization.CultureInfo.InvariantCulture))
             .Distinct()
             .Should().HaveCount(2);
     }

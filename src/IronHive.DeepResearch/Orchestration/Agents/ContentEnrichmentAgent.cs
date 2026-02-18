@@ -12,7 +12,7 @@ namespace IronHive.DeepResearch.Orchestration.Agents;
 /// 콘텐츠 강화 에이전트
 /// 검색 결과에서 콘텐츠를 추출하고 청킹하여 SourceDocument로 변환
 /// </summary>
-public class ContentEnrichmentAgent
+public partial class ContentEnrichmentAgent
 {
     private readonly IContentExtractor _contentExtractor;
     private readonly ContentChunker _contentChunker;
@@ -46,8 +46,7 @@ public class ContentEnrichmentAgent
         // 검색 결과에서 소스 정보 추출
         var sourcesToProcess = ExtractSourcesToProcess(searchResults, options);
 
-        _logger.LogInformation("콘텐츠 강화 시작: {SourceCount}개 소스, 최대 병렬 {MaxParallel}개",
-            sourcesToProcess.Count, options.MaxParallelExtractions);
+        LogContentEnrichmentStarting(_logger, sourcesToProcess.Count, options.MaxParallelExtractions);
 
         var documents = new List<SourceDocument>();
         var failedExtractions = new List<FailedExtraction>();
@@ -100,9 +99,7 @@ public class ContentEnrichmentAgent
 
         var completedAt = DateTimeOffset.UtcNow;
 
-        _logger.LogInformation(
-            "콘텐츠 강화 완료: 문서 {DocCount}개, 청크 {ChunkCount}개, 실패 {FailCount}개, 소요 시간 {Duration}ms",
-            documents.Count, totalChunks, failedExtractions.Count,
+        LogContentEnrichmentCompleted(_logger, documents.Count, totalChunks, failedExtractions.Count,
             (completedAt - startedAt).TotalMilliseconds);
 
         return new ContentEnrichmentResult
@@ -138,7 +135,7 @@ public class ContentEnrichmentAgent
         return result;
     }
 
-    private List<SourceInfo> ExtractSourcesToProcess(
+    private static List<SourceInfo> ExtractSourcesToProcess(
         IReadOnlyList<SearchResult> searchResults,
         ContentEnrichmentOptions options)
     {
@@ -151,7 +148,9 @@ public class ContentEnrichmentAgent
             {
                 // 중복 URL 제외
                 if (!seenUrls.Add(source.Url))
+                {
                     continue;
+                }
 
                 sources.Add(new SourceInfo
                 {
@@ -181,13 +180,13 @@ public class ContentEnrichmentAgent
             // RawContent가 있고 사용 옵션이 켜져 있으면 직접 사용
             if (options.UseRawContentWhenAvailable && !string.IsNullOrWhiteSpace(source.RawContent))
             {
-                _logger.LogDebug("RawContent 사용: {Url}", TruncateUrl(source.Url));
+                LogUsingRawContent(_logger, source.Url);
                 extracted = CreateExtractedContentFromRaw(source);
             }
             else
             {
                 // 콘텐츠 추출 실행
-                _logger.LogDebug("콘텐츠 추출 시작: {Url}", TruncateUrl(source.Url));
+                LogContentExtractionStarting(_logger, source.Url);
 
                 using var timeoutCts = new CancellationTokenSource(options.ExtractionTimeout);
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -281,7 +280,7 @@ public class ContentEnrichmentAgent
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "콘텐츠 추출 실패: {Url}", source.Url);
+            LogContentExtractionFailed(_logger, ex, source.Url);
 
             return new ProcessingResult
             {
@@ -339,18 +338,26 @@ public class ContentEnrichmentAgent
 
         // 저자 정보가 있으면 신뢰도 증가
         if (!string.IsNullOrEmpty(extracted.Author))
+        {
             score += 0.1;
+        }
 
         // 발행일이 있으면 신뢰도 증가
         if (extracted.PublishedDate.HasValue)
+        {
             score += 0.1;
+        }
 
         // 콘텐츠 길이에 따른 점수 (너무 짧거나 길면 감점)
         var contentLength = extracted.ContentLength;
         if (contentLength >= 500 && contentLength <= 20000)
+        {
             score += 0.1;
+        }
         else if (contentLength < 200)
+        {
             score -= 0.1;
+        }
 
         // 검색 점수 반영
         score += source.Score * 0.2;
@@ -358,7 +365,7 @@ public class ContentEnrichmentAgent
         return Math.Clamp(score, 0, 1);
     }
 
-    private void UpdateState(ResearchState state, ContentEnrichmentResult result)
+    private static void UpdateState(ResearchState state, ContentEnrichmentResult result)
     {
         // 소스 문서 추가
         foreach (var document in result.Documents)
@@ -396,14 +403,8 @@ public class ContentEnrichmentAgent
 
     private static string GenerateDocumentId(string url)
     {
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hash = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url));
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url));
         return $"doc_{Convert.ToHexString(hash)[..12].ToLowerInvariant()}";
-    }
-
-    private static string TruncateUrl(string url, int maxLength = 60)
-    {
-        return url.Length <= maxLength ? url : url[..(maxLength - 3)] + "...";
     }
 
     /// <summary>
@@ -428,4 +429,23 @@ public class ContentEnrichmentAgent
         public SourceDocument? Document { get; init; }
         public FailedExtraction? Failure { get; init; }
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 강화 시작: {SourceCount}개 소스, 최대 병렬 {MaxParallel}개")]
+    private static partial void LogContentEnrichmentStarting(ILogger logger, int sourceCount, int maxParallel);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 강화 완료: 문서 {DocCount}개, 청크 {ChunkCount}개, 실패 {FailCount}개, 소요 시간 {Duration}ms")]
+    private static partial void LogContentEnrichmentCompleted(ILogger logger, int docCount, int chunkCount, int failCount, double duration);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "RawContent 사용: {Url}")]
+    private static partial void LogUsingRawContent(ILogger logger, string url);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "콘텐츠 추출 시작: {Url}")]
+    private static partial void LogContentExtractionStarting(ILogger logger, string url);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "콘텐츠 추출 실패: {Url}")]
+    private static partial void LogContentExtractionFailed(ILogger logger, Exception? exception, string url);
+
+    #endregion
 }

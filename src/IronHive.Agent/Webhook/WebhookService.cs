@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IronHive.Agent.Webhook;
 
@@ -73,18 +75,23 @@ public class WebhookConfig
 /// <summary>
 /// HTTP-based webhook service implementation.
 /// </summary>
-public class WebhookService : IWebhookService, IDisposable
+public partial class WebhookService : IWebhookService, IDisposable
 {
     private readonly WebhookConfig _config;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly List<WebhookEndpoint> _activeEndpoints;
+    private readonly ILogger<WebhookService> _logger;
 
-    public WebhookService(WebhookConfig? config = null, HttpClient? httpClient = null)
+    public WebhookService(
+        WebhookConfig? config = null,
+        HttpClient? httpClient = null,
+        ILogger<WebhookService>? logger = null)
     {
         _config = config ?? new WebhookConfig();
         _ownsHttpClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
+        _logger = logger ?? NullLogger<WebhookService>.Instance;
         _activeEndpoints = _config.Endpoints
             .Where(e => e.Enabled && !string.IsNullOrEmpty(e.Url))
             .ToList();
@@ -140,9 +147,9 @@ public class WebhookService : IWebhookService, IDisposable
 
         if (_config.AsyncDelivery)
         {
-            // Fire-and-forget: start tasks but observe exceptions
+            // Fire-and-forget: start tasks but observe exceptions via logger
             _ = Task.WhenAll(tasks).ContinueWith(
-                t => Debug.WriteLine($"Webhook delivery failed: {t.Exception?.Message}"),
+                t => LogWebhookDeliveryFailed(t.Exception),
                 TaskContinuationOptions.OnlyOnFaulted);
             return [];
         }
@@ -264,4 +271,7 @@ public class WebhookService : IWebhookService, IDisposable
 
         GC.SuppressFinalize(this);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Webhook delivery failed")]
+    private partial void LogWebhookDeliveryFailed(Exception? exception);
 }

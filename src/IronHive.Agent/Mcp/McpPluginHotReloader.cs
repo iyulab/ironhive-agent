@@ -14,6 +14,7 @@ public class McpPluginHotReloader : IAsyncDisposable
     private bool _disposed;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private readonly CancellationTokenSource _disposeCts = new();
+    private volatile Task? _pendingReloadTask;
 
     /// <summary>
     /// Event raised when plugins are reloaded.
@@ -263,8 +264,13 @@ public class McpPluginHotReloader : IAsyncDisposable
 
     private void OnConfigFileChanged(object sender, FileSystemEventArgs e)
     {
-        // Debounce and reload asynchronously
-        _ = Task.Run(async () =>
+        if (_disposed)
+        {
+            return;
+        }
+
+        // Debounce and reload asynchronously — track the task for graceful disposal
+        var task = Task.Run(async () =>
         {
             // Small delay to allow file write to complete
             await Task.Delay(100, _disposeCts.Token);
@@ -281,6 +287,8 @@ public class McpPluginHotReloader : IAsyncDisposable
                 });
             }
         }, TaskScheduler.Default);
+
+        _pendingReloadTask = task;
     }
 
     private static bool ConfigEquals(McpPluginConfig a, McpPluginConfig b)
@@ -349,6 +357,19 @@ public class McpPluginHotReloader : IAsyncDisposable
         await _disposeCts.CancelAsync();
 
         _watcher?.Dispose();
+
+        // Await the pending reload task to prevent accessing disposed resources
+        if (_pendingReloadTask is { } pending)
+        {
+            try
+            {
+                await pending;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during disposal
+            }
+        }
 
         // Disconnect all connected plugins
         foreach (var name in _pluginManager.ConnectedPlugins.ToList())

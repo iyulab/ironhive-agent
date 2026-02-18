@@ -6,6 +6,7 @@ using IronHive.Agent.Permissions;
 using IronHive.Agent.Tracking;
 using IronHive.Agent.Webhook;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace IronHive.Agent.Extensions;
 
@@ -89,7 +90,8 @@ public static class AgentServiceCollectionExtensions
         {
             var config = sp.GetService<WebhookConfig>();
             var httpClient = sp.GetService<HttpClient>();
-            return new WebhookService(config, httpClient);
+            var logger = sp.GetService<ILogger<WebhookService>>();
+            return new WebhookService(config, httpClient, logger);
         });
 
         // Register MCP plugin manager

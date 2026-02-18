@@ -8,7 +8,7 @@ namespace IronHive.DeepResearch.Search.QueryExpansion;
 /// <summary>
 /// LLM 기반 쿼리 확장기
 /// </summary>
-public class LLMQueryExpander : IQueryExpander
+public partial class LLMQueryExpander : IQueryExpander
 {
     private readonly ITextGenerationService _textService;
     private readonly ILogger<LLMQueryExpander> _logger;
@@ -50,7 +50,7 @@ public class LLMQueryExpander : IQueryExpander
 
             if (response?.Questions is null || response.Questions.Count == 0)
             {
-                _logger.LogWarning("쿼리 분해 실패: 빈 응답");
+                LogDecompositionEmptyResponse(_logger);
                 return CreateFallbackSubQuestions(query);
             }
 
@@ -68,7 +68,7 @@ public class LLMQueryExpander : IQueryExpander
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "쿼리 분해 중 오류 발생");
+            LogDecompositionError(_logger, ex);
             return CreateFallbackSubQuestions(query);
         }
     }
@@ -96,7 +96,7 @@ public class LLMQueryExpander : IQueryExpander
 
             if (response?.Perspectives is null || response.Perspectives.Count == 0)
             {
-                _logger.LogWarning("관점 발견 실패: 빈 응답");
+                LogPerspectiveEmptyResponse(_logger);
                 return CreateFallbackPerspectives();
             }
 
@@ -113,7 +113,7 @@ public class LLMQueryExpander : IQueryExpander
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "관점 발견 중 오류 발생");
+            LogPerspectiveError(_logger, ex);
             return CreateFallbackPerspectives();
         }
     }
@@ -143,7 +143,7 @@ public class LLMQueryExpander : IQueryExpander
 
             if (response?.Queries is null || response.Queries.Count == 0)
             {
-                _logger.LogWarning("쿼리 확장 실패: 빈 응답");
+                LogExpansionEmptyResponse(_logger);
                 return CreateFallbackExpandedQueries(originalQuery, subQuestions);
             }
 
@@ -163,7 +163,7 @@ public class LLMQueryExpander : IQueryExpander
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "쿼리 확장 중 오류 발생");
+            LogExpansionError(_logger, ex);
             return CreateFallbackExpandedQueries(originalQuery, subQuestions);
         }
     }
@@ -243,8 +243,15 @@ public class LLMQueryExpander : IQueryExpander
             JsonOptions);
 
         var searchTypes = new List<string> { "web" };
-        if (options.IncludeNews) searchTypes.Add("news");
-        if (options.IncludeAcademic) searchTypes.Add("academic");
+        if (options.IncludeNews)
+        {
+            searchTypes.Add("news");
+        }
+
+        if (options.IncludeAcademic)
+        {
+            searchTypes.Add("academic");
+        }
 
         var searchTypesStr = string.Join(", ", searchTypes);
 
@@ -378,7 +385,7 @@ public class LLMQueryExpander : IQueryExpander
         ];
     }
 
-    private static IReadOnlyList<ExpandedQuery> CreateFallbackExpandedQueries(
+    private static List<ExpandedQuery> CreateFallbackExpandedQueries(
         string originalQuery,
         IReadOnlyList<SubQuestion> subQuestions)
     {
@@ -413,6 +420,28 @@ public class LLMQueryExpander : IQueryExpander
             _ => QuerySearchType.Web
         };
     }
+
+    #endregion
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 분해 실패: 빈 응답")]
+    private static partial void LogDecompositionEmptyResponse(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "쿼리 분해 중 오류 발생")]
+    private static partial void LogDecompositionError(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "관점 발견 실패: 빈 응답")]
+    private static partial void LogPerspectiveEmptyResponse(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "관점 발견 중 오류 발생")]
+    private static partial void LogPerspectiveError(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 확장 실패: 빈 응답")]
+    private static partial void LogExpansionEmptyResponse(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "쿼리 확장 중 오류 발생")]
+    private static partial void LogExpansionError(ILogger logger, Exception? exception);
 
     #endregion
 }

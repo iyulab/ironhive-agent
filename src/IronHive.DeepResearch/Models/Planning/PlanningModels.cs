@@ -152,12 +152,12 @@ public record QueryExpansionOptions
     /// <summary>
     /// 학술 검색 포함 여부
     /// </summary>
-    public bool IncludeAcademic { get; init; } = false;
+    public bool IncludeAcademic { get; init; }
 
     /// <summary>
     /// 뉴스 검색 포함 여부
     /// </summary>
-    public bool IncludeNews { get; init; } = false;
+    public bool IncludeNews { get; init; }
 
     /// <summary>
     /// 출력 언어

@@ -9,7 +9,7 @@ namespace IronHive.DeepResearch.Orchestration.Agents;
 /// <summary>
 /// 쿼리 계획 에이전트 (Self-Ask + STORM 패턴)
 /// </summary>
-public class QueryPlannerAgent
+public partial class QueryPlannerAgent
 {
     private readonly IQueryExpander _queryExpander;
     private readonly ILogger<QueryPlannerAgent> _logger;
@@ -29,26 +29,26 @@ public class QueryPlannerAgent
         ResearchState state,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("쿼리 계획 시작: {Query}", state.Request.Query);
+        LogQueryPlanStarting(_logger, state.Request.Query);
 
         var options = CreateExpansionOptions(state.Request);
 
         // 1. Self-Ask: 질문 분해
-        _logger.LogDebug("질문 분해 시작 (Self-Ask 패턴)");
+        LogDecomposingQuery(_logger);
         var subQuestions = await _queryExpander.DecomposeQueryAsync(
             state.Request.Query, options, cancellationToken);
 
-        _logger.LogDebug("하위 질문 {Count}개 생성됨", subQuestions.Count);
+        LogSubQuestionsGenerated(_logger, subQuestions.Count);
 
         // 2. STORM: 관점 발견
-        _logger.LogDebug("관점 발견 시작 (STORM 패턴)");
+        LogDiscoveringPerspectives(_logger);
         var perspectives = await _queryExpander.DiscoverPerspectivesAsync(
             state.Request.Query, options, cancellationToken);
 
-        _logger.LogDebug("리서치 관점 {Count}개 발견됨", perspectives.Count);
+        LogPerspectivesDiscovered(_logger, perspectives.Count);
 
         // 3. 쿼리 확장 (관점 x 하위질문)
-        _logger.LogDebug("쿼리 확장 시작");
+        LogExpandingQueries(_logger);
         var expandedQueries = await _queryExpander.ExpandQueriesAsync(
             state.Request.Query,
             subQuestions,
@@ -56,14 +56,12 @@ public class QueryPlannerAgent
             options,
             cancellationToken);
 
-        _logger.LogDebug("확장된 쿼리 {Count}개 생성됨", expandedQueries.Count);
+        LogExpandedQueriesGenerated(_logger, expandedQueries.Count);
 
         // 4. 중복 제거 및 우선순위 정렬
         var prioritizedQueries = DeduplicateAndPrioritize(expandedQueries);
 
-        _logger.LogInformation(
-            "쿼리 계획 완료: 하위질문 {SubQCount}개, 관점 {PerspCount}개, 쿼리 {QueryCount}개",
-            subQuestions.Count, perspectives.Count, prioritizedQueries.Count);
+        LogQueryPlanCompleted(_logger, subQuestions.Count, perspectives.Count, prioritizedQueries.Count);
 
         return new QueryPlanResult
         {
@@ -83,11 +81,11 @@ public class QueryPlannerAgent
     {
         if (state.IdentifiedGaps.Count == 0)
         {
-            _logger.LogDebug("식별된 정보 갭 없음");
+            LogNoGapsIdentified(_logger);
             return [];
         }
 
-        _logger.LogDebug("정보 갭 기반 후속 쿼리 생성: {GapCount}개 갭", state.IdentifiedGaps.Count);
+        LogGeneratingFollowUpQueries(_logger, state.IdentifiedGaps.Count);
 
         var options = CreateExpansionOptions(state.Request);
 
@@ -148,7 +146,7 @@ public class QueryPlannerAgent
             .Where(q => !executedQueryTexts.Contains(q.Query.ToLowerInvariant()))
             .ToList();
 
-        _logger.LogDebug("후속 쿼리 {Count}개 생성됨 (중복 제외 후)", newQueries.Count);
+        LogFollowUpQueriesGenerated(_logger, newQueries.Count);
 
         return newQueries;
     }
@@ -174,7 +172,7 @@ public class QueryPlannerAgent
         };
     }
 
-    private static IReadOnlyList<ExpandedQuery> DeduplicateAndPrioritize(
+    private static List<ExpandedQuery> DeduplicateAndPrioritize(
         IReadOnlyList<ExpandedQuery> queries)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -199,4 +197,41 @@ public class QueryPlannerAgent
         return string.Join(' ', query.ToLowerInvariant()
             .Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "쿼리 계획 시작: {Query}")]
+    private static partial void LogQueryPlanStarting(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "질문 분해 시작 (Self-Ask 패턴)")]
+    private static partial void LogDecomposingQuery(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "하위 질문 {Count}개 생성됨")]
+    private static partial void LogSubQuestionsGenerated(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "관점 발견 시작 (STORM 패턴)")]
+    private static partial void LogDiscoveringPerspectives(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "리서치 관점 {Count}개 발견됨")]
+    private static partial void LogPerspectivesDiscovered(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "쿼리 확장 시작")]
+    private static partial void LogExpandingQueries(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "확장된 쿼리 {Count}개 생성됨")]
+    private static partial void LogExpandedQueriesGenerated(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "쿼리 계획 완료: 하위질문 {SubQCount}개, 관점 {PerspCount}개, 쿼리 {QueryCount}개")]
+    private static partial void LogQueryPlanCompleted(ILogger logger, int subQCount, int perspCount, int queryCount);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "식별된 정보 갭 없음")]
+    private static partial void LogNoGapsIdentified(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "정보 갭 기반 후속 쿼리 생성: {GapCount}개 갭")]
+    private static partial void LogGeneratingFollowUpQueries(ILogger logger, int gapCount);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "후속 쿼리 {Count}개 생성됨 (중복 제외 후)")]
+    private static partial void LogFollowUpQueriesGenerated(ILogger logger, int count);
+
+    #endregion
 }

@@ -85,7 +85,7 @@ public class DeepResearchOptions
     /// true: WebFlux의 ICrawler + IContentExtractor 사용 (고급 기능)
     /// false: 기본 HttpClient + ContentProcessor 사용 (경량)
     /// </summary>
-    public bool UseWebFluxPackage { get; set; } = false;
+    public bool UseWebFluxPackage { get; set; }
 
     /// <summary>
     /// 보고서 생성 전 필요한 최소 소스 수

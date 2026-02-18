@@ -75,7 +75,7 @@ public partial class ContentProcessor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "콘텐츠 처리 실패: {Url}", baseUri);
+            LogContentProcessingFailed(_logger, ex, baseUri);
             return new ExtractedContent
             {
                 Url = baseUri.ToString(),
@@ -305,4 +305,11 @@ public partial class ContentProcessor
 
     [GeneratedRegex(@"<img[^>]+src=[""']([^""']+)[""']", RegexOptions.IgnoreCase)]
     private static partial Regex ImgSrcRegex();
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "콘텐츠 처리 실패: {Url}")]
+    private static partial void LogContentProcessingFailed(ILogger logger, Exception? exception, Uri url);
+
+    #endregion
 }

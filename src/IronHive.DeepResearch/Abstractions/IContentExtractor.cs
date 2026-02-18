@@ -37,12 +37,12 @@ public record ContentExtractionOptions
     /// <summary>
     /// 링크 추출 여부
     /// </summary>
-    public bool ExtractLinks { get; init; } = false;
+    public bool ExtractLinks { get; init; }
 
     /// <summary>
     /// 이미지 URL 추출 여부
     /// </summary>
-    public bool ExtractImages { get; init; } = false;
+    public bool ExtractImages { get; init; }
 
     /// <summary>
     /// 메타데이터 추출 여부 (author, date 등)

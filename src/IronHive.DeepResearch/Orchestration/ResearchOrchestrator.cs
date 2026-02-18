@@ -14,7 +14,7 @@ namespace IronHive.DeepResearch.Orchestration;
 /// <summary>
 /// 리서치 오케스트레이터: 전체 파이프라인 조율
 /// </summary>
-public class ResearchOrchestrator
+public partial class ResearchOrchestrator
 {
     private readonly QueryPlannerAgent _queryPlanner;
     private readonly SearchCoordinatorAgent _searchCoordinator;
@@ -51,12 +51,12 @@ public class ResearchOrchestrator
     {
         var state = CreateInitialState(request);
 
-        _logger.LogInformation("리서치 시작: {Query}, 깊이: {Depth}", request.Query, request.Depth);
+        LogResearchStarting(_logger, request.Query, request.Depth);
 
         // 시작 시 취소 상태 확인
         if (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning("리서치 시작 전 취소됨");
+            LogResearchCancelledBeforeStart(_logger);
             state.CurrentPhase = ResearchPhase.Failed;
             return BuildPartialResult(state, "리서치가 시작 전에 취소되었습니다.");
         }
@@ -68,7 +68,7 @@ public class ResearchOrchestrator
             while (state.CurrentIteration < maxIterations && !cancellationToken.IsCancellationRequested)
             {
                 state.CurrentIteration++;
-                _logger.LogInformation("반복 {Iteration}/{Max} 시작", state.CurrentIteration, maxIterations);
+                LogIterationStarting(_logger, state.CurrentIteration, maxIterations);
 
                 // 1. 계획 단계 (첫 번째 반복 또는 갭 기반)
                 await ExecutePlanningPhaseAsync(state, cancellationToken);
@@ -85,12 +85,11 @@ public class ResearchOrchestrator
                 // 5. 충분성 확인
                 if (!analysisResult.NeedsMoreResearch)
                 {
-                    _logger.LogInformation("충분성 달성 (점수: {Score:P0})", analysisResult.SufficiencyScore.OverallScore);
+                    LogSufficiencyAchieved(_logger, analysisResult.SufficiencyScore.OverallScore);
                     break;
                 }
 
-                _logger.LogInformation("추가 리서치 필요 (점수: {Score:P0}, 갭: {GapCount}개)",
-                    analysisResult.SufficiencyScore.OverallScore, analysisResult.Gaps.Count);
+                LogAdditionalResearchNeeded(_logger, analysisResult.SufficiencyScore.OverallScore, analysisResult.Gaps.Count);
             }
 
             // 6. 보고서 생성
@@ -101,13 +100,13 @@ public class ResearchOrchestrator
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("리서치 취소됨");
+            LogResearchCancelled(_logger);
             state.CurrentPhase = ResearchPhase.Failed;
             return BuildPartialResult(state, "리서치가 취소되었습니다.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "리서치 실행 중 오류 발생");
+            LogResearchExecutionError(_logger, ex);
             state.CurrentPhase = ResearchPhase.Failed;
             state.Errors.Add(new ResearchError
             {
@@ -219,7 +218,7 @@ public class ResearchOrchestrator
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "스트리밍 리서치 중 오류");
+            LogStreamingResearchError(_logger, ex);
             caughtException = ex;
         }
 
@@ -318,7 +317,7 @@ public class ResearchOrchestrator
             {
                 if (searchResult.UniqueSourcesCollected == 0 && retryCount >= maxRetries)
                 {
-                    _logger.LogWarning("검색 재시도 {RetryCount}회 후에도 소스를 찾지 못함", retryCount);
+                    LogSearchRetriesExhausted(_logger, retryCount);
                     state.AddThinkingStep(
                         ThinkingStepType.Searching,
                         "검색 결과 없음",
@@ -330,8 +329,7 @@ public class ResearchOrchestrator
 
             // 재시도 대기 (봇 보호 우회)
             retryCount++;
-            _logger.LogInformation("검색 결과 없음, {Delay}초 후 재시도 ({Retry}/{Max})",
-                _options.RetryDelayOnNoResults.TotalSeconds, retryCount, maxRetries);
+            LogSearchRetrying(_logger, _options.RetryDelayOnNoResults.TotalSeconds, retryCount, maxRetries);
 
             state.AddThinkingStep(
                 ThinkingStepType.Searching,
@@ -393,7 +391,10 @@ public class ResearchOrchestrator
             .Skip(Math.Max(0, state.SearchResults.Count - state.Request.MaxSourcesPerIteration))
             .ToList();
 
-        if (recentResults.Count == 0) return;
+        if (recentResults.Count == 0)
+        {
+            return;
+        }
 
         var enrichmentResult = await _contentEnrichment.EnrichSearchResultsAsync(
             recentResults, cancellationToken: cancellationToken);
@@ -439,7 +440,7 @@ public class ResearchOrchestrator
 
     #region Helper Methods
 
-    private ResearchState CreateInitialState(ResearchRequest request)
+    private static ResearchState CreateInitialState(ResearchRequest request)
     {
         return new ResearchState
         {
@@ -449,7 +450,7 @@ public class ResearchOrchestrator
         };
     }
 
-    private int GetMaxIterations(ResearchRequest request)
+    private static int GetMaxIterations(ResearchRequest request)
     {
         return request.Depth switch
         {
@@ -460,7 +461,7 @@ public class ResearchOrchestrator
         };
     }
 
-    private ResearchResult BuildResult(ResearchState state, ReportGenerationResult reportResult)
+    private static ResearchResult BuildResult(ResearchState state, ReportGenerationResult reportResult)
     {
         state.CurrentPhase = ResearchPhase.Completed;
 
@@ -494,7 +495,7 @@ public class ResearchOrchestrator
         };
     }
 
-    private ResearchResult BuildPartialResult(ResearchState state, string errorMessage)
+    private static ResearchResult BuildPartialResult(ResearchState state, string errorMessage)
     {
         // 가능한 경우 부분 보고서 생성
         var partialReport = state.GeneratedSections.Count > 0
@@ -553,6 +554,40 @@ public class ResearchOrchestrator
             Error = error
         };
     }
+
+    #endregion
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 시작: {Query}, 깊이: {Depth}")]
+    private static partial void LogResearchStarting(ILogger logger, string query, ResearchDepth depth);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "리서치 시작 전 취소됨")]
+    private static partial void LogResearchCancelledBeforeStart(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "반복 {Iteration}/{Max} 시작")]
+    private static partial void LogIterationStarting(ILogger logger, int iteration, int max);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "충분성 달성 (점수: {Score:P0})")]
+    private static partial void LogSufficiencyAchieved(ILogger logger, decimal score);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "추가 리서치 필요 (점수: {Score:P0}, 갭: {GapCount}개)")]
+    private static partial void LogAdditionalResearchNeeded(ILogger logger, decimal score, int gapCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "리서치 취소됨")]
+    private static partial void LogResearchCancelled(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "리서치 실행 중 오류 발생")]
+    private static partial void LogResearchExecutionError(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "스트리밍 리서치 중 오류")]
+    private static partial void LogStreamingResearchError(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "검색 재시도 {RetryCount}회 후에도 소스를 찾지 못함")]
+    private static partial void LogSearchRetriesExhausted(ILogger logger, int retryCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "검색 결과 없음, {Delay}초 후 재시도 ({Retry}/{Max})")]
+    private static partial void LogSearchRetrying(ILogger logger, double delay, int retry, int max);
 
     #endregion
 }

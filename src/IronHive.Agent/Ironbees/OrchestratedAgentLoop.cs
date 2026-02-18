@@ -104,34 +104,46 @@ public class OrchestratedAgentLoop : IAgentLoop
 
     /// <inheritdoc />
     public IReadOnlyList<ChatMessage> History
+        => GetHistoryAsync().GetAwaiter().GetResult();
+
+    /// <inheritdoc />
+    public void ClearHistory()
+        => ClearHistoryAsync().GetAwaiter().GetResult();
+
+    /// <inheritdoc />
+    public void InitializeHistory(IEnumerable<ChatMessage> messages)
+        => InitializeHistoryAsync(messages).GetAwaiter().GetResult();
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ChatMessage>> GetHistoryAsync(CancellationToken cancellationToken = default)
     {
-        get
+        if (_conversationStore is null)
         {
-            if (_conversationStore is null)
-            {
-                return [];
-            }
+            return [];
+        }
 
-            var state = _conversationStore.LoadAsync(_conversationId).GetAwaiter().GetResult();
-            if (state is null)
-            {
-                return [];
-            }
+        var state = await _conversationStore.LoadAsync(_conversationId, cancellationToken);
+        if (state is null)
+        {
+            return [];
+        }
 
-            return state.Messages
-                .Select(m => m.ToChatMessage())
-                .ToList();
+        return state.Messages
+            .Select(m => m.ToChatMessage())
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task ClearHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        if (_conversationStore is not null)
+        {
+            await _conversationStore.DeleteAsync(_conversationId, cancellationToken);
         }
     }
 
     /// <inheritdoc />
-    public void ClearHistory()
-    {
-        _conversationStore?.DeleteAsync(_conversationId).GetAwaiter().GetResult();
-    }
-
-    /// <inheritdoc />
-    public void InitializeHistory(IEnumerable<ChatMessage> messages)
+    public async Task InitializeHistoryAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken = default)
     {
         if (_conversationStore is null)
         {
@@ -141,8 +153,7 @@ public class OrchestratedAgentLoop : IAgentLoop
         foreach (var msg in messages)
         {
             var conversationMsg = ConversationMessage.FromChatMessage(msg);
-            _conversationStore.AppendMessageAsync(_conversationId, conversationMsg)
-                .GetAwaiter().GetResult();
+            await _conversationStore.AppendMessageAsync(_conversationId, conversationMsg, cancellationToken);
         }
     }
 }

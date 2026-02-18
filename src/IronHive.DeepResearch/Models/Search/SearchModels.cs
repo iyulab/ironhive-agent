@@ -9,7 +9,7 @@ public record SearchQuery
     public SearchType Type { get; init; } = SearchType.Web;
     public QueryDepth Depth { get; init; } = QueryDepth.Basic;
     public int MaxResults { get; init; } = 10;
-    public bool IncludeContent { get; init; } = false;
+    public bool IncludeContent { get; init; }
     public IReadOnlyList<string>? IncludeDomains { get; init; }
     public IReadOnlyList<string>? ExcludeDomains { get; init; }
 }

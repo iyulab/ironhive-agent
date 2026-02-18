@@ -15,7 +15,7 @@ public interface ISearchResultCache
     /// <summary>
     /// 검색 결과를 캐시에 저장
     /// </summary>
-    void Set(string cacheKey, SearchResult result, TimeSpan? expiration = null);
+    void SetEntry(string cacheKey, SearchResult result, TimeSpan? expiration = null);
 
     /// <summary>
     /// 캐시 키 생성

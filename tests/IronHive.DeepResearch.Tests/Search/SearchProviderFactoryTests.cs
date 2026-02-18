@@ -4,27 +4,27 @@ using IronHive.DeepResearch.Models.Search;
 using IronHive.DeepResearch.Options;
 using IronHive.DeepResearch.Search;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace IronHive.Flux.Tests.DeepResearch.Search;
 
 public class SearchProviderFactoryTests
 {
-    private readonly Mock<ISearchProvider> _mockTavilyProvider;
-    private readonly Mock<ISearchProvider> _mockAcademicProvider;
+    private readonly ISearchProvider _mockTavilyProvider;
+    private readonly ISearchProvider _mockAcademicProvider;
     private readonly DeepResearchOptions _options;
 
     public SearchProviderFactoryTests()
     {
-        _mockTavilyProvider = new Mock<ISearchProvider>();
-        _mockTavilyProvider.Setup(p => p.ProviderId).Returns("tavily");
-        _mockTavilyProvider.Setup(p => p.Capabilities)
+        _mockTavilyProvider = Substitute.For<ISearchProvider>();
+        _mockTavilyProvider.ProviderId.Returns("tavily");
+        _mockTavilyProvider.Capabilities
             .Returns(SearchCapabilities.WebSearch | SearchCapabilities.NewsSearch | SearchCapabilities.ContentExtraction);
 
-        _mockAcademicProvider = new Mock<ISearchProvider>();
-        _mockAcademicProvider.Setup(p => p.ProviderId).Returns("semantic-scholar");
-        _mockAcademicProvider.Setup(p => p.Capabilities)
+        _mockAcademicProvider = Substitute.For<ISearchProvider>();
+        _mockAcademicProvider.ProviderId.Returns("semantic-scholar");
+        _mockAcademicProvider.Capabilities
             .Returns(SearchCapabilities.AcademicSearch);
 
         _options = new DeepResearchOptions
@@ -37,7 +37,7 @@ public class SearchProviderFactoryTests
     public void Constructor_InitializesWithProviders()
     {
         // Arrange & Act
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Assert
         factory.AvailableProviders.Should().Contain("tavily");
@@ -48,7 +48,7 @@ public class SearchProviderFactoryTests
     public void GetDefaultProvider_ReturnsConfiguredDefault()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object, _mockAcademicProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider, _mockAcademicProvider]);
 
         // Act
         var provider = factory.GetDefaultProvider();
@@ -61,7 +61,7 @@ public class SearchProviderFactoryTests
     public void GetProvider_ExistingProvider_ReturnsProvider()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object, _mockAcademicProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider, _mockAcademicProvider]);
 
         // Act
         var provider = factory.GetProvider("semantic-scholar");
@@ -74,7 +74,7 @@ public class SearchProviderFactoryTests
     public void GetProvider_NonExistentProvider_ThrowsException()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Act
         var act = () => factory.GetProvider("non-existent");
@@ -88,7 +88,7 @@ public class SearchProviderFactoryTests
     public void GetProvider_CaseInsensitive()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Act
         var provider = factory.GetProvider("TAVILY");
@@ -102,7 +102,7 @@ public class SearchProviderFactoryTests
     public void HasProvider_ExistingProvider_ReturnsTrue()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Act & Assert
         factory.HasProvider("tavily").Should().BeTrue();
@@ -113,7 +113,7 @@ public class SearchProviderFactoryTests
     public void HasProvider_NonExistentProvider_ReturnsFalse()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Act & Assert
         factory.HasProvider("non-existent").Should().BeFalse();
@@ -123,7 +123,7 @@ public class SearchProviderFactoryTests
     public void GetProvidersWithCapability_WebSearch_ReturnsTavily()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object, _mockAcademicProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider, _mockAcademicProvider]);
 
         // Act
         var providers = factory.GetProvidersWithCapability(SearchCapabilities.WebSearch);
@@ -137,7 +137,7 @@ public class SearchProviderFactoryTests
     public void GetProvidersWithCapability_AcademicSearch_ReturnsSemanticScholar()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object, _mockAcademicProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider, _mockAcademicProvider]);
 
         // Act
         var providers = factory.GetProvidersWithCapability(SearchCapabilities.AcademicSearch);
@@ -151,7 +151,7 @@ public class SearchProviderFactoryTests
     public void GetProvidersWithCapability_NoMatch_ReturnsEmpty()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Act
         var providers = factory.GetProvidersWithCapability(SearchCapabilities.ImageSearch);
@@ -164,7 +164,7 @@ public class SearchProviderFactoryTests
     public void SelectProviderForSearchType_Web_ReturnsTavily()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object, _mockAcademicProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider, _mockAcademicProvider]);
 
         // Act
         var provider = factory.SelectProviderForSearchType(SearchType.Web);
@@ -177,7 +177,7 @@ public class SearchProviderFactoryTests
     public void SelectProviderForSearchType_Academic_ReturnsSemanticScholar()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object, _mockAcademicProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider, _mockAcademicProvider]);
 
         // Act
         var provider = factory.SelectProviderForSearchType(SearchType.Academic);
@@ -190,7 +190,7 @@ public class SearchProviderFactoryTests
     public void SelectProviderForSearchType_UnsupportedType_ReturnsDefault()
     {
         // Arrange
-        var factory = CreateFactory([_mockTavilyProvider.Object]);
+        var factory = CreateFactory([_mockTavilyProvider]);
 
         // Act
         var provider = factory.SelectProviderForSearchType(SearchType.Academic);

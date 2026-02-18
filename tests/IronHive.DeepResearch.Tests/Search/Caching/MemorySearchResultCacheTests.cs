@@ -8,10 +8,10 @@ using Xunit;
 
 namespace IronHive.Flux.Tests.DeepResearch.Search.Caching;
 
-public class MemorySearchResultCacheTests
+public class MemorySearchResultCacheTests : IDisposable
 {
     private readonly MemorySearchResultCache _cache;
-    private readonly IMemoryCache _memoryCache;
+    private readonly MemoryCache _memoryCache;
 
     public MemorySearchResultCacheTests()
     {
@@ -21,6 +21,12 @@ public class MemorySearchResultCacheTests
             _memoryCache,
             options,
             NullLogger<MemorySearchResultCache>.Instance);
+    }
+
+    public void Dispose()
+    {
+        _memoryCache.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     [Fact]
@@ -121,7 +127,7 @@ public class MemorySearchResultCacheTests
         };
 
         // Act
-        _cache.Set(key, searchResult);
+        _cache.SetEntry(key, searchResult);
         var result = _cache.TryGet(key, out var cached);
 
         // Assert
@@ -144,7 +150,7 @@ public class MemorySearchResultCacheTests
             SearchedAt = DateTimeOffset.UtcNow
         };
 
-        _cache.Set(key, searchResult);
+        _cache.SetEntry(key, searchResult);
         _cache.TryGet(key, out _).Should().BeTrue();
 
         // Act
@@ -169,7 +175,7 @@ public class MemorySearchResultCacheTests
         };
 
         // Act
-        _cache.Set(key, searchResult, TimeSpan.FromMinutes(5));
+        _cache.SetEntry(key, searchResult, TimeSpan.FromMinutes(5));
         var result = _cache.TryGet(key, out var cached);
 
         // Assert

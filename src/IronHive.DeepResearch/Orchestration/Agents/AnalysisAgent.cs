@@ -12,7 +12,7 @@ namespace IronHive.DeepResearch.Orchestration.Agents;
 /// <summary>
 /// 분석 에이전트: Finding 추출 및 정보 갭 식별
 /// </summary>
-public class AnalysisAgent
+public partial class AnalysisAgent
 {
     private readonly ITextGenerationService _textService;
     private readonly DeepResearchOptions _researchOptions;
@@ -46,30 +46,27 @@ public class AnalysisAgent
         options ??= CreateDefaultOptions(state);
         var startedAt = DateTimeOffset.UtcNow;
 
-        _logger.LogInformation("분석 시작: 소스 {SourceCount}개, 반복 {Iteration}",
-            state.CollectedSources.Count, state.CurrentIteration);
+        LogAnalysisStarting(_logger, state.CollectedSources.Count, state.CurrentIteration);
 
         // 1. 소스에서 Finding 추출
         var findings = await ExtractFindingsAsync(state, options, cancellationToken);
-        _logger.LogDebug("Finding {Count}개 추출됨", findings.Count);
+        LogFindingsExtracted(_logger, findings.Count);
 
         // 2. 정보 갭 식별
         var gaps = await IdentifyGapsAsync(state, findings, options, cancellationToken);
-        _logger.LogDebug("정보 갭 {Count}개 식별됨", gaps.Count);
+        LogGapsIdentified(_logger, gaps.Count);
 
         // 3. 충분성 평가
         var sufficiencyScore = await EvaluateSufficiencyAsync(
             state, findings, gaps, options, cancellationToken);
-        _logger.LogDebug("충분성 점수: {Score}", sufficiencyScore.OverallScore);
+        LogSufficiencyScore(_logger, sufficiencyScore.OverallScore);
 
         var completedAt = DateTimeOffset.UtcNow;
 
         // 상태 업데이트
         UpdateState(state, findings, gaps, sufficiencyScore);
 
-        _logger.LogInformation(
-            "분석 완료: Finding {FindingCount}개, 갭 {GapCount}개, 충분성 {Score:P0}, 소요 시간 {Duration}ms",
-            findings.Count, gaps.Count, sufficiencyScore.OverallScore,
+        LogAnalysisCompleted(_logger, findings.Count, gaps.Count, sufficiencyScore.OverallScore,
             (completedAt - startedAt).TotalMilliseconds);
 
         return new AnalysisResult
@@ -113,7 +110,7 @@ public class AnalysisAgent
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "소스 분석 실패: {SourceId}", source.Id);
+                LogSourceAnalysisFailed(_logger, ex, source.Id);
             }
         }
 
@@ -163,7 +160,7 @@ public class AnalysisAgent
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Finding 추출 실패: {SourceId}", source.Id);
+            LogFindingExtractionFailed(_logger, ex, source.Id);
             return [];
         }
     }
@@ -208,7 +205,7 @@ public class AnalysisAgent
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "갭 분석 실패");
+            LogGapAnalysisFailed(_logger, ex);
             return [];
         }
     }
@@ -273,7 +270,7 @@ public class AnalysisAgent
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "LLM 충분성 평가 실패");
+            LogLlmSufficiencyEvaluationFailed(_logger, ex);
             return null;
         }
     }
@@ -442,7 +439,7 @@ public class AnalysisAgent
 
     #region Helper Methods
 
-    private static IReadOnlyList<Finding> DeduplicateFindings(List<Finding> findings)
+    private static List<Finding> DeduplicateFindings(List<Finding> findings)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<Finding>();
@@ -463,9 +460,12 @@ public class AnalysisAgent
         return result;
     }
 
-    private static decimal CalculateSourceDiversity(IReadOnlyList<SourceDocument> sources)
+    private static decimal CalculateSourceDiversity(List<SourceDocument> sources)
     {
-        if (sources.Count == 0) return 0;
+        if (sources.Count == 0)
+        {
+            return 0;
+        }
 
         // 도메인 다양성
         var domains = sources
@@ -482,9 +482,12 @@ public class AnalysisAgent
         return (domainDiversity + providerDiversity) / 2;
     }
 
-    private static decimal CalculateFreshnessScore(IReadOnlyList<SourceDocument> sources)
+    private static decimal CalculateFreshnessScore(List<SourceDocument> sources)
     {
-        if (sources.Count == 0) return 0;
+        if (sources.Count == 0)
+        {
+            return 0;
+        }
 
         var now = DateTimeOffset.UtcNow;
         var scores = sources
@@ -504,7 +507,9 @@ public class AnalysisAgent
             .ToList();
 
         if (scores.Count == 0)
+        {
             return 0.5m; // 날짜 정보 없으면 중간 점수
+        }
 
         return scores.Average();
     }
@@ -544,7 +549,7 @@ public class AnalysisAgent
         };
     }
 
-    private void UpdateState(
+    private static void UpdateState(
         ResearchState state,
         IReadOnlyList<Finding> findings,
         IReadOnlyList<InformationGap> gaps,
@@ -577,6 +582,37 @@ public class AnalysisAgent
             MaxSourcesToAnalyze = 20
         };
     }
+
+    #endregion
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "분석 시작: 소스 {SourceCount}개, 반복 {Iteration}")]
+    private static partial void LogAnalysisStarting(ILogger logger, int sourceCount, int iteration);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Finding {Count}개 추출됨")]
+    private static partial void LogFindingsExtracted(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "정보 갭 {Count}개 식별됨")]
+    private static partial void LogGapsIdentified(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "충분성 점수: {Score}")]
+    private static partial void LogSufficiencyScore(ILogger logger, decimal score);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "분석 완료: Finding {FindingCount}개, 갭 {GapCount}개, 충분성 {Score:P0}, 소요 시간 {Duration}ms")]
+    private static partial void LogAnalysisCompleted(ILogger logger, int findingCount, int gapCount, decimal score, double duration);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "소스 분석 실패: {SourceId}")]
+    private static partial void LogSourceAnalysisFailed(ILogger logger, Exception? exception, string sourceId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Finding 추출 실패: {SourceId}")]
+    private static partial void LogFindingExtractionFailed(ILogger logger, Exception? exception, string sourceId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "갭 분석 실패")]
+    private static partial void LogGapAnalysisFailed(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM 충분성 평가 실패")]
+    private static partial void LogLlmSufficiencyEvaluationFailed(ILogger logger, Exception? exception);
 
     #endregion
 }

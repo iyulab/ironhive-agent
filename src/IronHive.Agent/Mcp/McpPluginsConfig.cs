@@ -74,7 +74,7 @@ public static class McpPluginsConfigExtensions
             catch (Exception ex)
             {
                 // Log but continue with other plugins
-                System.Diagnostics.Debug.WriteLine($"Failed to connect plugin '{name}': {ex.Message}");
+                System.Diagnostics.Trace.TraceWarning($"Failed to connect plugin '{name}': {ex.Message}");
             }
         }
     }

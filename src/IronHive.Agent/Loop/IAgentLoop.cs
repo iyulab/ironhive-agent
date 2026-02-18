@@ -40,6 +40,33 @@ public interface IAgentLoop
     /// Clears the conversation history (keeps system prompt if configured).
     /// </summary>
     void ClearHistory();
+
+    /// <summary>
+    /// Asynchronously gets the current conversation history.
+    /// Override this in implementations that use async storage backends.
+    /// </summary>
+    Task<IReadOnlyList<ChatMessage>> GetHistoryAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(History);
+
+    /// <summary>
+    /// Asynchronously clears the conversation history.
+    /// Override this in implementations that use async storage backends.
+    /// </summary>
+    Task ClearHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        ClearHistory();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Asynchronously initializes the conversation history with existing messages.
+    /// Override this in implementations that use async storage backends.
+    /// </summary>
+    Task InitializeHistoryAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken = default)
+    {
+        InitializeHistory(messages);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>

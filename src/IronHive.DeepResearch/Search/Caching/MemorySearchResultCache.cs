@@ -11,7 +11,7 @@ namespace IronHive.DeepResearch.Search.Caching;
 /// <summary>
 /// 메모리 기반 검색 결과 캐시
 /// </summary>
-public class MemorySearchResultCache : ISearchResultCache
+public partial class MemorySearchResultCache : ISearchResultCache
 {
     private readonly IMemoryCache _cache;
     private readonly DeepResearchOptions _options;
@@ -33,16 +33,16 @@ public class MemorySearchResultCache : ISearchResultCache
     {
         if (_cache.TryGetValue(cacheKey, out result))
         {
-            _logger.LogDebug("Cache hit: {CacheKey}", cacheKey);
+            LogCacheHit(_logger, cacheKey);
             return true;
         }
 
-        _logger.LogDebug("Cache miss: {CacheKey}", cacheKey);
+        LogCacheMiss(_logger, cacheKey);
         result = null;
         return false;
     }
 
-    public void Set(string cacheKey, SearchResult result, TimeSpan? expiration = null)
+    public void SetEntry(string cacheKey, SearchResult result, TimeSpan? expiration = null)
     {
         var options = new MemoryCacheEntryOptions
         {
@@ -52,8 +52,7 @@ public class MemorySearchResultCache : ISearchResultCache
         };
 
         _cache.Set(cacheKey, result, options);
-        _logger.LogDebug("Cached search result: {CacheKey}, Expiration: {Expiration}",
-            cacheKey, expiration ?? _defaultExpiration);
+        LogCachedSearchResult(_logger, cacheKey, expiration ?? _defaultExpiration);
     }
 
     public string GenerateKey(SearchQuery query)
@@ -81,13 +80,32 @@ public class MemorySearchResultCache : ISearchResultCache
     public void Invalidate(string cacheKey)
     {
         _cache.Remove(cacheKey);
-        _logger.LogDebug("Cache invalidated: {CacheKey}", cacheKey);
+        LogCacheInvalidated(_logger, cacheKey);
     }
 
     public void Clear()
     {
         // IMemoryCache는 전체 클리어를 직접 지원하지 않음
         // 실제로는 MemoryCache를 새로 생성하거나 특정 패턴의 키들을 추적해야 함
-        _logger.LogWarning("Clear not fully supported for IMemoryCache");
+        LogClearNotSupported(_logger);
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache hit: {CacheKey}")]
+    private static partial void LogCacheHit(ILogger logger, string cacheKey);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache miss: {CacheKey}")]
+    private static partial void LogCacheMiss(ILogger logger, string cacheKey);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cached search result: {CacheKey}, Expiration: {Expiration}")]
+    private static partial void LogCachedSearchResult(ILogger logger, string cacheKey, TimeSpan expiration);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cache invalidated: {CacheKey}")]
+    private static partial void LogCacheInvalidated(ILogger logger, string cacheKey);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Clear not fully supported for IMemoryCache")]
+    private static partial void LogClearNotSupported(ILogger logger);
+
+    #endregion
 }

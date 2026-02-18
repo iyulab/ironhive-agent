@@ -12,7 +12,7 @@ namespace IronHive.DeepResearch;
 /// <summary>
 /// 딥리서치 메인 파사드 구현
 /// </summary>
-public class DeepResearcher : IDeepResearcher
+public partial class DeepResearcher : IDeepResearcher
 {
     private readonly ResearchOrchestrator _orchestrator;
     private readonly DeepResearchOptions _options;
@@ -36,12 +36,11 @@ public class DeepResearcher : IDeepResearcher
         ResearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("리서치 시작: {Query}", TruncateQuery(request.Query));
+        LogResearchStarting(_logger, request.Query);
 
         var result = await _orchestrator.ExecuteAsync(request, cancellationToken);
 
-        _logger.LogInformation("리서치 완료: {SessionId}, 소스 {SourceCount}개, 반복 {Iterations}회",
-            result.SessionId, result.AllSources.Count, result.Metadata.IterationCount);
+        LogResearchCompleted(_logger, result.SessionId, result.AllSources.Count, result.Metadata.IterationCount);
 
         return result;
     }
@@ -51,7 +50,7 @@ public class DeepResearcher : IDeepResearcher
         ResearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("스트리밍 리서치 시작: {Query}", TruncateQuery(request.Query));
+        LogStreamingResearchStarting(_logger, request.Query);
         return _orchestrator.ExecuteStreamAsync(request, cancellationToken);
     }
 
@@ -60,7 +59,7 @@ public class DeepResearcher : IDeepResearcher
         ResearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("대화형 리서치 세션 시작: {Query}", TruncateQuery(request.Query));
+        LogInteractiveSessionStarting(_logger, request.Query);
 
         var state = new ResearchState
         {
@@ -89,7 +88,7 @@ public class DeepResearcher : IDeepResearcher
             throw new InvalidOperationException($"세션을 찾을 수 없습니다: {sessionId}");
         }
 
-        _logger.LogInformation("리서치 재개: {SessionId}", sessionId);
+        LogResearchResuming(_logger, sessionId);
 
         try
         {
@@ -102,16 +101,30 @@ public class DeepResearcher : IDeepResearcher
         }
     }
 
-    private static string TruncateQuery(string query)
-    {
-        return query.Length > 50 ? query[..50] + "..." : query;
-    }
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 시작: {Query}")]
+    private static partial void LogResearchStarting(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 완료: {SessionId}, 소스 {SourceCount}개, 반복 {Iterations}회")]
+    private static partial void LogResearchCompleted(ILogger logger, string sessionId, int sourceCount, int iterations);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "스트리밍 리서치 시작: {Query}")]
+    private static partial void LogStreamingResearchStarting(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "대화형 리서치 세션 시작: {Query}")]
+    private static partial void LogInteractiveSessionStarting(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 재개: {SessionId}")]
+    private static partial void LogResearchResuming(ILogger logger, string sessionId);
+
+    #endregion
 }
 
 /// <summary>
 /// 대화형 리서치 세션 구현
 /// </summary>
-public class ResearchSession : IResearchSession
+public partial class ResearchSession : IResearchSession
 {
     private readonly ResearchState _state;
     private readonly ResearchOrchestrator _orchestrator;
@@ -151,7 +164,7 @@ public class ResearchSession : IResearchSession
         _state.CurrentPhase = ResearchPhase.Planning;
 
         // 계획 수립은 오케스트레이터에서 처리
-        _logger.LogDebug("세션 초기화 완료: {SessionId}", SessionId);
+        LogSessionInitialized(_logger, SessionId);
         await Task.CompletedTask;
     }
 
@@ -187,8 +200,7 @@ public class ResearchSession : IResearchSession
             throw new InvalidOperationException("세션이 이미 완료되었습니다.");
         }
 
-        _logger.LogInformation("세션 계속 진행: {SessionId}, 반복 {Iteration}",
-            SessionId, _state.CurrentIteration + 1);
+        LogSessionContinuing(_logger, SessionId, _state.CurrentIteration + 1);
 
         // 다음 반복 실행 (전체 파이프라인 1회)
         // 실제 구현에서는 오케스트레이터의 단일 반복 메서드 호출
@@ -209,7 +221,7 @@ public class ResearchSession : IResearchSession
             Type = SearchType.Web
         });
 
-        _logger.LogDebug("사용자 쿼리 추가: {Query}", customQuery);
+        LogUserQueryAdded(_logger, customQuery);
         return Task.CompletedTask;
     }
 
@@ -221,7 +233,7 @@ public class ResearchSession : IResearchSession
             throw new InvalidOperationException("세션이 이미 완료되었습니다.");
         }
 
-        _logger.LogInformation("세션 종료 및 보고서 생성: {SessionId}", SessionId);
+        LogSessionFinalizing(_logger, SessionId);
 
         // 남은 작업 완료 및 보고서 생성
         var result = await _orchestrator.ExecuteAsync(_state.Request);
@@ -233,27 +245,50 @@ public class ResearchSession : IResearchSession
     /// <inheritdoc />
     public ValueTask DisposeAsync()
     {
-        if (_isDisposed) return ValueTask.CompletedTask;
+        if (_isDisposed)
+        {
+            return ValueTask.CompletedTask;
+        }
 
+        GC.SuppressFinalize(this);
         _isDisposed = true;
         _onDispose?.Invoke();
-        _logger.LogDebug("세션 해제: {SessionId}", SessionId);
+        LogSessionDisposed(_logger, SessionId);
 
         return ValueTask.CompletedTask;
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "세션 초기화 완료: {SessionId}")]
+    private static partial void LogSessionInitialized(ILogger logger, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "세션 계속 진행: {SessionId}, 반복 {Iteration}")]
+    private static partial void LogSessionContinuing(ILogger logger, string sessionId, int iteration);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "사용자 쿼리 추가: {Query}")]
+    private static partial void LogUserQueryAdded(ILogger logger, string query);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "세션 종료 및 보고서 생성: {SessionId}")]
+    private static partial void LogSessionFinalizing(ILogger logger, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "세션 해제: {SessionId}")]
+    private static partial void LogSessionDisposed(ILogger logger, string sessionId);
+
+    #endregion
 
     private string GenerateSummary()
     {
         var summary = new System.Text.StringBuilder();
 
-        summary.AppendLine($"## 리서치 진행 상황");
-        summary.AppendLine($"- 반복: {_state.CurrentIteration}회");
-        summary.AppendLine($"- 수집된 소스: {_state.CollectedSources.Count}개");
-        summary.AppendLine($"- 발견 사항: {_state.Findings.Count}개");
+        summary.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"## 리서치 진행 상황");
+        summary.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"- 반복: {_state.CurrentIteration}회");
+        summary.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"- 수집된 소스: {_state.CollectedSources.Count}개");
+        summary.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"- 발견 사항: {_state.Findings.Count}개");
 
         if (_state.LastSufficiencyScore != null)
         {
-            summary.AppendLine($"- 충분성 점수: {_state.LastSufficiencyScore.OverallScore:P0}");
+            summary.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"- 충분성 점수: {_state.LastSufficiencyScore.OverallScore:P0}");
         }
 
         if (_state.IdentifiedGaps.Count > 0)
@@ -262,7 +297,7 @@ public class ResearchSession : IResearchSession
             summary.AppendLine("### 정보 갭");
             foreach (var gap in _state.IdentifiedGaps.Take(3))
             {
-                summary.AppendLine($"- [{gap.Priority}] {gap.Description}");
+                summary.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"- [{gap.Priority}] {gap.Description}");
             }
         }
 

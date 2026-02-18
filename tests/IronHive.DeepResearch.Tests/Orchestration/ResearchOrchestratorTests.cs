@@ -549,7 +549,9 @@ internal class MockQueryPlannerAgentForOrchestrator : QueryPlannerAgent
         PlanCalled = true;
 
         if (_failure != null)
+        {
             throw _failure;
+        }
 
         return Task.FromResult(_planResult ?? new QueryPlanResult
         {

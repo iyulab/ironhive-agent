@@ -64,11 +64,7 @@ public record ResearchResult
     /// <summary>
     /// 부분 결과 여부
     /// </summary>
-    public bool IsPartial { get; init; } = false;
-
-    // 하위 호환성을 위한 별칭
-    [Obsolete("Use CitedSources or AllSources instead")]
-    public IReadOnlyList<SourceDocument> Sources => AllSources;
+    public bool IsPartial { get; init; }
 }
 
 /// <summary>

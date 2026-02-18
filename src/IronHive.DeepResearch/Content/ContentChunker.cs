@@ -158,8 +158,7 @@ public partial class ContentChunker
             chunks[i] = chunks[i] with { TotalChunks = totalChunks };
         }
 
-        _logger.LogDebug("텍스트 청킹 완료: {ChunkCount}개 청크 생성, 소스: {SourceId}",
-            chunks.Count, sourceId);
+        LogTextChunkingCompleted(_logger, chunks.Count, sourceId);
 
         return chunks;
     }
@@ -252,7 +251,9 @@ public partial class ContentChunker
     private static int EstimateTokenCount(string text)
     {
         if (string.IsNullOrEmpty(text))
+        {
             return 0;
+        }
 
         // 간단한 추정: 영어 4자 = 1토큰, 한국어 2자 = 1토큰
         // 혼합 텍스트의 경우 평균값 사용
@@ -268,8 +269,7 @@ public partial class ContentChunker
     private static string GenerateSourceId(string url)
     {
         // URL에서 고유 ID 생성
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hash = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url));
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url));
         return Convert.ToHexString(hash)[..12].ToLowerInvariant();
     }
 
@@ -278,4 +278,11 @@ public partial class ContentChunker
 
     [GeneratedRegex(@"(?<=[.!?])\s+", RegexOptions.Compiled)]
     private static partial Regex SentenceSplitRegex();
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "텍스트 청킹 완료: {ChunkCount}개 청크 생성, 소스: {SourceId}")]
+    private static partial void LogTextChunkingCompleted(ILogger logger, int chunkCount, string sourceId);
+
+    #endregion
 }

@@ -149,14 +149,14 @@ public class ChatClientFrameworkAdapterTests
 
         var testTool = AIFunctionFactory.Create(() => "should not execute", "DangerousTool", "Dangerous");
 
-        var permissionEvaluator = Substitute.For<IPermissionEvaluator>();
-        permissionEvaluator.Evaluate("tool", "DangerousTool")
+        var mockPermission = Substitute.For<IPermissionEvaluator>();
+        mockPermission.Evaluate("tool", "DangerousTool")
             .Returns(PermissionResult.Deny("Not allowed"));
 
         var adapter = new ChatClientFrameworkAdapter(
             _ => mockClient,
             toolsFactory: () => [testTool],
-            permissionEvaluator: permissionEvaluator);
+            permissionEvaluator: mockPermission);
 
         var agent = await adapter.CreateAgentAsync(CreateTestConfig());
 
@@ -165,7 +165,7 @@ public class ChatClientFrameworkAdapterTests
 
         // Assert
         Assert.Equal("Handled denial", response);
-        permissionEvaluator.Received(1).Evaluate("tool", "DangerousTool");
+        mockPermission.Received(1).Evaluate("tool", "DangerousTool");
     }
 
     [Fact]

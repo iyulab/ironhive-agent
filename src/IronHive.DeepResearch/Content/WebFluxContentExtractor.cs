@@ -46,7 +46,7 @@ public partial class WebFluxContentExtractor : IContentExtractor, IDisposable
     {
         options ??= new ContentExtractionOptions();
 
-        _logger.LogInformation("콘텐츠 추출 시작: {Url}", url);
+        LogContentExtractionStarting(_logger, url);
 
         try
         {
@@ -79,24 +79,23 @@ public partial class WebFluxContentExtractor : IContentExtractor, IDisposable
             // 콘텐츠 처리
             var processed = _processor.Process(html, uri, options);
 
-            _logger.LogInformation("콘텐츠 추출 완료: {Url}, Length: {Length}",
-                url, processed.Content?.Length ?? 0);
+            LogContentExtractionCompleted(_logger, url, processed.Content?.Length ?? 0);
 
             return processed;
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("콘텐츠 추출 타임아웃: {Url}", url);
+            LogContentExtractionTimeout(_logger, url);
             return CreateFailedResult(url, "요청 타임아웃");
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "HTTP 요청 오류: {Url}", url);
+            LogHttpRequestError(_logger, ex, url);
             return CreateFailedResult(url, $"HTTP 요청 오류: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "콘텐츠 추출 실패: {Url}", url);
+            LogContentExtractionFailed(_logger, ex, url);
             return CreateFailedResult(url, ex.Message);
         }
     }
@@ -107,7 +106,7 @@ public partial class WebFluxContentExtractor : IContentExtractor, IDisposable
         CancellationToken cancellationToken = default)
     {
         var urlList = urls.ToList();
-        _logger.LogInformation("배치 콘텐츠 추출 시작: {Count}개 URL", urlList.Count);
+        LogBatchExtractionStarting(_logger, urlList.Count);
 
         var tasks = urlList.Select(async url =>
         {
@@ -125,8 +124,7 @@ public partial class WebFluxContentExtractor : IContentExtractor, IDisposable
         var results = await Task.WhenAll(tasks);
 
         var successCount = results.Count(r => r.Success);
-        _logger.LogInformation("배치 콘텐츠 추출 완료: {Success}/{Total} 성공",
-            successCount, results.Length);
+        LogBatchExtractionCompleted(_logger, successCount, results.Length);
 
         return results;
     }
@@ -152,4 +150,29 @@ public partial class WebFluxContentExtractor : IContentExtractor, IDisposable
             ExtractedAt = DateTimeOffset.UtcNow
         };
     }
+
+    #region LoggerMessage Definitions
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 추출 시작: {Url}")]
+    private static partial void LogContentExtractionStarting(ILogger logger, string url);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 추출 완료: {Url}, Length: {Length}")]
+    private static partial void LogContentExtractionCompleted(ILogger logger, string url, int length);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "콘텐츠 추출 타임아웃: {Url}")]
+    private static partial void LogContentExtractionTimeout(ILogger logger, string url);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "HTTP 요청 오류: {Url}")]
+    private static partial void LogHttpRequestError(ILogger logger, Exception? exception, string url);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "콘텐츠 추출 실패: {Url}")]
+    private static partial void LogContentExtractionFailed(ILogger logger, Exception? exception, string url);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "배치 콘텐츠 추출 시작: {Count}개 URL")]
+    private static partial void LogBatchExtractionStarting(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "배치 콘텐츠 추출 완료: {Success}/{Total} 성공")]
+    private static partial void LogBatchExtractionCompleted(ILogger logger, int success, int total);
+
+    #endregion
 }
