@@ -4,14 +4,14 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.3.3" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.4.0" />
     <!-- Ironbees (multi-agent orchestration) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.6.0" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.6.0" />
+    <PackageVersion Include="Ironbees.Core" Version="0.6.1" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.6.1" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
-    <PackageVersion Include="TokenMeter" Version="0.3.0" />
+    <PackageVersion Include="TokenMeter" Version="0.3.1" />
     <!-- ToolCallParser (multi-provider tool call parsing) -->
-    <PackageVersion Include="ToolCallParser" Version="0.1.0" />
+    <PackageVersion Include="ToolCallParser" Version="0.2.1" />
     <!-- Microsoft.Extensions.AI -->
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.3.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.3.0" />
@@ -29,12 +29,12 @@
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.16.0" />
+    <PackageVersion Include="IndexThinking" Version="0.17.0" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.13.1" />
-    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.13.1" />
+    <PackageVersion Include="MemoryIndexer" Version="0.13.2" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.13.2" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.4.0" />
+    <PackageVersion Include="WebFlux" Version="0.4.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.3.0" />
     <PackageVersion Include="Polly" Version="8.6.5" />
