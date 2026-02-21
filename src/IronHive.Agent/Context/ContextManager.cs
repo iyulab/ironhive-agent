@@ -43,17 +43,26 @@ public class ContextManager
     private readonly ICompactionTrigger _compactionTrigger;
     private readonly IHistoryCompactor _historyCompactor;
     private readonly GoalReminder _goalReminder;
+    private readonly ToolResultCompactor? _toolResultCompactor;
+    private readonly ObservationMasker? _observationMasker;
+    private readonly Scratchpad? _scratchpad;
 
     public ContextManager(
         IContextTokenCounter tokenCounter,
         ICompactionTrigger? compactionTrigger = null,
         IHistoryCompactor? historyCompactor = null,
-        GoalReminderOptions? goalReminderOptions = null)
+        GoalReminderOptions? goalReminderOptions = null,
+        ToolResultCompactor? toolResultCompactor = null,
+        ObservationMasker? observationMasker = null,
+        Scratchpad? scratchpad = null)
     {
         _tokenCounter = tokenCounter ?? throw new ArgumentNullException(nameof(tokenCounter));
         _compactionTrigger = compactionTrigger ?? new ThresholdCompactionTrigger();
         _historyCompactor = historyCompactor ?? new HistoryCompactor(tokenCounter);
         _goalReminder = new GoalReminder(goalReminderOptions);
+        _toolResultCompactor = toolResultCompactor;
+        _observationMasker = observationMasker;
+        _scratchpad = scratchpad;
     }
 
     /// <summary>
@@ -65,6 +74,11 @@ public class ContextManager
     /// Gets the goal reminder component.
     /// </summary>
     public GoalReminder GoalReminder => _goalReminder;
+
+    /// <summary>
+    /// Gets the scratchpad component, if configured.
+    /// </summary>
+    public Scratchpad? Scratchpad => _scratchpad;
 
     /// <summary>
     /// Gets the maximum context tokens.
@@ -164,18 +178,34 @@ public class ContextManager
 
     /// <summary>
     /// Prepares the history for sending to the model.
-    /// Applies compaction if needed and injects goal reminder.
+    /// Applies observation masking, compaction if needed, and injects goal reminder.
     /// </summary>
     public async Task<IReadOnlyList<ChatMessage>> PrepareHistoryAsync(
         IReadOnlyList<ChatMessage> history,
         CancellationToken cancellationToken = default)
     {
+        // Step 0a: Compact large tool results (cheap, always runs if enabled)
+        var compactedResults = _toolResultCompactor?.CompactToolResults(history) ?? history;
+
+        // Step 0b: Mask old observations (cheap, always runs if enabled)
+        var maskedHistory = _observationMasker?.MaskObservations(compactedResults) ?? compactedResults;
+
         // Step 1: Compact if needed
-        var compactionResult = await CompactIfNeededAsync(history, cancellationToken);
+        var compactionResult = await CompactIfNeededAsync(maskedHistory, cancellationToken);
         var preparedHistory = compactionResult.CompactedHistory;
 
         // Step 2: Inject goal reminder if needed
         preparedHistory = _goalReminder.InjectReminderIfNeeded(preparedHistory);
+
+        // Step 3: Inject scratchpad if present
+        if (_scratchpad?.HasContent == true)
+        {
+            var result = new List<ChatMessage>(preparedHistory)
+            {
+                new(ChatRole.System, _scratchpad.ToContextBlock())
+            };
+            preparedHistory = result;
+        }
 
         return preparedHistory;
     }
@@ -210,7 +240,14 @@ public class ContextManager
         ICompactionTrigger compactionTrigger;
         IHistoryCompactor historyCompactor;
 
-        if (config.UseTokenBasedCompaction)
+        if (config.UseAnchoredCompaction)
+        {
+            compactionTrigger = new TokenBasedCompactionTrigger(
+                config.ProtectRecentTokens,
+                config.MinimumPruneTokens);
+            historyCompactor = new AnchoredHistoryCompactor(tokenCounter, config, summarizer);
+        }
+        else if (config.UseTokenBasedCompaction)
         {
             compactionTrigger = new TokenBasedCompactionTrigger(
                 config.ProtectRecentTokens,
@@ -223,6 +260,22 @@ public class ContextManager
             historyCompactor = new HistoryCompactor(tokenCounter, summarizer);
         }
 
-        return new ContextManager(tokenCounter, compactionTrigger, historyCompactor);
+        ToolResultCompactor? toolResultCompactor = config.EnableToolResultCompaction
+            ? new ToolResultCompactor(
+                config.MaxToolResultChars,
+                config.ToolResultKeepHeadLines,
+                config.ToolResultKeepTailLines)
+            : null;
+
+        ObservationMasker? observationMasker = config.EnableObservationMasking
+            ? new ObservationMasker(
+                config.ObservationMaskingProtectedTurns,
+                config.ObservationMaskingMinResultLength)
+            : null;
+
+        return new ContextManager(
+            tokenCounter, compactionTrigger, historyCompactor,
+            toolResultCompactor: toolResultCompactor,
+            observationMasker: observationMasker);
     }
 }

@@ -19,6 +19,7 @@ public class AgentLoop : IAgentLoop
     private readonly IUsageTracker? _usageTracker;
     private readonly ContextManager? _contextManager;
     private readonly IErrorRecoveryService? _errorRecovery;
+    private readonly IToolRetriever? _toolRetriever;
     private readonly List<ChatMessage> _history = [];
 
     public AgentLoop(
@@ -26,13 +27,15 @@ public class AgentLoop : IAgentLoop
         AgentOptions? options = null,
         IUsageTracker? usageTracker = null,
         ContextManager? contextManager = null,
-        IErrorRecoveryService? errorRecovery = null)
+        IErrorRecoveryService? errorRecovery = null,
+        IToolRetriever? toolRetriever = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _options = options ?? new AgentOptions();
         _usageTracker = usageTracker;
         _contextManager = contextManager;
         _errorRecovery = errorRecovery;
+        _toolRetriever = toolRetriever;
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))
@@ -59,7 +62,7 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
-        var chatOptions = CreateChatOptions();
+        var chatOptions = await CreateChatOptionsAsync(cancellationToken);
         ChatResponse response;
 
         try
@@ -128,7 +131,7 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
-        var chatOptions = CreateChatOptions();
+        var chatOptions = await CreateChatOptionsAsync(cancellationToken);
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
 
@@ -217,14 +220,46 @@ public class AgentLoop : IAgentLoop
         return preparedHistory;
     }
 
-    private ChatOptions CreateChatOptions()
+    private async Task<ChatOptions> CreateChatOptionsAsync(CancellationToken cancellationToken)
     {
+        var tools = _options.Tools;
+
+        // Step 1: Dynamic tool retrieval (select relevant tools for the query)
+        if (_toolRetriever is not null && tools is { Count: > 0 })
+        {
+            var query = GetLatestUserQuery();
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var result = await _toolRetriever.RetrieveAsync(
+                    query, tools, _options.ToolRetrievalOptions, cancellationToken);
+                tools = result.SelectedTools;
+            }
+        }
+
+        // Step 2: Tool schema compression (reduce token usage)
+        if (tools is { Count: > 0 } && _options.ToolSchemaCompression != ToolSchemaCompressionLevel.None)
+        {
+            tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
+        }
+
         return new ChatOptions
         {
             Temperature = _options.Temperature,
             MaxOutputTokens = _options.MaxTokens,
-            Tools = _options.Tools
+            Tools = tools
         };
+    }
+
+    private string GetLatestUserQuery()
+    {
+        for (var i = _history.Count - 1; i >= 0; i--)
+        {
+            if (_history[i].Role == ChatRole.User)
+            {
+                return _history[i].Text ?? string.Empty;
+            }
+        }
+        return string.Empty;
     }
 
     private static List<ToolCallResult> ExtractToolCalls(ChatResponse response)
@@ -351,4 +386,15 @@ public class AgentOptions
     /// Available tools for the agent.
     /// </summary>
     public IList<AITool>? Tools { get; set; }
+
+    /// <summary>
+    /// Tool schema compression level. Reduces tool definition token usage.
+    /// Default: None (no compression).
+    /// </summary>
+    public ToolSchemaCompressionLevel ToolSchemaCompression { get; set; } = ToolSchemaCompressionLevel.None;
+
+    /// <summary>
+    /// Options for dynamic tool retrieval. Only used when an IToolRetriever is configured.
+    /// </summary>
+    public ToolRetrievalOptions? ToolRetrievalOptions { get; set; }
 }
