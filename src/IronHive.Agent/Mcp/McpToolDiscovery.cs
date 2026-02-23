@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace IronHive.Agent.Mcp;
 
@@ -7,12 +8,13 @@ namespace IronHive.Agent.Mcp;
 /// Provides hierarchical tool discovery and lazy loading for MCP plugins.
 /// Acts as a meta-tool that can discover and load tools on demand.
 /// </summary>
-public class McpToolDiscovery : IDisposable
+public partial class McpToolDiscovery : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly IMcpPluginManager _pluginManager;
     private readonly McpPluginsConfig _config;
+    private readonly ILogger<McpToolDiscovery>? _logger;
     private readonly Dictionary<string, PluginToolInfo> _toolRegistry = new();
     private readonly SemaphoreSlim _discoveryLock = new(1, 1);
     private bool _disposed;
@@ -22,10 +24,15 @@ public class McpToolDiscovery : IDisposable
     /// </summary>
     /// <param name="pluginManager">Plugin manager for connections</param>
     /// <param name="config">Plugin configuration</param>
-    public McpToolDiscovery(IMcpPluginManager pluginManager, McpPluginsConfig config)
+    /// <param name="logger">Optional logger</param>
+    public McpToolDiscovery(
+        IMcpPluginManager pluginManager,
+        McpPluginsConfig config,
+        ILogger<McpToolDiscovery>? logger = null)
     {
         _pluginManager = pluginManager ?? throw new ArgumentNullException(nameof(pluginManager));
         _config = config ?? throw new ArgumentNullException(nameof(config));
+        _logger = logger;
     }
 
     /// <summary>
@@ -86,9 +93,9 @@ public class McpToolDiscovery : IDisposable
                         await _pluginManager.ConnectAsync(name, config, cancellationToken);
                         isConnected = true;
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        // Connection failed — skip plugin and continue discovery
+                        LogPluginConnectionFailed(_logger, name, ex);
                         continue;
                     }
                 }
@@ -175,9 +182,9 @@ public class McpToolDiscovery : IDisposable
             {
                 await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Connection failed — tool not available
+                LogPluginConnectionFailed(_logger, pluginName, ex);
                 return null;
             }
         }
@@ -211,9 +218,9 @@ public class McpToolDiscovery : IDisposable
             await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
             return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Connection failed — plugin not available
+            LogPluginConnectionFailed(_logger, pluginName, ex);
             return false;
         }
     }
@@ -272,6 +279,17 @@ public class McpToolDiscovery : IDisposable
         _disposed = true;
         _discoveryLock.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "MCP plugin '{PluginName}' connection failed, skipping")]
+    private static partial void LogPluginConnectionFailedCore(ILogger logger, string pluginName, Exception ex);
+
+    private static void LogPluginConnectionFailed(ILogger? logger, string pluginName, Exception ex)
+    {
+        if (logger is not null)
+        {
+            LogPluginConnectionFailedCore(logger, pluginName, ex);
+        }
     }
 
     private sealed class PluginToolInfo
