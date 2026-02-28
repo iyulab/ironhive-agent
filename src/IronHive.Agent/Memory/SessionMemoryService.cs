@@ -27,19 +27,19 @@ public class SessionMemoryService : ISessionMemoryService
     /// <inheritdoc />
     public async Task RememberUserMessageAsync(string content, CancellationToken cancellationToken = default)
     {
-        await _memoryService.RememberAsync(_userId, _sessionId, content, "user", cancellationToken);
+        await _memoryService.RememberAsync(_userId, _sessionId, content, "user", cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task RememberAssistantMessageAsync(string content, CancellationToken cancellationToken = default)
     {
-        await _memoryService.RememberAsync(_userId, _sessionId, content, "assistant", cancellationToken);
+        await _memoryService.RememberAsync(_userId, _sessionId, content, "assistant", cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task<MemoryRecallResult> RecallAsync(string query, int limit = 10, CancellationToken cancellationToken = default)
     {
-        var context = await _memoryService.RecallAsync(_userId, _sessionId, query, limit, cancellationToken);
+        var context = await _memoryService.RecallAsync(_userId, _sessionId, query, limit, cancellationToken: cancellationToken);
 
         return new MemoryRecallResult
         {
