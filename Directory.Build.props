@@ -23,7 +23,14 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.2.2</Version>
+    <Version>0.2.3</Version>
+  </PropertyGroup>
+
+  <!-- Local NuGet package source for development -->
+  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)../../local-packages')">
+    <RestoreAdditionalProjectSources>
+        $(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)../../local-packages
+    </RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <!-- Release build: exclude PDB files -->

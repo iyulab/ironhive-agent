@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.4.1" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.4.2" />
     <!-- Ironbees (multi-agent orchestration) -->
     <PackageVersion Include="Ironbees.Core" Version="0.6.2" />
     <PackageVersion Include="Ironbees.Autonomous" Version="0.6.2" />
@@ -17,8 +17,8 @@
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.3.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.3.0" />
     <!-- OpenAI SDK -->
-    <PackageVersion Include="ModelContextProtocol" Version="0.9.0-preview.2" />
-    <PackageVersion Include="OpenAI" Version="2.8.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="1.0.0" />
+    <PackageVersion Include="OpenAI" Version="2.9.0" />
     <!-- DI -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.3" />
@@ -29,12 +29,12 @@
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.17.0" />
+    <PackageVersion Include="IndexThinking" Version="0.17.1" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.13.2" />
-    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.13.2" />
+    <PackageVersion Include="MemoryIndexer" Version="0.14.0" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.14.0" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.4.1" />
+    <PackageVersion Include="WebFlux" Version="0.4.2" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.3.0" />
     <PackageVersion Include="Polly" Version="8.6.5" />
@@ -46,7 +46,7 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.61" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
     <PackageVersion Include="coverlet.collector" Version="8.0.0" />
   </ItemGroup>
