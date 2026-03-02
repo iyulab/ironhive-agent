@@ -10,10 +10,11 @@ namespace IronHive.Agent.Planning;
 /// When tools are provided, the chat client automatically handles
 /// the tool-call -> result -> re-send loop via FunctionInvocation middleware.
 /// </summary>
-public class DefaultPlanExecutor : IPlanExecutor
+public class DefaultPlanExecutor : IPlanExecutor, IDisposable
 {
     private readonly IChatClient _chatClient;
     private readonly IList<AITool>? _tools;
+    private readonly bool _ownsClient;
 
     public DefaultPlanExecutor(IChatClient chatClient, IList<AITool>? tools = null)
     {
@@ -24,6 +25,7 @@ public class DefaultPlanExecutor : IPlanExecutor
                 .UseFunctionInvocation()
                 .Build();
             _tools = tools;
+            _ownsClient = true;
         }
         else
         {
@@ -98,5 +100,15 @@ public class DefaultPlanExecutor : IPlanExecutor
                 """),
             new(ChatRole.User, step.Instruction),
         ];
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        if (_ownsClient && _chatClient is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+        GC.SuppressFinalize(this);
     }
 }

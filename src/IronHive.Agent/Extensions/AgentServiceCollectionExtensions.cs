@@ -1,10 +1,8 @@
-using IronHive.Abstractions.Agent.Planning;
 using IronHive.Agent.Context;
 using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Mcp;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
-using IronHive.Agent.Planning;
 using IronHive.Agent.Tracking;
 using IronHive.Agent.Webhook;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,10 +98,10 @@ public static class AgentServiceCollectionExtensions
         // Register MCP plugin manager
         services.AddSingleton<IMcpPluginManager, McpPluginManager>();
 
-        // Register default plan executor (requires IChatClient in DI)
-        // Uses TryAdd so consumers can override with a custom implementation.
-        // Note: Resolving IPlanExecutor requires IChatClient to be registered.
-        services.TryAddTransient<IPlanExecutor, DefaultPlanExecutor>();
+        // IPlanExecutor is not registered by default — consumers should register it
+        // at the application layer where IChatClient is available.
+        // Example: services.AddTransient<IPlanExecutor>(sp =>
+        //     new DefaultPlanExecutor(sp.GetRequiredService<IChatClient>(), tools));
 
         // Note: ISubAgentService requires IChatClient which is CLI-specific
         // It should be registered at the CLI layer where IChatClient is available
