@@ -40,6 +40,8 @@ public class PlannerTriggerDetector
     /// </summary>
     public virtual bool ShouldTriggerPlanning(string prompt, bool forcePlanning = false)
     {
+        ArgumentNullException.ThrowIfNull(prompt);
+
         if (forcePlanning)
         {
             return true;

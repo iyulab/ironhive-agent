@@ -79,7 +79,10 @@ public sealed class PlannerTriggerDetectorTests
     [Theory]
     [InlineData("plan this task")]
     [InlineData("Plan This Reorganization")]
+    [InlineData("create a plan for deployment")]
     [InlineData("make a plan for the migration")]
+    [InlineData("break it down into steps")]
+    [InlineData("break down the problem")]
     [InlineData("step by step approach")]
     public void ShouldTriggerPlanning_EnglishExplicitPlanPattern_Triggers(string prompt)
     {
@@ -179,7 +182,7 @@ public sealed class PlannerTriggerDetectorTests
         var options = new PlannerTriggerOptions();
 
         options.MinContentLength.Should().Be(800);
-        options.MultiStepPatterns.Should().HaveCount(2);
+        options.MultiStepPatterns.Should().HaveCount(1);
         options.ExplicitPlanPatterns.Should().HaveCount(1);
     }
 
@@ -187,6 +190,14 @@ public sealed class PlannerTriggerDetectorTests
     public void Constructor_NullOptions_ThrowsArgumentNullException()
     {
         var act = () => new PlannerTriggerDetector(null!);
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void ShouldTriggerPlanning_NullPrompt_ThrowsArgumentNullException()
+    {
+        var detector = new PlannerTriggerDetector();
+        var act = () => detector.ShouldTriggerPlanning(null!);
         act.Should().Throw<ArgumentNullException>();
     }
 
