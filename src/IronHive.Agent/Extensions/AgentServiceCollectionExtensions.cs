@@ -1,11 +1,14 @@
+using IronHive.Abstractions.Agent.Planning;
 using IronHive.Agent.Context;
 using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Mcp;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
+using IronHive.Agent.Planning;
 using IronHive.Agent.Tracking;
 using IronHive.Agent.Webhook;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace IronHive.Agent.Extensions;
@@ -96,6 +99,11 @@ public static class AgentServiceCollectionExtensions
 
         // Register MCP plugin manager
         services.AddSingleton<IMcpPluginManager, McpPluginManager>();
+
+        // Register default plan executor (requires IChatClient in DI)
+        // Uses TryAdd so consumers can override with a custom implementation.
+        // Note: Resolving IPlanExecutor requires IChatClient to be registered.
+        services.TryAddTransient<IPlanExecutor, DefaultPlanExecutor>();
 
         // Note: ISubAgentService requires IChatClient which is CLI-specific
         // It should be registered at the CLI layer where IChatClient is available
