@@ -56,8 +56,11 @@ public class ToolResultCompactor
             return new ToolResultCompaction(result, false, result.Length, result.Length);
         }
 
+        // Normalize CRLF to LF before line splitting to avoid trailing \r artifacts
+        var normalized = result.Replace("\r\n", "\n", StringComparison.Ordinal);
+
         // Try line-based truncation (head + tail)
-        var lines = result.Split('\n');
+        var lines = normalized.Split('\n');
         var totalKeep = _keepHeadLines + _keepTailLines;
 
         if (lines.Length > totalKeep && totalKeep > 0)

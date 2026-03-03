@@ -164,9 +164,47 @@ public class ObservationMaskerTests
 
         var result = masker.MaskObservations(history);
 
-        // protectedTurns=0 means FindProtectedStartIndex never finds enough turns
-        // so protectedStartIndex returns 0, protecting everything
-        Assert.Same(history, result);
+        // protectedTurns=0 means nothing is protected — all tool results should be masked
+        Assert.NotSame(history, result);
+        Assert.Equal(3, result.Count);
+
+        // Tool result at index 2 should be masked
+        var toolMsg = result[2];
+        var frc = toolMsg.Contents.OfType<FunctionResultContent>().Single();
+        var maskedText = frc.Result?.ToString() ?? "";
+        Assert.Contains("[Masked:", maskedText);
+    }
+
+    [Fact]
+    public void MaskObservations_ZeroProtectedTurns_MultipleUserMessages_AllMasked()
+    {
+        var masker = new ObservationMasker(protectedTurns: 0, minimumResultLength: 50);
+
+        var largeResult = new string('b', 300);
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "First request"),
+            CreateAssistantWithToolCall("call-1", "tool_a"),
+            CreateToolResult("call-1", largeResult),
+            new(ChatRole.User, "Second request"),
+            CreateAssistantWithToolCall("call-2", "tool_b"),
+            CreateToolResult("call-2", largeResult),
+        };
+
+        var result = masker.MaskObservations(history);
+
+        // protectedTurns=0: both tool results should be masked
+        Assert.NotSame(history, result);
+        Assert.Equal(6, result.Count);
+
+        // Both tool results should contain [Masked:
+        var toolMsg1 = result[2];
+        var frc1 = toolMsg1.Contents.OfType<FunctionResultContent>().Single();
+        Assert.Contains("[Masked:", frc1.Result?.ToString() ?? "");
+
+        var toolMsg2 = result[5];
+        var frc2 = toolMsg2.Contents.OfType<FunctionResultContent>().Single();
+        Assert.Contains("[Masked:", frc2.Result?.ToString() ?? "");
     }
 
     #endregion

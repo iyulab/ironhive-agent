@@ -113,6 +113,12 @@ public class ObservationMasker
     /// </summary>
     private int FindProtectedStartIndex(IReadOnlyList<ChatMessage> history)
     {
+        // Special case: 0 protected turns means nothing is protected
+        if (_protectedTurns <= 0)
+        {
+            return history.Count;
+        }
+
         var turnsFound = 0;
 
         for (var i = history.Count - 1; i >= 0; i--)

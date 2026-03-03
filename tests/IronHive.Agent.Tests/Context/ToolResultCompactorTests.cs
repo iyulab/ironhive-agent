@@ -82,6 +82,25 @@ public class ToolResultCompactorTests
     }
 
     [Fact]
+    public void Compact_CrlfLineEndings_NormalizesToLf()
+    {
+        // Create 100 lines with CRLF line endings (Windows-style)
+        var lines = Enumerable.Range(1, 100).Select(i => $"line {i:D4}!").ToArray();
+        var text = string.Join("\r\n", lines);
+        var compactor = new ToolResultCompactor(maxResultChars: 50, keepHeadLines: 3, keepTailLines: 2);
+
+        var result = compactor.Compact(text);
+
+        Assert.True(result.WasTruncated);
+        // Should NOT contain \r in the compacted result
+        Assert.DoesNotContain("\r", result.CompactedResult);
+        // Should still preserve content
+        Assert.StartsWith("line 0001!", result.CompactedResult);
+        Assert.EndsWith("line 0100!", result.CompactedResult);
+        Assert.Contains("lines omitted", result.CompactedResult);
+    }
+
+    [Fact]
     public void Compact_OmittedCount_Correct()
     {
         var lines = Enumerable.Range(1, 50).Select(i => $"line-{i}").ToArray();
