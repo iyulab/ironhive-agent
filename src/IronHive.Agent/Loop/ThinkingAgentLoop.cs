@@ -212,7 +212,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     {
         var tools = _options.Tools;
 
-        // Dynamic tool retrieval (select relevant tools for the query)
+        // Step 1: Dynamic tool retrieval (select relevant tools for the query)
         if (_toolRetriever is not null && tools is { Count: > 0 })
         {
             var query = GetLatestUserQuery();
@@ -222,6 +222,12 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                     query, tools, _options.ToolRetrievalOptions, cancellationToken);
                 tools = result.SelectedTools;
             }
+        }
+
+        // Step 2: Tool schema compression (reduce token usage)
+        if (tools is { Count: > 0 } && _options.ToolSchemaCompression != ToolSchemaCompressionLevel.None)
+        {
+            tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
         }
 
         return new ChatOptions
