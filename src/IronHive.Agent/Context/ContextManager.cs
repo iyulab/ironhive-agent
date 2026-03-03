@@ -198,12 +198,19 @@ public class ContextManager
         preparedHistory = _goalReminder.InjectReminderIfNeeded(preparedHistory);
 
         // Step 3: Inject scratchpad if present
+        // Insert after leading system messages for cross-provider compatibility
+        // (OpenAI, Anthropic, Gemini all expect system messages at the start)
         if (_scratchpad?.HasContent == true)
         {
-            var result = new List<ChatMessage>(preparedHistory)
+            var result = new List<ChatMessage>(preparedHistory.Count + 1);
+            var insertAt = 0;
+            while (insertAt < preparedHistory.Count && preparedHistory[insertAt].Role == ChatRole.System)
             {
-                new(ChatRole.System, _scratchpad.ToContextBlock())
-            };
+                insertAt++;
+            }
+            result.AddRange(preparedHistory.Take(insertAt));
+            result.Add(new ChatMessage(ChatRole.System, _scratchpad.ToContextBlock()));
+            result.AddRange(preparedHistory.Skip(insertAt));
             preparedHistory = result;
         }
 
