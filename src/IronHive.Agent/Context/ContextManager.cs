@@ -34,6 +34,22 @@ public record ContextUsage
 }
 
 /// <summary>
+/// Warning when system prompt exceeds context budget.
+/// </summary>
+public record ContextFitWarning
+{
+    /// <summary>Token count of system messages.</summary>
+    public required int SystemPromptTokens { get; init; }
+    /// <summary>Maximum context tokens for the model.</summary>
+    public required int MaxContextTokens { get; init; }
+    /// <summary>Percentage of context consumed by system prompt.</summary>
+    public float SystemPromptPercentage => MaxContextTokens > 0
+        ? (float)SystemPromptTokens / MaxContextTokens : 0;
+    /// <summary>Whether the system prompt alone exceeds 80% of context budget.</summary>
+    public bool IsOverBudget => SystemPromptPercentage > 0.80f;
+}
+
+/// <summary>
 /// Manages context window for agent conversations.
 /// Handles token counting, compaction triggering, goal reminders, and history management.
 /// </summary>
@@ -215,6 +231,34 @@ public class ContextManager
         }
 
         return preparedHistory;
+    }
+
+    /// <summary>
+    /// Validates whether the system prompt fits within the context budget.
+    /// Returns a warning if system messages consume more than 80% of max context tokens.
+    /// Returns null if within budget.
+    /// </summary>
+    public ContextFitWarning? ValidateContextFit(IReadOnlyList<ChatMessage> history)
+    {
+        var systemMessages = history.Where(m => m.Role == ChatRole.System).ToList();
+        if (systemMessages.Count == 0)
+        {
+            return null;
+        }
+
+        var systemTokens = systemMessages.Sum(m => _tokenCounter.CountTokens(m));
+        var maxTokens = _tokenCounter.MaxContextTokens;
+
+        if ((float)systemTokens / maxTokens <= 0.80f)
+        {
+            return null;
+        }
+
+        return new ContextFitWarning
+        {
+            SystemPromptTokens = systemTokens,
+            MaxContextTokens = maxTokens
+        };
     }
 
     /// <summary>
