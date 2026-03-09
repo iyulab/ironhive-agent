@@ -110,4 +110,11 @@ public class CompactionConfig
     /// Default: 2000.
     /// </summary>
     public int MaxAnchorStateChars { get; set; } = 2000;
+
+    /// <summary>
+    /// Optional override for the model's maximum context token count.
+    /// When set, this value takes precedence over the hardcoded model context size dictionary.
+    /// Use this for local/custom models whose context window is not in the built-in lookup table.
+    /// </summary>
+    public int? MaxContextTokens { get; set; }
 }
