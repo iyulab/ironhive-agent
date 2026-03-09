@@ -242,7 +242,7 @@ public class ContextManager
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var tokenCounter = new ContextTokenCounter(modelName);
+        var tokenCounter = new ContextTokenCounter(modelName, config.MaxContextTokens);
 
         ICompactionTrigger compactionTrigger;
         IHistoryCompactor historyCompactor;
