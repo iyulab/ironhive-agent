@@ -29,7 +29,7 @@
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.18.5" />
+    <PackageVersion Include="IndexThinking" Version="0.19.1" />
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.14.0" />
     <PackageVersion Include="MemoryIndexer.Sdk" Version="0.14.0" />
