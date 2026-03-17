@@ -63,6 +63,14 @@ public interface IMcpPluginManager : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Checks if a connected plugin is healthy and responsive.
+    /// </summary>
+    /// <param name="pluginName">Plugin name to check</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if plugin responds within timeout, false otherwise</returns>
+    Task<bool> IsHealthyAsync(string pluginName, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Event raised when a plugin is connected.
     /// </summary>
     event EventHandler<McpPluginEventArgs>? PluginConnected;

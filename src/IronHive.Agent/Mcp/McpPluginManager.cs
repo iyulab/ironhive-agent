@@ -186,6 +186,29 @@ public class McpPluginManager : IMcpPluginManager
     }
 
     /// <inheritdoc />
+    public async Task<bool> IsHealthyAsync(string pluginName, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (!_clients.TryGetValue(pluginName, out var wrapper))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(10));
+            await wrapper.Client.ListToolsAsync(cancellationToken: cts.Token);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
