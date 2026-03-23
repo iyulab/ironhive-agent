@@ -234,13 +234,12 @@ public class McpPluginManager : IMcpPluginManager
         GC.SuppressFinalize(this);
     }
 
-    private static StdioClientTransport CreateTransport(string name, McpPluginConfig config)
+    private static IClientTransport CreateTransport(string name, McpPluginConfig config)
     {
         return config.Transport switch
         {
             McpTransportType.Stdio => CreateStdioTransport(name, config),
-            McpTransportType.Http => throw new NotSupportedException(
-                "HTTP transport is not yet supported by MCP SDK. Use stdio transport instead."),
+            McpTransportType.Http => CreateHttpTransport(name, config),
             _ => throw new ArgumentException($"Unknown transport type: {config.Transport}")
         };
     }
@@ -272,6 +271,22 @@ public class McpPluginManager : IMcpPluginManager
         }
 
         return new StdioClientTransport(options);
+    }
+
+    private static HttpClientTransport CreateHttpTransport(string name, McpPluginConfig config)
+    {
+        if (string.IsNullOrWhiteSpace(config.Url))
+        {
+            throw new ArgumentException("Url is required for HTTP transport.");
+        }
+
+        var options = new HttpClientTransportOptions
+        {
+            Name = name,
+            Endpoint = new Uri(config.Url)
+        };
+
+        return new HttpClientTransport(options);
     }
 
     private sealed record McpClientWrapper(string Name, McpClient Client, McpPluginConfig Config);

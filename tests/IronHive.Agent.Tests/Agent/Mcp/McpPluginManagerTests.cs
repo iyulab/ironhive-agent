@@ -62,6 +62,50 @@ public class McpPluginManagerTests
     }
 
     [Fact]
+    public async Task ConnectAsync_HttpTransport_WithValidUrl_DoesNotThrowArgumentException()
+    {
+        var config = new McpPluginConfig
+        {
+            Transport = McpTransportType.Http,
+            Url = "http://localhost:9999/not-a-real-server"
+        };
+
+        var manager = new McpPluginManager();
+        var ex = await Record.ExceptionAsync(() =>
+            manager.ConnectAsync("test-http", config));
+
+        Assert.IsNotType<ArgumentException>(ex);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_HttpTransport_WithEmptyUrl_ThrowsArgumentException()
+    {
+        var config = new McpPluginConfig
+        {
+            Transport = McpTransportType.Http,
+            Url = ""
+        };
+
+        var manager = new McpPluginManager();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            manager.ConnectAsync("test-http-empty", config));
+    }
+
+    [Fact]
+    public async Task ConnectAsync_HttpTransport_WithNullUrl_ThrowsArgumentException()
+    {
+        var config = new McpPluginConfig
+        {
+            Transport = McpTransportType.Http,
+            Url = null
+        };
+
+        var manager = new McpPluginManager();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            manager.ConnectAsync("test-http-null", config));
+    }
+
+    [Fact]
     public async Task DisconnectAsync_NonExistentPlugin_DoesNotThrow()
     {
         await using var manager = new McpPluginManager();
