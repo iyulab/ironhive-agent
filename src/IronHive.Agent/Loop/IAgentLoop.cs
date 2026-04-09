@@ -165,24 +165,70 @@ public record ToolCallResult
 }
 
 /// <summary>
-/// Streaming tool call chunk.
+/// A streaming tool-call chunk carried inside <see cref="AgentResponseChunk.ToolCallDelta"/>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The built-in <see cref="AgentLoop"/> and <see cref="ThinkingAgentLoop"/> always emit chunks
+/// with <see cref="IsComplete"/> = <c>true</c>, because the underlying
+/// <c>Microsoft.Extensions.AI</c> chat client has already accumulated streaming fragments into
+/// the materialised <see cref="Microsoft.Extensions.AI.FunctionCallContent.Arguments"/> dictionary
+/// before forwarding it. Consumers can therefore parse
+/// <see cref="ArgumentsDelta"/> directly as JSON in that common case.
+/// </para>
+/// <para>
+/// The <c>Delta</c> suffix on <see cref="NameDelta"/> and <see cref="ArgumentsDelta"/> is kept so
+/// future loop implementations can forward true provider deltas; in that case they must set
+/// <see cref="IsComplete"/> to <c>false</c> on intermediate chunks and emit a final chunk
+/// (with the same <see cref="Id"/>) with <see cref="IsComplete"/> = <c>true</c>.
+/// </para>
+/// <para>
+/// Use <see cref="ToolCallChunkFactory.FromFunctionCall"/> to build chunks from
+/// provider-produced <see cref="Microsoft.Extensions.AI.FunctionCallContent"/>; it encodes the
+/// canonical "complete-in-one-chunk, JSON-serialised arguments" contract.
+/// </para>
+/// </remarks>
 public record ToolCallChunk
 {
     /// <summary>
-    /// Tool call ID.
+    /// Stable identifier for the tool call. All chunks that belong to the same tool call
+    /// — including intermediate deltas and the final completion chunk — share the same
+    /// <see cref="Id"/>.
     /// </summary>
     public required string Id { get; init; }
 
     /// <summary>
-    /// Tool name (may be partial during streaming).
+    /// Tool name. When <see cref="IsComplete"/> is <c>true</c> (the default, and the only
+    /// mode produced by the built-in loops) this is the complete tool name. When
+    /// <see cref="IsComplete"/> is <c>false</c> this may be a partial fragment that consumers
+    /// must accumulate across chunks that share the same <see cref="Id"/>.
     /// </summary>
     public string? NameDelta { get; init; }
 
     /// <summary>
-    /// Arguments delta (partial JSON).
+    /// Tool arguments serialized as JSON.
+    /// <para>
+    /// When <see cref="IsComplete"/> is <c>true</c> (the default, and the only mode produced
+    /// by the built-in loops) this is the complete, parseable JSON for the tool call
+    /// — consumers may feed it straight into <c>JsonDocument.Parse</c>.
+    /// </para>
+    /// <para>
+    /// When <see cref="IsComplete"/> is <c>false</c> this is an opaque fragment of the
+    /// provider's raw stream and consumers must accumulate across subsequent chunks
+    /// (sharing the same <see cref="Id"/>) before attempting to parse.
+    /// </para>
     /// </summary>
     public string? ArgumentsDelta { get; init; }
+
+    /// <summary>
+    /// Whether this chunk carries the complete tool call. When <c>true</c>,
+    /// <see cref="NameDelta"/> is the final name and <see cref="ArgumentsDelta"/> is valid,
+    /// fully-formed JSON (or <c>null</c> for calls with no arguments).
+    /// When <c>false</c>, the chunk carries a partial fragment and consumers must
+    /// accumulate further chunks with the same <see cref="Id"/>.
+    /// Defaults to <c>true</c> so existing emitters remain source-compatible.
+    /// </summary>
+    public bool IsComplete { get; init; } = true;
 }
 
 /// <summary>

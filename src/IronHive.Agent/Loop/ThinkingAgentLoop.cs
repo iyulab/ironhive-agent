@@ -140,12 +140,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                     toolCalls.Add(functionCall);
                     yield return new AgentResponseChunk
                     {
-                        ToolCallDelta = new ToolCallChunk
-                        {
-                            Id = functionCall.CallId,
-                            NameDelta = functionCall.Name,
-                            ArgumentsDelta = functionCall.Arguments?.ToString()
-                        }
+                        ToolCallDelta = ToolCallChunkFactory.FromFunctionCall(functionCall)
                     };
                 }
             }

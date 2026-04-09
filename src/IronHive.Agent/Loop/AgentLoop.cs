@@ -170,14 +170,7 @@ public class AgentLoop : IAgentLoop
                     toolCalls.Add(functionCall);
                     yield return new AgentResponseChunk
                     {
-                        ToolCallDelta = new ToolCallChunk
-                        {
-                            Id = functionCall.CallId,
-                            NameDelta = functionCall.Name,
-                            ArgumentsDelta = functionCall.Arguments is not null
-                                ? JsonSerializer.Serialize(functionCall.Arguments)
-                                : null
-                        }
+                        ToolCallDelta = ToolCallChunkFactory.FromFunctionCall(functionCall)
                     };
                 }
             }
