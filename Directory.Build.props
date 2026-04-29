@@ -6,8 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Ignore NU1903 (known vulnerability in transitive dependency from ironhive) -->
+    <!-- Ignore NU1902 (known moderate vulnerability in transitive OpenTelemetry deps — no fix available yet) -->
     <!-- Ignore NU5104 (stable package with prerelease dependency: ModelContextProtocol has no stable release yet) -->
-    <NoWarn>$(NoWarn);NU1903;NU5104</NoWarn>
+    <NoWarn>$(NoWarn);NU1902;NU1903;NU5104</NoWarn>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
   </PropertyGroup>
