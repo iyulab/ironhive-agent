@@ -574,22 +574,22 @@ public partial class ReportGeneratorAgent
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "보고서 생성 시작: Finding {FindingCount}개, 소스 {SourceCount}개")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Report generation starting: {FindingCount} findings, {SourceCount} sources")]
     private static partial void LogReportGenerationStarting(ILogger logger, int findingCount, int sourceCount);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "아웃라인 생성 완료: {SectionCount}개 섹션")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Outline generated: {SectionCount} sections")]
     private static partial void LogOutlineGenerated(ILogger logger, int sectionCount);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "섹션 생성 완료: {Title}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Section generated: {Title}")]
     private static partial void LogSectionGenerated(ILogger logger, string title);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "보고서 생성 완료: {SectionCount}개 섹션, {CitationCount}개 인용, 소요 시간 {Duration}ms")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Report generation completed: {SectionCount} sections, {CitationCount} citations, duration {Duration}ms")]
     private static partial void LogReportGenerationCompleted(ILogger logger, int sectionCount, int citationCount, double duration);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "아웃라인 생성 실패, 기본 아웃라인 사용")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Outline generation failed, using default outline")]
     private static partial void LogOutlineGenerationFailed(ILogger logger, Exception? exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "섹션 생성 실패: {Title}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Section generation failed: {Title}")]
     private static partial void LogSectionGenerationFailed(ILogger logger, Exception? exception, string title);
 
     #endregion

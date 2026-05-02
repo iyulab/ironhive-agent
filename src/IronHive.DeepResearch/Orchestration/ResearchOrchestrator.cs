@@ -559,34 +559,34 @@ public partial class ResearchOrchestrator
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 시작: {Query}, 깊이: {Depth}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research starting: {Query}, depth: {Depth}")]
     private static partial void LogResearchStarting(ILogger logger, string query, ResearchDepth depth);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "리서치 시작 전 취소됨")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Research cancelled before start")]
     private static partial void LogResearchCancelledBeforeStart(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "반복 {Iteration}/{Max} 시작")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Iteration {Iteration}/{Max} starting")]
     private static partial void LogIterationStarting(ILogger logger, int iteration, int max);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "충분성 달성 (점수: {Score:P0})")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sufficiency achieved (score: {Score:P0})")]
     private static partial void LogSufficiencyAchieved(ILogger logger, decimal score);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "추가 리서치 필요 (점수: {Score:P0}, 갭: {GapCount}개)")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Additional research needed (score: {Score:P0}, gaps: {GapCount})")]
     private static partial void LogAdditionalResearchNeeded(ILogger logger, decimal score, int gapCount);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "리서치 취소됨")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Research cancelled")]
     private static partial void LogResearchCancelled(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "리서치 실행 중 오류 발생")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Research execution error")]
     private static partial void LogResearchExecutionError(ILogger logger, Exception? exception);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "스트리밍 리서치 중 오류")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Streaming research error")]
     private static partial void LogStreamingResearchError(ILogger logger, Exception? exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "검색 재시도 {RetryCount}회 후에도 소스를 찾지 못함")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No sources found after {RetryCount} retries")]
     private static partial void LogSearchRetriesExhausted(ILogger logger, int retryCount);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "검색 결과 없음, {Delay}초 후 재시도 ({Retry}/{Max})")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "No search results, retrying after {Delay}s ({Retry}/{Max})")]
     private static partial void LogSearchRetrying(ILogger logger, double delay, int retry, int max);
 
     #endregion

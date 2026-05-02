@@ -484,34 +484,34 @@ public partial class SearchCoordinatorAgent
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "검색 실행 시작: {QueryCount}개 쿼리, 최대 병렬 {MaxParallel}개")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Search execution starting: {QueryCount} queries, max parallel {MaxParallel}")]
     private static partial void LogSearchExecutionStarting(ILogger logger, int queryCount, int maxParallel);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "실행할 새로운 쿼리 없음")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "No new queries to execute")]
     private static partial void LogNoNewQueriesToExecute(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "새로운 쿼리 {NewCount}개 실행 (기존 {ExistingCount}개 제외)")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Executing {NewCount} new queries (skipping {ExistingCount} existing)")]
     private static partial void LogNewQueriesExecuting(ILogger logger, int newCount, int existingCount);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "후속 검색 실행: {QueryCount}개 쿼리")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Follow-up search executing: {QueryCount} queries")]
     private static partial void LogFollowUpSearchExecuting(ILogger logger, int queryCount);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "검색 실행 완료: 성공 {SuccessCount}개, 실패 {FailCount}개, 소스 {SourceCount}개, 소요 시간 {Duration}ms")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Search execution completed: success {SuccessCount}, failed {FailCount}, sources {SourceCount}, duration {Duration}ms")]
     private static partial void LogSearchExecutionCompleted(ILogger logger, int successCount, int failCount, int sourceCount, double duration);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "쿼리 성공: {Query}, 소스 {Count}개")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Query succeeded: {Query}, sources {Count}")]
     private static partial void LogQuerySucceeded(ILogger logger, string query, int count);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 타임아웃: {Query} (시도 {Retry}/{MaxRetry})")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Query timeout: {Query} (attempt {Retry}/{MaxRetry})")]
     private static partial void LogQueryTimeout(ILogger logger, string query, int retry, int maxRetry);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Rate limit 감지: {Query}, 대기 후 재시도")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rate limit detected: {Query}, retrying after wait")]
     private static partial void LogRateLimitDetected(ILogger logger, string query);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "서버 에러: {Query}, {Message}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Server error: {Query}, {Message}")]
     private static partial void LogServerError(ILogger logger, string query, string message);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 실패: {Query}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Query failed: {Query}")]
     private static partial void LogQueryFailed(ILogger logger, Exception? exception, string query);
 
     #endregion

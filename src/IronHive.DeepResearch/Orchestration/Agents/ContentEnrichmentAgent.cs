@@ -432,19 +432,19 @@ public partial class ContentEnrichmentAgent
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 강화 시작: {SourceCount}개 소스, 최대 병렬 {MaxParallel}개")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Content enrichment starting: {SourceCount} sources, max parallel {MaxParallel}")]
     private static partial void LogContentEnrichmentStarting(ILogger logger, int sourceCount, int maxParallel);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 강화 완료: 문서 {DocCount}개, 청크 {ChunkCount}개, 실패 {FailCount}개, 소요 시간 {Duration}ms")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Content enrichment completed: documents {DocCount}, chunks {ChunkCount}, failed {FailCount}, duration {Duration}ms")]
     private static partial void LogContentEnrichmentCompleted(ILogger logger, int docCount, int chunkCount, int failCount, double duration);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "RawContent 사용: {Url}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Using RawContent: {Url}")]
     private static partial void LogUsingRawContent(ILogger logger, string url);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "콘텐츠 추출 시작: {Url}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Content extraction starting: {Url}")]
     private static partial void LogContentExtractionStarting(ILogger logger, string url);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "콘텐츠 추출 실패: {Url}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Content extraction failed: {Url}")]
     private static partial void LogContentExtractionFailed(ILogger logger, Exception? exception, string url);
 
     #endregion

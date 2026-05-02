@@ -281,7 +281,7 @@ public partial class ContentChunker
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "텍스트 청킹 완료: {ChunkCount}개 청크 생성, 소스: {SourceId}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Text chunking completed: {ChunkCount} chunks created, source: {SourceId}")]
     private static partial void LogTextChunkingCompleted(ILogger logger, int chunkCount, string sourceId);
 
     #endregion

@@ -200,37 +200,37 @@ public partial class QueryPlannerAgent
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "쿼리 계획 시작: {Query}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Query plan starting: {Query}")]
     private static partial void LogQueryPlanStarting(ILogger logger, string query);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "질문 분해 시작 (Self-Ask 패턴)")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Decomposing query (Self-Ask pattern)")]
     private static partial void LogDecomposingQuery(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "하위 질문 {Count}개 생성됨")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Count} sub-questions generated")]
     private static partial void LogSubQuestionsGenerated(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "관점 발견 시작 (STORM 패턴)")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Discovering perspectives (STORM pattern)")]
     private static partial void LogDiscoveringPerspectives(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "리서치 관점 {Count}개 발견됨")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Count} research perspectives discovered")]
     private static partial void LogPerspectivesDiscovered(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "쿼리 확장 시작")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Expanding queries")]
     private static partial void LogExpandingQueries(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "확장된 쿼리 {Count}개 생성됨")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Count} expanded queries generated")]
     private static partial void LogExpandedQueriesGenerated(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "쿼리 계획 완료: 하위질문 {SubQCount}개, 관점 {PerspCount}개, 쿼리 {QueryCount}개")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Query plan completed: sub-questions {SubQCount}, perspectives {PerspCount}, queries {QueryCount}")]
     private static partial void LogQueryPlanCompleted(ILogger logger, int subQCount, int perspCount, int queryCount);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "식별된 정보 갭 없음")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "No information gaps identified")]
     private static partial void LogNoGapsIdentified(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "정보 갭 기반 후속 쿼리 생성: {GapCount}개 갭")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Generating follow-up queries from {GapCount} information gaps")]
     private static partial void LogGeneratingFollowUpQueries(ILogger logger, int gapCount);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "후속 쿼리 {Count}개 생성됨 (중복 제외 후)")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Count} follow-up queries generated (after deduplication)")]
     private static partial void LogFollowUpQueriesGenerated(ILogger logger, int count);
 
     #endregion

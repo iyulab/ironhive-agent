@@ -425,22 +425,22 @@ public partial class LLMQueryExpander : IQueryExpander
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 분해 실패: 빈 응답")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Query decomposition failed: empty response")]
     private static partial void LogDecompositionEmptyResponse(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "쿼리 분해 중 오류 발생")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Query decomposition error")]
     private static partial void LogDecompositionError(ILogger logger, Exception? exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "관점 발견 실패: 빈 응답")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Perspective discovery failed: empty response")]
     private static partial void LogPerspectiveEmptyResponse(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "관점 발견 중 오류 발생")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Perspective discovery error")]
     private static partial void LogPerspectiveError(ILogger logger, Exception? exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "쿼리 확장 실패: 빈 응답")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Query expansion failed: empty response")]
     private static partial void LogExpansionEmptyResponse(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "쿼리 확장 중 오류 발생")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Query expansion error")]
     private static partial void LogExpansionError(ILogger logger, Exception? exception);
 
     #endregion

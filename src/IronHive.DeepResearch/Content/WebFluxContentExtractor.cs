@@ -153,25 +153,25 @@ public partial class WebFluxContentExtractor : IContentExtractor, IDisposable
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 추출 시작: {Url}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Content extraction starting: {Url}")]
     private static partial void LogContentExtractionStarting(ILogger logger, string url);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "콘텐츠 추출 완료: {Url}, Length: {Length}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Content extraction completed: {Url}, Length: {Length}")]
     private static partial void LogContentExtractionCompleted(ILogger logger, string url, int length);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "콘텐츠 추출 타임아웃: {Url}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Content extraction timeout: {Url}")]
     private static partial void LogContentExtractionTimeout(ILogger logger, string url);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "HTTP 요청 오류: {Url}")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "HTTP request error: {Url}")]
     private static partial void LogHttpRequestError(ILogger logger, Exception? exception, string url);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "콘텐츠 추출 실패: {Url}")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Content extraction failed: {Url}")]
     private static partial void LogContentExtractionFailed(ILogger logger, Exception? exception, string url);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "배치 콘텐츠 추출 시작: {Count}개 URL")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Batch content extraction starting: {Count} URLs")]
     private static partial void LogBatchExtractionStarting(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "배치 콘텐츠 추출 완료: {Success}/{Total} 성공")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Batch content extraction completed: {Success}/{Total} succeeded")]
     private static partial void LogBatchExtractionCompleted(ILogger logger, int success, int total);
 
     #endregion

@@ -18,7 +18,7 @@ public class TextCompletionServiceAdapter : ITextCompletionService
     /// <inheritdoc />
     public async Task<string> CompleteAsync(
         string prompt,
-        TextCompletionOptions? options = null,
+        Flux.Abstractions.TextCompletionOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         var chatOptions = MapOptions(options);
@@ -34,7 +34,7 @@ public class TextCompletionServiceAdapter : ITextCompletionService
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> CompleteBatchAsync(
         IEnumerable<string> prompts,
-        TextCompletionOptions? options = null,
+        Flux.Abstractions.TextCompletionOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         var results = new List<string>();
@@ -54,7 +54,7 @@ public class TextCompletionServiceAdapter : ITextCompletionService
         return results;
     }
 
-    private static ChatOptions? MapOptions(TextCompletionOptions? options)
+    private static ChatOptions? MapOptions(Flux.Abstractions.TextCompletionOptions? options)
     {
         if (options is null)
         {

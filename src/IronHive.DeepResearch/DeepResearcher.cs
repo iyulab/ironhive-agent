@@ -103,19 +103,19 @@ public partial class DeepResearcher : IDeepResearcher
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 시작: {Query}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research starting: {Query}")]
     private static partial void LogResearchStarting(ILogger logger, string query);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 완료: {SessionId}, 소스 {SourceCount}개, 반복 {Iterations}회")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research completed: {SessionId}, sources: {SourceCount}, iterations: {Iterations}")]
     private static partial void LogResearchCompleted(ILogger logger, string sessionId, int sourceCount, int iterations);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "스트리밍 리서치 시작: {Query}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Streaming research starting: {Query}")]
     private static partial void LogStreamingResearchStarting(ILogger logger, string query);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "대화형 리서치 세션 시작: {Query}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Interactive research session starting: {Query}")]
     private static partial void LogInteractiveSessionStarting(ILogger logger, string query);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "리서치 재개: {SessionId}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research resuming: {SessionId}")]
     private static partial void LogResearchResuming(ILogger logger, string sessionId);
 
     #endregion
@@ -260,19 +260,19 @@ public partial class ResearchSession : IResearchSession
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "세션 초기화 완료: {SessionId}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Session initialized: {SessionId}")]
     private static partial void LogSessionInitialized(ILogger logger, string sessionId);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "세션 계속 진행: {SessionId}, 반복 {Iteration}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Session continuing: {SessionId}, iteration {Iteration}")]
     private static partial void LogSessionContinuing(ILogger logger, string sessionId, int iteration);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "사용자 쿼리 추가: {Query}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "User query added: {Query}")]
     private static partial void LogUserQueryAdded(ILogger logger, string query);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "세션 종료 및 보고서 생성: {SessionId}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Session finalizing and generating report: {SessionId}")]
     private static partial void LogSessionFinalizing(ILogger logger, string sessionId);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "세션 해제: {SessionId}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Session disposed: {SessionId}")]
     private static partial void LogSessionDisposed(ILogger logger, string sessionId);
 
     #endregion

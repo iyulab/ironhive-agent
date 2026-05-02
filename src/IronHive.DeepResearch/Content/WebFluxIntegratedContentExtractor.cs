@@ -255,22 +255,22 @@ public partial class WebFluxIntegratedContentExtractor : DeepResearchContentExtr
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 콘텐츠 추출 시작: {Url}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux content extraction starting: {Url}")]
     private static partial void LogWebFluxExtractionStarting(ILogger logger, string url);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 콘텐츠 추출 완료: {Url}, Length: {Length}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux content extraction completed: {Url}, Length: {Length}")]
     private static partial void LogWebFluxExtractionCompleted(ILogger logger, string url, int length);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "콘텐츠 추출 타임아웃: {Url}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Content extraction timeout: {Url}")]
     private static partial void LogExtractionTimeout(ILogger logger, string url);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "WebFlux 콘텐츠 추출 실패: {Url}")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "WebFlux content extraction failed: {Url}")]
     private static partial void LogWebFluxExtractionFailed(ILogger logger, Exception? exception, string url);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 배치 콘텐츠 추출 시작: {Count}개 URL")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux batch content extraction starting: {Count} URLs")]
     private static partial void LogWebFluxBatchExtractionStarting(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux 배치 콘텐츠 추출 완료: {Success}/{Total} 성공")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "WebFlux batch content extraction completed: {Success}/{Total} succeeded")]
     private static partial void LogWebFluxBatchExtractionCompleted(ILogger logger, int success, int total);
 
     #endregion

@@ -308,7 +308,7 @@ public partial class ContentProcessor
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "콘텐츠 처리 실패: {Url}")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Content processing failed: {Url}")]
     private static partial void LogContentProcessingFailed(ILogger logger, Exception? exception, Uri url);
 
     #endregion

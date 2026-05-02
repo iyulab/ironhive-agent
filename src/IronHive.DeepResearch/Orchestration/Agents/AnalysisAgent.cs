@@ -587,31 +587,31 @@ public partial class AnalysisAgent
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "분석 시작: 소스 {SourceCount}개, 반복 {Iteration}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analysis starting: {SourceCount} sources, iteration {Iteration}")]
     private static partial void LogAnalysisStarting(ILogger logger, int sourceCount, int iteration);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Finding {Count}개 추출됨")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Count} findings extracted")]
     private static partial void LogFindingsExtracted(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "정보 갭 {Count}개 식별됨")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Count} information gaps identified")]
     private static partial void LogGapsIdentified(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "충분성 점수: {Score}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sufficiency score: {Score}")]
     private static partial void LogSufficiencyScore(ILogger logger, decimal score);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "분석 완료: Finding {FindingCount}개, 갭 {GapCount}개, 충분성 {Score:P0}, 소요 시간 {Duration}ms")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Analysis completed: findings {FindingCount}, gaps {GapCount}, sufficiency {Score:P0}, duration {Duration}ms")]
     private static partial void LogAnalysisCompleted(ILogger logger, int findingCount, int gapCount, decimal score, double duration);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "소스 분석 실패: {SourceId}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Source analysis failed: {SourceId}")]
     private static partial void LogSourceAnalysisFailed(ILogger logger, Exception? exception, string sourceId);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Finding 추출 실패: {SourceId}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Finding extraction failed: {SourceId}")]
     private static partial void LogFindingExtractionFailed(ILogger logger, Exception? exception, string sourceId);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "갭 분석 실패")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Gap analysis failed")]
     private static partial void LogGapAnalysisFailed(ILogger logger, Exception? exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM 충분성 평가 실패")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM sufficiency evaluation failed")]
     private static partial void LogLlmSufficiencyEvaluationFailed(ILogger logger, Exception? exception);
 
     #endregion
