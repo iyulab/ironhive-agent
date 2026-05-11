@@ -238,13 +238,23 @@ public class ContentEnrichmentAgentTests
             CreateExtractedContent("https://example.com/2", "Content 2"));
 
         var progressReports = new List<ContentEnrichmentProgress>();
-        var progress = new Progress<ContentEnrichmentProgress>(p => progressReports.Add(p));
+        var progressGate = new SemaphoreSlim(0);
+        var progress = new Progress<ContentEnrichmentProgress>(p =>
+        {
+            progressReports.Add(p);
+            if (p.CompletedUrls == 2)
+            {
+                progressGate.Release();
+            }
+        });
 
         // Act
         await _agent.EnrichSearchResultsAsync(searchResults, progress: progress);
 
-        // Assert
-        await Task.Delay(100);
+        // Assert — wait for the Progress<T> SynchronizationContext dispatch to flush.
+        // Task.Delay alone is flaky on CI runners; SemaphoreSlim with timeout is robust.
+        var signaled = await progressGate.WaitAsync(TimeSpan.FromSeconds(5));
+        signaled.Should().BeTrue("progress callback for CompletedUrls=2 should fire within 5s");
         progressReports.Should().NotBeEmpty();
         progressReports.Last().CompletedUrls.Should().Be(2);
     }
