@@ -7,10 +7,12 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Agent Loop**: Single-threaded master loop with streaming support
 - **Context Management**: Auto-compaction (92% threshold), goal reminders, prompt caching
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
-- **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports
+- **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Built-in Tools**: Read, Write, Shell, Glob, Grep, Todo
 - **Sub-Agent System**: Explore/General sub-agent spawning with depth and concurrency limits
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
+- **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`
+- **Checkpoint Service**: `ICheckpointService` abstraction for pre-destructive-operation state snapshots and rollback
 - **Usage Tracking**: Token/cost tracking and session limits
 - **Error Recovery**: Categorized error handling with recovery strategies
 - **Webhook System**: Event notifications with HMAC signing
@@ -25,22 +27,22 @@ dotnet add package IronHive.Agent
 
 ```csharp
 using IronHive.Agent.Loop;
-using IronHive.Agent.Extensions;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DependencyInjection;
+using OpenAI;
 
-var services = new ServiceCollection();
-services.AddIronHiveAgent(options =>
+// Construct IChatClient from any Microsoft.Extensions.AI-compatible provider
+IChatClient chatClient = new OpenAIClient("YOUR_API_KEY")
+    .GetChatClient("gpt-4o")
+    .AsIChatClient();
+
+var agentLoop = new AgentLoop(chatClient, new AgentOptions
 {
-    options.ChatClient = new OpenAIChatClient("gpt-4o");
+    SystemPrompt = "You are a helpful assistant."
 });
-
-var provider = services.BuildServiceProvider();
-var agentLoop = provider.GetRequiredService<IAgentLoop>();
 
 await foreach (var chunk in agentLoop.RunStreamingAsync("Hello!"))
 {
-    Console.Write(chunk.Text);
+    Console.Write(chunk.TextDelta);
 }
 ```
 
@@ -54,6 +56,8 @@ IronHive.Agent/
 ├── Mcp/            # MCP plugin management and tool discovery
 ├── Tools/          # Built-in tools (BuiltInTools, TodoTool, SubAgentTool)
 ├── SubAgent/       # Sub-agent spawning and management
+├── Planning/       # Plan-and-execute orchestration (DefaultTaskPlanner, DefaultPlanExecutor, HeuristicPlanEvaluator, PlannerTriggerDetector)
+├── Services/       # Cross-cutting services (ICheckpointService for pre-destructive-op snapshots)
 ├── Permissions/    # Permission evaluation and configuration
 ├── Tracking/       # Usage tracking and limits
 ├── Providers/      # Chat client, embedding, rerank provider abstractions
