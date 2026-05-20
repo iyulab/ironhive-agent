@@ -1,4 +1,4 @@
-using MemoryIndexer.Interfaces;
+using Flux.Abstractions;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Memory;

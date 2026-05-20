@@ -71,10 +71,10 @@ public record SessionUsage
     public string? ModelId { get; init; }
 
     /// <summary>
-    /// The pricing information used for cost calculation.
+    /// The model info used for cost calculation.
     /// Null if the model is not found in TokenMeter pricing data.
     /// </summary>
-    public ModelPricing? Pricing { get; init; }
+    public ModelInfo? Pricing { get; init; }
 }
 
 /// <summary>
@@ -87,11 +87,11 @@ public class UsageTracker : IUsageTracker
     private long _totalOutputTokens;
     private int _requestCount;
     private string? _modelId;
-    private ModelPricing? _pricing;
+    private ModelInfo? _pricing;
     private readonly object _lock = new();
 
     // Default fallback pricing (GPT-4o-mini style) when model is unknown
-    private static readonly ModelPricing DefaultPricing = new()
+    private static readonly ModelInfo DefaultPricing = new()
     {
         ModelId = "unknown",
         InputPricePerMillion = 0.15m,
@@ -106,7 +106,7 @@ public class UsageTracker : IUsageTracker
         lock (_lock)
         {
             _modelId = modelId;
-            _pricing = ModelPricingData.FindPricing(modelId);
+            _pricing = ModelCatalog.FindModel(modelId);
         }
     }
 
@@ -136,7 +136,7 @@ public class UsageTracker : IUsageTracker
                 TotalInputTokens = _totalInputTokens,
                 TotalOutputTokens = _totalOutputTokens,
                 RequestCount = _requestCount,
-                EstimatedCostUsd = cost,
+                EstimatedCostUsd = cost ?? 0m,
                 ModelId = _modelId,
                 Pricing = _pricing
             };
