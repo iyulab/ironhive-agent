@@ -80,6 +80,12 @@ public record AgentResponse
     public required string Content { get; init; }
 
     /// <summary>
+    /// Whether the response contains text output.
+    /// <c>false</c> when the model produced only thinking/tool content with no visible text (thinking-only turn).
+    /// </summary>
+    public bool HasTextOutput { get; init; }
+
+    /// <summary>
     /// Tool calls made during this turn.
     /// </summary>
     public IReadOnlyList<ToolCallResult> ToolCalls { get; init; } = [];

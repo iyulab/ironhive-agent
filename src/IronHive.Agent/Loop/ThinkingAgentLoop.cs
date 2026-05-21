@@ -87,6 +87,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         return new AgentResponse
         {
             Content = response.Text ?? string.Empty,
+            HasTextOutput = !string.IsNullOrEmpty(response.Text),
             ToolCalls = toolCalls,
             Usage = usage,
             ThinkingContent = thinkingContent

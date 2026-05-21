@@ -111,6 +111,7 @@ public class AgentLoop : IAgentLoop
         return new AgentResponse
         {
             Content = response.Text ?? string.Empty,
+            HasTextOutput = !string.IsNullOrEmpty(response.Text),
             ToolCalls = toolCalls,
             Usage = usage
         };

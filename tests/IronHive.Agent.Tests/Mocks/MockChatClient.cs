@@ -60,6 +60,17 @@ public class MockChatClient : IChatClient
     }
 
     /// <summary>
+    /// Enqueues a response with no text content (thinking-only or tool-only turn).
+    /// </summary>
+    public MockChatClient EnqueueEmptyResponse(UsageDetails? usage = null)
+    {
+        var message = new ChatMessage(ChatRole.Assistant, []);
+        var response = new ChatResponse([message]) { Usage = usage };
+        _responses.Enqueue(response);
+        return this;
+    }
+
+    /// <summary>
     /// Enqueues an error response.
     /// </summary>
     public MockChatClient EnqueueError(Exception exception)
