@@ -85,7 +85,7 @@ public partial class DeepResearcher : IDeepResearcher
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new InvalidOperationException($"세션을 찾을 수 없습니다: {sessionId}");
+            throw new InvalidOperationException($"Session not found: {sessionId}");
         }
 
         LogResearchResuming(_logger, sessionId);
@@ -193,26 +193,17 @@ public partial class ResearchSession : IResearchSession
     }
 
     /// <inheritdoc />
-    public async Task ContinueAsync()
-    {
-        if (_isComplete)
-        {
-            throw new InvalidOperationException("세션이 이미 완료되었습니다.");
-        }
-
-        LogSessionContinuing(_logger, SessionId, _state.CurrentIteration + 1);
-
-        // 다음 반복 실행 (전체 파이프라인 1회)
-        // 실제 구현에서는 오케스트레이터의 단일 반복 메서드 호출
-        await Task.CompletedTask;
-    }
+    public Task ContinueAsync()
+        => throw new NotImplementedException(
+            "Interactive continuation is not yet implemented. " +
+            "Use FinalizeAsync() to complete the session or start a new research session.");
 
     /// <inheritdoc />
     public Task AddQueryAsync(string customQuery)
     {
         if (_isComplete)
         {
-            throw new InvalidOperationException("세션이 이미 완료되었습니다.");
+            throw new InvalidOperationException("Session is already complete.");
         }
 
         _state.ExecutedQueries.Add(new SearchQuery
@@ -230,13 +221,14 @@ public partial class ResearchSession : IResearchSession
     {
         if (_isComplete)
         {
-            throw new InvalidOperationException("세션이 이미 완료되었습니다.");
+            throw new InvalidOperationException("Session is already complete.");
         }
 
         LogSessionFinalizing(_logger, SessionId);
 
-        // 남은 작업 완료 및 보고서 생성
-        var result = await _orchestrator.ExecuteAsync(_state.Request);
+        // Pass accumulated state so the orchestrator continues from collected sources,
+        // findings, queries, and gaps rather than starting from scratch.
+        var result = await _orchestrator.ExecuteAsync(_state);
 
         _isComplete = true;
         return result;
@@ -262,9 +254,6 @@ public partial class ResearchSession : IResearchSession
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Session initialized: {SessionId}")]
     private static partial void LogSessionInitialized(ILogger logger, string sessionId);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Session continuing: {SessionId}, iteration {Iteration}")]
-    private static partial void LogSessionContinuing(ILogger logger, string sessionId, int iteration);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "User query added: {Query}")]
     private static partial void LogUserQueryAdded(ILogger logger, string query);

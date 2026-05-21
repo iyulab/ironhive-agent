@@ -43,28 +43,34 @@ public partial class ResearchOrchestrator
     }
 
     /// <summary>
-    /// 리서치 실행 (동기)
+    /// 리서치 실행 (동기) — 새 상태를 생성하여 처음부터 실행
     /// </summary>
-    public virtual async Task<ResearchResult> ExecuteAsync(
+    public virtual Task<ResearchResult> ExecuteAsync(
         ResearchRequest request,
         CancellationToken cancellationToken = default)
-    {
-        var state = CreateInitialState(request);
+        => ExecuteAsync(CreateInitialState(request), cancellationToken);
 
-        LogResearchStarting(_logger, request.Query, request.Depth);
+    /// <summary>
+    /// 리서치 실행 (동기) — 기존 상태를 이어서 실행 (interactive session finalize에 사용)
+    /// </summary>
+    public virtual async Task<ResearchResult> ExecuteAsync(
+        ResearchState state,
+        CancellationToken cancellationToken = default)
+    {
+        LogResearchStarting(_logger, state.Request.Query, state.Request.Depth);
 
         // 시작 시 취소 상태 확인
         if (cancellationToken.IsCancellationRequested)
         {
             LogResearchCancelledBeforeStart(_logger);
             state.CurrentPhase = ResearchPhase.Failed;
-            return BuildPartialResult(state, "리서치가 시작 전에 취소되었습니다.");
+            return BuildPartialResult(state, "Research cancelled before start.");
         }
 
         try
         {
             // 반복 실행
-            var maxIterations = GetMaxIterations(request);
+            var maxIterations = GetMaxIterations(state.Request);
             while (state.CurrentIteration < maxIterations && !cancellationToken.IsCancellationRequested)
             {
                 state.CurrentIteration++;
@@ -102,7 +108,7 @@ public partial class ResearchOrchestrator
         {
             LogResearchCancelled(_logger);
             state.CurrentPhase = ResearchPhase.Failed;
-            return BuildPartialResult(state, "리서치가 취소되었습니다.");
+            return BuildPartialResult(state, "Research was cancelled.");
         }
         catch (Exception ex)
         {

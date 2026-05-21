@@ -173,19 +173,38 @@ public class DeepResearcherTests
     }
 
     [Fact]
-    public async Task Session_ContinueAsync_ThrowsWhenComplete()
+    public async Task Session_ContinueAsync_ThrowsNotImplementedException()
     {
         // Arrange
         var request = CreateTestRequest();
         var session = await _researcher.StartInteractiveAsync(request);
+
+        // Act & Assert — ContinueAsync throws synchronously before returning a Task
+        var act = () => { _ = session.ContinueAsync(); };
+        act.Should().Throw<NotImplementedException>();
+    }
+
+    [Fact]
+    public async Task Session_FinalizeAsync_PassesAccumulatedStateToOrchestrator()
+    {
+        // Arrange
+        var request = CreateTestRequest();
+        var session = await _researcher.StartInteractiveAsync(request);
+
+        // Add a custom query to accumulate state before finalizing
+        const string customQuery = "accumulated custom query";
+        await session.AddQueryAsync(customQuery);
+
         _mockOrchestrator.SetupResult(CreateTestResult());
 
-        // Complete the session
-        await session.FinalizeAsync();
+        // Act
+        var result = await session.FinalizeAsync();
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => session.ContinueAsync());
+        // Assert — orchestrator received the state with the accumulated query
+        result.Should().NotBeNull();
+        _mockOrchestrator.LastExecutedState.Should().NotBeNull();
+        _mockOrchestrator.LastExecutedState!.ExecutedQueries
+            .Should().Contain(q => q.Query == customQuery);
     }
 
     [Fact]
@@ -343,6 +362,7 @@ internal class MockResearchOrchestratorForFacade : ResearchOrchestrator
 
     public bool ExecuteCalled { get; private set; }
     public bool ExecuteStreamCalled { get; private set; }
+    public ResearchState? LastExecutedState { get; private set; }
 
     public MockResearchOrchestratorForFacade() : base(
         CreateMockQueryPlanner(),
@@ -364,29 +384,41 @@ internal class MockResearchOrchestratorForFacade : ResearchOrchestrator
     {
         ExecuteCalled = true;
 
-        return Task.FromResult(_result ?? new ResearchResult
-        {
-            SessionId = Guid.NewGuid().ToString("N"),
-            Query = "Default query",
-            Report = "Default report",
-            Sections = [],
-            CitedSources = [],
-            UncitedSources = [],
-            Citations = [],
-            ThinkingProcess = [],
-            Metadata = new ResearchMetadata
-            {
-                IterationCount = 1,
-                TotalQueriesExecuted = 1,
-                TotalSourcesAnalyzed = 1,
-                Duration = TimeSpan.FromSeconds(1),
-                TokenUsage = new TokenUsage(),
-                EstimatedCost = 0,
-                FinalSufficiencyScore = new SufficiencyScore()
-            },
-            IsPartial = false
-        });
+        return Task.FromResult(_result ?? BuildDefaultResult(request.Query));
     }
+
+    public override Task<ResearchResult> ExecuteAsync(
+        ResearchState state,
+        CancellationToken cancellationToken = default)
+    {
+        ExecuteCalled = true;
+        LastExecutedState = state;
+
+        return Task.FromResult(_result ?? BuildDefaultResult(state.Request.Query));
+    }
+
+    private static ResearchResult BuildDefaultResult(string query) => new ResearchResult
+    {
+        SessionId = Guid.NewGuid().ToString("N"),
+        Query = query,
+        Report = "Default report",
+        Sections = [],
+        CitedSources = [],
+        UncitedSources = [],
+        Citations = [],
+        ThinkingProcess = [],
+        Metadata = new ResearchMetadata
+        {
+            IterationCount = 1,
+            TotalQueriesExecuted = 1,
+            TotalSourcesAnalyzed = 1,
+            Duration = TimeSpan.FromSeconds(1),
+            TokenUsage = new TokenUsage(),
+            EstimatedCost = 0,
+            FinalSufficiencyScore = new SufficiencyScore()
+        },
+        IsPartial = false
+    };
 
     public override async IAsyncEnumerable<ResearchProgress> ExecuteStreamAsync(
         ResearchRequest request,
