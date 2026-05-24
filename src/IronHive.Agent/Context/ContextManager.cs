@@ -261,6 +261,41 @@ public class ContextManager
         };
     }
 
+    /// Clamps token-based compaction parameters to fit within the actual context window.
+    /// Without this, defaults (ProtectRecentTokens=40_000) exceed small-context models
+    /// (e.g. 32K), making prunableTokens permanently negative and compaction non-functional.
+    private static (int protect, int prune) ClampToContext(int protect, int prune, int maxCtx)
+    {
+        if (maxCtx <= 0)
+        {
+            return (protect, prune);
+        }
+
+        return (Math.Min(protect, maxCtx / 2), Math.Min(prune, maxCtx / 4));
+    }
+
+    private static CompactionConfig CloneWithClampedProtect(CompactionConfig source, int protect, int prune)
+        => new()
+        {
+            ProtectRecentTokens = protect,
+            MinimumPruneTokens = prune,
+            ProtectedToolOutputs = source.ProtectedToolOutputs,
+            TargetRatio = source.TargetRatio,
+            UseTokenBasedCompaction = source.UseTokenBasedCompaction,
+            ThresholdPercentage = source.ThresholdPercentage,
+            EnableObservationMasking = source.EnableObservationMasking,
+            ObservationMaskingProtectedTurns = source.ObservationMaskingProtectedTurns,
+            ObservationMaskingMinResultLength = source.ObservationMaskingMinResultLength,
+            ToolSchemaCompression = source.ToolSchemaCompression,
+            EnableToolResultCompaction = source.EnableToolResultCompaction,
+            MaxToolResultChars = source.MaxToolResultChars,
+            ToolResultKeepHeadLines = source.ToolResultKeepHeadLines,
+            ToolResultKeepTailLines = source.ToolResultKeepTailLines,
+            UseAnchoredCompaction = source.UseAnchoredCompaction,
+            MaxAnchorStateChars = source.MaxAnchorStateChars,
+            MaxContextTokens = source.MaxContextTokens,
+        };
+
     /// <summary>
     /// Creates a context manager with default settings for a model.
     /// </summary>
@@ -293,17 +328,19 @@ public class ContextManager
 
         if (config.UseAnchoredCompaction)
         {
-            compactionTrigger = new TokenBasedCompactionTrigger(
-                config.ProtectRecentTokens,
-                config.MinimumPruneTokens);
-            historyCompactor = new AnchoredHistoryCompactor(tokenCounter, config, summarizer);
+            var (effectiveProtect, effectivePrune) = ClampToContext(
+                config.ProtectRecentTokens, config.MinimumPruneTokens, tokenCounter.MaxContextTokens);
+            compactionTrigger = new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune);
+            var anchoredConfig = CloneWithClampedProtect(config, effectiveProtect, effectivePrune);
+            historyCompactor = new AnchoredHistoryCompactor(tokenCounter, anchoredConfig, summarizer);
         }
         else if (config.UseTokenBasedCompaction)
         {
-            compactionTrigger = new TokenBasedCompactionTrigger(
-                config.ProtectRecentTokens,
-                config.MinimumPruneTokens);
-            historyCompactor = new TokenBasedHistoryCompactor(tokenCounter, config, summarizer);
+            var (effectiveProtect, effectivePrune) = ClampToContext(
+                config.ProtectRecentTokens, config.MinimumPruneTokens, tokenCounter.MaxContextTokens);
+            compactionTrigger = new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune);
+            var tokenConfig = CloneWithClampedProtect(config, effectiveProtect, effectivePrune);
+            historyCompactor = new TokenBasedHistoryCompactor(tokenCounter, tokenConfig, summarizer);
         }
         else
         {

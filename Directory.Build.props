@@ -24,7 +24,7 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.2.13</Version>
+    <Version>0.2.14</Version>
   </PropertyGroup>
 
   <!-- Local NuGet package source for development -->
