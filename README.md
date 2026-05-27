@@ -103,6 +103,43 @@ plugins:
     url: http://localhost:3000/mcp
 ```
 
+## Available Tools Context
+
+After the agent loop factory filters tools via `IModeToolFilter.FilterTools()`, it should populate
+`IAvailableToolsContext` so that tool implementations can generate context-aware error messages.
+
+```csharp
+// In your agent loop factory (e.g. FilerAgentLoopFactory.CreateAsync):
+var filteredTools = modeToolFilter.FilterTools(allTools, modeManager.CurrentMode);
+
+// Expose filtered tool names to tool implementations via DI
+var context = serviceProvider.GetRequiredService<IAvailableToolsContext>();
+context.SetAvailableTools(filteredTools.OfType<AIFunction>().Select(t => t.Name));
+```
+
+Tool implementations can then inject `IAvailableToolsContext` to produce accurate guidance:
+
+```csharp
+public class FileSystemTools(IAvailableToolsContext availableTools)
+{
+    [AIFunction]
+    public string WriteFile(string path, string content)
+    {
+        if (content.Length == 0)
+        {
+            var hint = availableTools.IsAvailable("DeleteFile")
+                ? "To delete a file, use the DeleteFile tool instead."
+                : "To delete a file, use a dedicated delete operation.";
+            return $"Error: empty content is not allowed. {hint}";
+        }
+        // ...
+    }
+}
+```
+
+`IAvailableToolsContext` is registered as a singleton by `AddIronHiveAgent()`. Returns empty list
+before `SetAvailableTools` is called (i.e., before the first agent loop is created).
+
 ## Permission Defaults
 
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:

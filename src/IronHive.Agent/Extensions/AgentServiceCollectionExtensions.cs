@@ -50,6 +50,7 @@ public static class AgentServiceCollectionExtensions
             }
             return new ModeToolFilter();
         });
+        services.AddSingleton<IAvailableToolsContext, AvailableToolsContext>();
 
         // Register context management
         services.AddSingleton<IContextTokenCounter, ContextTokenCounter>();
