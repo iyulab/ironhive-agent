@@ -46,3 +46,6 @@ dev-docs/
 nul
 local-tests/
 .serena/
+
+# IDE language server cache
+*.lscache
