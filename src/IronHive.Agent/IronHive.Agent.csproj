@@ -32,6 +32,9 @@
     <!-- IndexThinking (token management, reasoning) -->
     <PackageReference Include="IndexThinking" />
 
+    <!-- Security pin: forces patched Microsoft.Bcl.Memory (>=10.0.4) over transitive 9.0.4.
+         Direct reference so the patched version flows to consumers, clearing NU1903 downstream. -->
+    <PackageReference Include="Microsoft.Bcl.Memory" />
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageReference Include="MemoryIndexer" />
     <PackageReference Include="MemoryIndexer.Sdk" />
