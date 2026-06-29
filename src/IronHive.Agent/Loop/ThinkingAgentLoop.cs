@@ -113,16 +113,44 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
 
+        // Track live reasoning streamed this turn so the turn-end metadata thinking is not emitted
+        // a second time (prefer-live; see ComputeMetadataThinkingTail).
+        var liveReasoning = new StringBuilder();
+        var sawLiveReasoning = false;
+
         await foreach (var update in _thinkingClient.GetStreamingResponseAsync(historyToSend, chatOptions, cancellationToken))
         {
-            // Extract thinking content from AdditionalProperties if available
-            var thinkingDelta = ExtractStreamingThinking(update);
-            if (!string.IsNullOrEmpty(thinkingDelta))
+            // 1. Live, provider-native reasoning (M.E.AI TextReasoningContent, e.g. from the streaming
+            //    reasoning separator or a reasoning-capable model). Bridge each delta to ThinkingDelta
+            //    immediately so consumers get live separation instead of hand-splitting <think> tags.
+            var liveDelta = ExtractLiveReasoning(update);
+            if (!string.IsNullOrEmpty(liveDelta))
             {
+                liveReasoning.Append(liveDelta);
+                sawLiveReasoning = true;
                 yield return new AgentResponseChunk
                 {
-                    ThinkingDelta = thinkingDelta
+                    ThinkingDelta = liveDelta
                 };
+            }
+
+            // 2. Turn-end metadata thinking (AdditionalProperties[ThinkingContentKey]). If live
+            //    reasoning already streamed, emit only the tail not covered by it (continuation rounds
+            //    can append reasoning absent from the live stream); otherwise emit it whole — the path
+            //    consumers relied on before live separation existed.
+            var metadataThinking = ExtractMetadataThinking(update);
+            if (!string.IsNullOrEmpty(metadataThinking))
+            {
+                var thinkingDelta = sawLiveReasoning
+                    ? ComputeMetadataThinkingTail(liveReasoning.ToString(), metadataThinking)
+                    : metadataThinking;
+                if (!string.IsNullOrEmpty(thinkingDelta))
+                {
+                    yield return new AgentResponseChunk
+                    {
+                        ThinkingDelta = thinkingDelta
+                    };
+                }
             }
 
             if (!string.IsNullOrEmpty(update.Text))
@@ -184,9 +212,28 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         return preparedHistory;
     }
 
-    private static string? ExtractStreamingThinking(ChatResponseUpdate update)
+    /// <summary>
+    /// Extracts live, provider-native reasoning streamed as M.E.AI <see cref="TextReasoningContent"/>
+    /// on the update's contents (the streaming reasoning separator or a reasoning-capable model emits
+    /// these). Returns the concatenated reasoning text for this update, or null if it carries none.
+    /// </summary>
+    private static string? ExtractLiveReasoning(ChatResponseUpdate update)
     {
-        // Try to extract thinking from AdditionalProperties
+        var joined = string.Concat(update.Contents
+            .OfType<TextReasoningContent>()
+            .Select(c => c.Text)
+            .Where(t => !string.IsNullOrEmpty(t)));
+
+        return string.IsNullOrEmpty(joined) ? null : joined;
+    }
+
+    /// <summary>
+    /// Extracts turn-end thinking that <see cref="ThinkingChatClient"/> publishes on the final
+    /// metadata update's <c>AdditionalProperties</c>. This is the whole-turn thinking blob, used as
+    /// the path for callers without live reasoning separation.
+    /// </summary>
+    private static string? ExtractMetadataThinking(ChatResponseUpdate update)
+    {
         if (update.AdditionalProperties?.TryGetValue(
             ThinkingChatClient.ThinkingContentKey, out var value) == true)
         {
@@ -202,6 +249,33 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// When live reasoning already streamed this turn, returns only the portion of the turn-end
+    /// metadata thinking not already covered by it — i.e. the suffix a continuation round appended
+    /// (prefix match → empty tail, nothing re-emitted). On mismatch, suppresses rather than duplicate
+    /// the live deltas.
+    /// <para>
+    /// KNOWN LIMITATION: the live text (<c>StreamingReasoningSeparator</c>, raw substrings) and
+    /// the metadata text (turn manager <c>ParseReasoning</c>, which may heuristically strip/trim and is
+    /// provider-format specific) come from DIFFERENT parsers and need not be prefix-aligned. When they
+    /// diverge we dedup to the live deltas, so reasoning that a continuation round added is not shown —
+    /// the same state as before live separation (no new loss vs. pre-MU-3). Emitting the full metadata
+    /// instead would duplicate the live part, which is worse. Consumer (Filer) live verification is the
+    /// backstop for whether the two parsers align in practice.
+    /// </para>
+    /// </summary>
+    private static string? ComputeMetadataThinkingTail(string liveReasoning, string metadataThinking)
+    {
+        if (metadataThinking.Length <= liveReasoning.Length)
+        {
+            return null;
+        }
+
+        return metadataThinking.StartsWith(liveReasoning, StringComparison.Ordinal)
+            ? metadataThinking[liveReasoning.Length..]
+            : null;
     }
 
     private async Task<ChatOptions> CreateChatOptionsAsync(CancellationToken cancellationToken)
@@ -280,7 +354,15 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             };
         }
 
-        return null;
+        // Fallback: provider-native reasoning carried as M.E.AI TextReasoningContent on the response
+        // contents, with no AdditionalProperties blob. No dedup needed — non-streaming has no live stream.
+        var reasoning = string.Concat(response.Messages
+            .SelectMany(m => m.Contents)
+            .OfType<TextReasoningContent>()
+            .Select(c => c.Text)
+            .Where(t => !string.IsNullOrEmpty(t)));
+
+        return string.IsNullOrEmpty(reasoning) ? null : new ThinkingContent { Content = reasoning };
     }
 
     /// <inheritdoc />
