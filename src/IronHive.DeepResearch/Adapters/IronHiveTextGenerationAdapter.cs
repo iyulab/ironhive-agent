@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using IronHive.Abstractions.Messages;
 using IronHive.Abstractions.Messages.Content;
-using IronHive.Abstractions.Messages.Roles;
 using IronHive.DeepResearch.Abstractions;
 
 namespace IronHive.DeepResearch.Adapters;
@@ -90,10 +89,7 @@ public partial class IronHiveTextGenerationAdapter : ITextGenerationService
     {
         var messages = new List<Message>
         {
-            new UserMessage
-            {
-                Content = [new TextMessageContent { Value = prompt }]
-            }
+            Message.User(prompt)
         };
 
         return new MessageGenerationRequest
@@ -101,14 +97,13 @@ public partial class IronHiveTextGenerationAdapter : ITextGenerationService
             Model = _modelId,
             System = options?.SystemPrompt,
             Messages = messages,
-            Temperature = (float?)(options?.Temperature) ?? 0.7f,
             MaxTokens = options?.MaxTokens ?? 2048
         };
     }
 
     private static string ExtractTextFromResponse(MessageResponse response)
     {
-        var textContents = response.Message.Content?
+        var textContents = response.Message?.Content?
             .OfType<TextMessageContent>()
             .Select(c => c.Value);
 
