@@ -1,6 +1,5 @@
-using Flux.Abstractions;
-using IronHive.Agent.Memory;
 using MemoryIndexer.Interfaces;
+using IronHive.Agent.Memory;
 using Microsoft.Extensions.AI;
 using NSubstitute;
 

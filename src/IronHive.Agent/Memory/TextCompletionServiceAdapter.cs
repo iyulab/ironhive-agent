@@ -1,4 +1,4 @@
-using Flux.Abstractions;
+using MemoryIndexer.Interfaces;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Memory;
@@ -18,7 +18,7 @@ public class TextCompletionServiceAdapter : ITextCompletionService
     /// <inheritdoc />
     public async Task<string> CompleteAsync(
         string prompt,
-        Flux.Abstractions.TextCompletionOptions? options = null,
+        TextCompletionOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         var chatOptions = MapOptions(options);
@@ -31,10 +31,13 @@ public class TextCompletionServiceAdapter : ITextCompletionService
         return response.Text ?? string.Empty;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Completes multiple prompts sequentially. Convenience method kept from the
+    /// pre-0.16.0 MemoryIndexer contract (no longer an interface member).
+    /// </summary>
     public async Task<IReadOnlyList<string>> CompleteBatchAsync(
         IEnumerable<string> prompts,
-        Flux.Abstractions.TextCompletionOptions? options = null,
+        TextCompletionOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         var results = new List<string>();
@@ -54,7 +57,7 @@ public class TextCompletionServiceAdapter : ITextCompletionService
         return results;
     }
 
-    private static ChatOptions? MapOptions(Flux.Abstractions.TextCompletionOptions? options)
+    private static ChatOptions? MapOptions(TextCompletionOptions? options)
     {
         if (options is null)
         {
