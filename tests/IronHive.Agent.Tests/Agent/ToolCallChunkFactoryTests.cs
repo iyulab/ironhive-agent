@@ -13,8 +13,9 @@ namespace IronHive.Agent.Tests.Agent;
 ///
 /// Regression: prior to 0.2.10 <c>ThinkingAgentLoop</c> serialised arguments via
 /// <c>IDictionary.ToString()</c>, producing <c>"System.Collections.Generic.Dictionary`2[...]"</c>
-/// instead of JSON. See <c>claudedocs/issues/ISSUE-ironhive-2026-04-09-toolcallchunk-contract-clarity.md</c>
-/// on the Filer side for the original report.
+/// instead of JSON. The original report came from the Filer consumer app
+/// (<c>Filer/claudedocs/issues/closed/ISSUE-ironhive-2026-04-09-toolcallchunk-contract-clarity.md</c>,
+/// maintainer-local).
 /// </summary>
 public class ToolCallChunkFactoryTests
 {
