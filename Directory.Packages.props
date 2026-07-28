@@ -4,47 +4,47 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.8.2" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.14.0" />
     <!-- Ironbees (multi-agent orchestration) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.6.4" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.6.4" />
+    <PackageVersion Include="Ironbees.Core" Version="0.10.0" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.10.0" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
-    <PackageVersion Include="TokenMeter" Version="0.4.0" />
+    <PackageVersion Include="TokenMeter" Version="0.6.2" />
     <!-- ToolCallParser (multi-provider tool call parsing) -->
-    <PackageVersion Include="ToolCallParser" Version="0.2.1" />
+    <PackageVersion Include="ToolCallParser" Version="0.4.0" />
     <!-- Microsoft.Extensions.AI -->
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.6.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
     <!-- OpenAI SDK -->
     <PackageVersion Include="ModelContextProtocol" Version="1.3.0" />
     <PackageVersion Include="OpenAI" Version="2.10.0" />
     <!-- DI -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.9" />
     <!-- Diff -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <!-- Glob -->
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.9" />
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.21.0" />
+    <PackageVersion Include="IndexThinking" Version="0.21.1" />
     <!-- Security pin: override transitive Microsoft.Bcl.Memory 9.0.4 (NU1903 / GHSA-73j8-2gch-69rq,
          CVE-2026-26127 Base64Url OOB-read DoS). Patched in 10.0.4+; pin 10.0.8 so consumers with
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.8" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.16.0" />
-    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.16.0" />
+    <PackageVersion Include="MemoryIndexer" Version="0.16.1" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.16.1" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.5.2" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageVersion Include="WebFlux" Version="0.5.3" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
     <PackageVersion Include="Polly.Extensions" Version="8.6.6" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
     <PackageVersion Include="FluentAssertions" Version="8.10.0" />
     <!-- Testing -->
     <PackageVersion Include="xunit" Version="2.9.3" />

@@ -5,14 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- Ignore NU1903: SQLitePCLRaw.lib.e_sqlite3 2.1.11 (CVE-2025-6965), transitive via
-         MemoryIndexer -> Microsoft.Data.Sqlite. No patched e_sqlite3 release ships SQLite >= 3.50.2 yet,
-         so an upstream version bump is impossible. Remove this once a fixed bundle is published.
-         (Microsoft.Bcl.Memory NU1903/CVE-2026-26127 is no longer suppressed here — it is pinned to a
-         patched 10.0.8 in Directory.Packages.props so consumers inherit the fix, not the suppression.) -->
     <!-- Ignore NU1902 (known moderate vulnerability in transitive OpenTelemetry deps — no fix available yet) -->
     <!-- Ignore NU5104 (stable package with prerelease dependency: ModelContextProtocol has no stable release yet) -->
-    <NoWarn>$(NoWarn);NU1902;NU1903;NU5104</NoWarn>
+    <!-- NU1903 is deliberately NOT suppressed: the former SQLitePCLRaw.lib.e_sqlite3 2.1.11
+         (CVE-2025-6965) transitive floor cleared once upstream shipped 2.1.12 (2026-07-09) and
+         IronHive.Core 0.14.0 started pinning it directly. A vulnerable transitive must fail the
+         build, not be hidden. -->
+    <NoWarn>$(NoWarn);NU1902;NU5104</NoWarn>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
   </PropertyGroup>
@@ -28,7 +27,7 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <!-- Local NuGet package source for development -->

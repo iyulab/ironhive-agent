@@ -32,7 +32,9 @@ public sealed partial class ChatClientLLMAdapter : ILLMFrameworkAdapter
         ArgumentNullException.ThrowIfNull(config);
 
         IAgent agent = new SimpleAgent(config);
-        LogAgentCreated(config.Name, config.Model.Provider, config.Model.Deployment);
+        // Ironbees 0.10.0 made ModelConfig.Deployment nullable: null means "resolve at runtime from
+        // IronbeesCoreOptions.DefaultModelDeployment". Say that in the log rather than an empty slot.
+        LogAgentCreated(config.Name, config.Model.Provider, config.Model.Deployment ?? "(runtime-resolved)");
         return Task.FromResult(agent);
     }
 
