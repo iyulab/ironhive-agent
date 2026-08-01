@@ -274,6 +274,106 @@ public class KeywordToolRetrieverTests
 
     #endregion
 
+    #region Query Length Independence
+
+    /// <summary>
+    /// A relevance score must answer "does this tool fit the query", not "what fraction of the
+    /// query is about this tool". Scoring the latter makes every tool fall towards zero as the
+    /// prompt grows, so tool access starves exactly when the prompt carries the most instruction.
+    /// </summary>
+    [Fact]
+    public async Task RetrieveAsync_LongerQuery_DoesNotLowerAToolsScore()
+    {
+        var tools = CreateTestTools();
+
+        var shortResult = await _retriever.RetrieveAsync("read file", tools);
+        var longResult = await _retriever.RetrieveAsync(ReadFilePromptWithInstructions, tools);
+
+        var shortScore = shortResult.RelevanceScores!["ReadFile"];
+        var longScore = longResult.RelevanceScores!["ReadFile"];
+
+        Assert.True(
+            longScore >= shortScore,
+            $"The long prompt names the tool and carries strictly more matching evidence, " +
+            $"yet scored {longScore} against {shortScore}");
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_LongInstructionPrompt_StillOffersTheNamedTool()
+    {
+        var tools = CreateTestTools();
+        var options = new ToolRetrievalOptions { AlwaysInclude = ["ExecuteCommand"] };
+
+        var result = await _retriever.RetrieveAsync(ReadFilePromptWithInstructions, tools, options);
+
+        var names = result.SelectedTools.Select(GetName).ToList();
+        Assert.Contains("ReadFile", names);
+    }
+
+    /// <summary>
+    /// Normalising name and description against one shared denominator buries the name signal
+    /// under a verbose description, so a well-documented tool scores lower than a sparse one.
+    /// </summary>
+    [Fact]
+    public async Task RetrieveAsync_VerboseDescription_DoesNotScoreBelowASparseOne()
+    {
+        IList<AITool> tools =
+        [
+            AIFunctionFactory.Create(DocumentationTools.ConvertAudio),
+            AIFunctionFactory.Create(DocumentationTools.ConvertVideo),
+        ];
+
+        var result = await _retriever.RetrieveAsync("convert audio", tools);
+
+        Assert.True(
+            result.RelevanceScores!["ConvertAudio"] >= result.RelevanceScores!["ConvertVideo"],
+            "the tool the query names must not be outranked by a less documented sibling");
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_TwoCharacterQueryToken_DoesNotClaimAToolNameMatch()
+    {
+        var tools = CreateTestTools();
+
+        // "to" is a substring of "Directory". Accepting that as a name match hands an unrelated
+        // tool full name coverage on a stopword.
+        var result = await _retriever.RetrieveAsync("to", tools);
+
+        Assert.True(
+            result.RelevanceScores!["ListDirectory"] < 0.3f,
+            $"a two-character stopword must not carry a name match, got {result.RelevanceScores!["ListDirectory"]}");
+        Assert.DoesNotContain("ListDirectory", result.SelectedTools.Select(GetName));
+    }
+
+    private const string ReadFilePromptWithInstructions = """
+        Use ReadFile to inspect the target before making any change. Work through the request one
+        step at a time and explain what you are doing as you go. Prefer the smallest change that
+        satisfies the requirement, and keep the existing structure and naming intact wherever it
+        already works. When several approaches are viable, pick the one a reviewer would find
+        easiest to follow later. Do not restate the request back before starting, and do not
+        summarise what you already said. If something in the request is ambiguous, state the
+        assumption you are proceeding under instead of stopping to ask. Report what you changed
+        once the work is finished, including anything you deliberately left alone and why.
+        """;
+
+    private static class DocumentationTools
+    {
+        [Description("Convert an audio file from one encoding to another. Supports the common " +
+                     "container formats, resamples when the target rate differs, preserves the " +
+                     "channel layout unless an explicit downmix is requested, and writes the " +
+                     "result next to the source unless another destination is given.")]
+        public static string ConvertAudio(
+            [Description("Source path")] string path,
+            [Description("Target format")] string format) => "converted";
+
+        [Description("Convert a video file.")]
+        public static string ConvertVideo(
+            [Description("Source path")] string path,
+            [Description("Target format")] string format) => "converted";
+    }
+
+    #endregion
+
     #region Interface Contract
 
     [Fact]

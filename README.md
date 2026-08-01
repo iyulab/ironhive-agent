@@ -140,6 +140,26 @@ public class FileSystemTools(IAvailableToolsContext availableTools)
 `IAvailableToolsContext` is registered as a singleton by `AddIronHiveAgent()`. Returns empty list
 before `SetAvailableTools` is called (i.e., before the first agent loop is created).
 
+## Tool Retrieval Scoring
+
+`KeywordToolRetriever` (the dependency-free `IToolRetriever`) scores a tool by how much of **the
+tool's own** name and description the query covers:
+
+```
+score = nameCoverage * 0.75 + descriptionCoverage * 0.25
+```
+
+- The score is **independent of query length**. Extra query tokens can only add matches, so a long
+  system prompt or a large block of retrieved context no longer pushes every tool below
+  `MinRelevanceScore`.
+- The name and the description are normalised separately. Sharing one denominator would bury the
+  name signal under a long description, penalising a well-documented tool.
+- Name tokens may match by substring, but only from **3 characters up** — shorter tokens must match
+  exactly, so a stopword such as `to` does not claim a match against `ListDirectory`.
+
+Scores are on a different scale than before this rule; if you hand-tuned `MinRelevanceScore`,
+re-check it against the default of `0.3`.
+
 ## Permission Defaults
 
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:

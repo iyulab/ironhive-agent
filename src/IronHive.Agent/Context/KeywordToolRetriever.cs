@@ -8,8 +8,14 @@ namespace IronHive.Agent.Context;
 /// </summary>
 public class KeywordToolRetriever : IToolRetriever
 {
-    private const float NameWeight = 3.0f;
-    private const float DescriptionWeight = 1.0f;
+    private const float NameWeight = 0.75f;
+    private const float DescriptionWeight = 0.25f;
+
+    /// <summary>
+    /// Shortest token allowed to match by substring. A two-character token is a substring of half
+    /// the language ("to" in "history", "in" in "tracking"), so shorter tokens must match exactly.
+    /// </summary>
+    private const int MinSubstringMatchLength = 3;
 
     /// <inheritdoc />
     public Task<ToolRetrievalResult> RetrieveAsync(
@@ -103,6 +109,12 @@ public class KeywordToolRetriever : IToolRetriever
     /// Calculates relevance score between query tokens and a tool's name + description.
     /// Name matches are weighted higher than description matches.
     /// </summary>
+    /// <remarks>
+    /// Coverage is measured over the tool's own tokens, never the query's. Dividing by the query
+    /// length would answer "what fraction of the query is about this tool", which falls towards
+    /// zero as the prompt grows even though the tool's relevance never changed — starving tool
+    /// selection exactly when the prompt carries the most instruction.
+    /// </remarks>
     internal static float CalculateRelevance(
         HashSet<string> queryTokens, string toolName, string toolDescription)
     {
@@ -111,32 +123,49 @@ public class KeywordToolRetriever : IToolRetriever
             return 0f;
         }
 
-        var nameTokens = Tokenize(toolName);
-        var descTokens = Tokenize(toolDescription);
+        var nameCoverage = Coverage(Tokenize(toolName), queryTokens, allowSubstring: true);
+        var descCoverage = Coverage(Tokenize(toolDescription), queryTokens, allowSubstring: false);
 
-        float nameHits = 0;
-        float descHits = 0;
-
-        foreach (var qt in queryTokens)
-        {
-            // Name matching: substring check (bidirectional) for flexibility
-            if (nameTokens.Any(nt => nt.Contains(qt, StringComparison.OrdinalIgnoreCase)
-                                  || qt.Contains(nt, StringComparison.OrdinalIgnoreCase)))
-            {
-                nameHits++;
-            }
-
-            // Description matching: exact token match
-            if (descTokens.Contains(qt))
-            {
-                descHits++;
-            }
-        }
-
-        var maxScore = queryTokens.Count * (NameWeight + DescriptionWeight);
-        var score = (nameHits * NameWeight + descHits * DescriptionWeight) / maxScore;
+        // Name and description are normalised separately on purpose: a single shared denominator
+        // buries the name signal under a verbose description, so a well-documented tool would
+        // score lower than a sparse one carrying the same name.
+        var score = nameCoverage * NameWeight + descCoverage * DescriptionWeight;
 
         return Math.Min(score, 1.0f);
+    }
+
+    /// <summary>
+    /// Fraction of a tool's own tokens that the query covers.
+    /// </summary>
+    private static float Coverage(HashSet<string> toolTokens, HashSet<string> queryTokens, bool allowSubstring)
+    {
+        if (toolTokens.Count == 0)
+        {
+            return 0f;
+        }
+
+        var hits = toolTokens.Count(toolToken =>
+            queryTokens.Any(queryToken => Matches(toolToken, queryToken, allowSubstring)));
+
+        return (float)hits / toolTokens.Count;
+    }
+
+    private static bool Matches(string toolToken, string queryToken, bool allowSubstring)
+    {
+        if (string.Equals(toolToken, queryToken, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!allowSubstring
+            || toolToken.Length < MinSubstringMatchLength
+            || queryToken.Length < MinSubstringMatchLength)
+        {
+            return false;
+        }
+
+        return toolToken.Contains(queryToken, StringComparison.OrdinalIgnoreCase)
+            || queryToken.Contains(toolToken, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
