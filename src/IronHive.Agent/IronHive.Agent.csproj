@@ -43,8 +43,6 @@
   <ItemGroup>
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageReference Include="TokenMeter" />
-    <!-- ToolCallParser (multi-provider tool call parsing) -->
-    <PackageReference Include="ToolCallParser" />
     <!-- IronHive (LLM abstraction) -->
     <PackageReference Include="IronHive.Abstractions" />
   </ItemGroup>
