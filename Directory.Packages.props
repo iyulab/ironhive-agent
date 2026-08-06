@@ -36,7 +36,7 @@
     <PackageVersion Include="MemoryIndexer" Version="0.16.1" />
     <PackageVersion Include="MemoryIndexer.Sdk" Version="0.16.1" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.5.3" />
+    <PackageVersion Include="WebFlux" Version="0.6.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
