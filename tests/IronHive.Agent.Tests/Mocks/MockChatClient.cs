@@ -12,11 +12,17 @@ public class MockChatClient : IChatClient
 {
     private readonly Queue<ChatResponse> _responses = new();
     private readonly List<List<ChatMessage>> _receivedMessages = [];
+    private readonly List<ChatOptions?> _receivedOptions = [];
 
     /// <summary>
     /// Gets the messages received by the mock client.
     /// </summary>
     public IReadOnlyList<IReadOnlyList<ChatMessage>> ReceivedMessages => _receivedMessages;
+
+    /// <summary>
+    /// Gets the <see cref="ChatOptions"/> received by the mock client, one entry per call, in order.
+    /// </summary>
+    public IReadOnlyList<ChatOptions?> ReceivedOptions => _receivedOptions;
 
     /// <summary>
     /// Enqueues a response to be returned by the next call.
@@ -92,6 +98,7 @@ public class MockChatClient : IChatClient
         cancellationToken.ThrowIfCancellationRequested();
 
         _receivedMessages.Add(messages.ToList());
+        _receivedOptions.Add(options);
 
         if (_pendingException is not null)
         {
@@ -176,6 +183,7 @@ public class MockChatClient : IChatClient
     {
         _responses.Clear();
         _receivedMessages.Clear();
+        _receivedOptions.Clear();
         _pendingException = null;
     }
 }

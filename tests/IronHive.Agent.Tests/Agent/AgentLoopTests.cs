@@ -511,4 +511,63 @@ public class AgentLoopTests
         Assert.NotNull(agentLoop.ContextManager);
         Assert.NotEmpty(chunks);
     }
+
+    [Fact]
+    public async Task RunStreamingAsync_SecondCallWithOverrideOptions_OnlySecondCallCarriesOverride()
+    {
+        // Arrange
+        var mockClient = new MockChatClient()
+            .EnqueueResponse("first")
+            .EnqueueResponse("second");
+
+        var agentLoop = new AgentLoop(mockClient, new AgentOptions { Temperature = 0.7f });
+
+        var overrideOptions = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { ["enable_thinking"] = false }
+        };
+
+        // Act
+        await foreach (var _ in agentLoop.RunStreamingAsync("first prompt")) { }
+        await foreach (var _ in agentLoop.RunStreamingAsync("second prompt", overrideOptions)) { }
+
+        // Assert
+        Assert.Equal(2, mockClient.ReceivedOptions.Count);
+        Assert.Null(mockClient.ReceivedOptions[0]!.AdditionalProperties);
+        Assert.Equal(0.7f, mockClient.ReceivedOptions[0]!.Temperature);
+
+        Assert.NotNull(mockClient.ReceivedOptions[1]!.AdditionalProperties);
+        Assert.False((bool)mockClient.ReceivedOptions[1]!.AdditionalProperties!["enable_thinking"]!);
+        Assert.Equal(0.7f, mockClient.ReceivedOptions[1]!.Temperature); // inherited, not overridden
+    }
+
+    [Fact]
+    public async Task RunAsync_WithOverrideTemperature_ReplacesConfiguredDefault()
+    {
+        // Arrange
+        var mockClient = new MockChatClient().EnqueueResponse("ok");
+        var agentLoop = new AgentLoop(mockClient, new AgentOptions { Temperature = 0.7f });
+
+        // Act
+        await agentLoop.RunAsync("prompt", new ChatOptions { Temperature = 0.1f });
+
+        // Assert
+        Assert.Equal(0.1f, mockClient.ReceivedOptions[0]!.Temperature);
+    }
+
+    [Fact]
+    public async Task RunAsync_TwoArgOverload_StillCompilesAndBehavesUnchanged()
+    {
+        // Arrange — existing positional-CancellationToken call site must keep compiling and working
+        var mockClient = new MockChatClient().EnqueueResponse("ok");
+        var agentLoop = new AgentLoop(mockClient);
+        using var cts = new CancellationTokenSource();
+
+        // Act
+        var response = await agentLoop.RunAsync("prompt", cts.Token);
+
+        // Assert
+        Assert.Equal("ok", response.Content);
+        Assert.Null(mockClient.ReceivedOptions[0]!.AdditionalProperties);
+    }
 }

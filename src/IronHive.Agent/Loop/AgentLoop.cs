@@ -50,7 +50,11 @@ public class AgentLoop : IAgentLoop
     }
 
     /// <inheritdoc />
-    public async Task<AgentResponse> RunAsync(string prompt, CancellationToken cancellationToken = default)
+    public Task<AgentResponse> RunAsync(string prompt, CancellationToken cancellationToken = default)
+        => RunAsync(prompt, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<AgentResponse> RunAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
@@ -62,7 +66,7 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
-        var chatOptions = await CreateChatOptionsAsync(cancellationToken);
+        var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         ChatResponse response;
 
         try
@@ -118,8 +122,13 @@ public class AgentLoop : IAgentLoop
     }
 
     /// <inheritdoc />
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, CancellationToken cancellationToken = default)
+        => RunStreamingAsync(prompt, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
     public async IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(
         string prompt,
+        ChatOptions? overrideOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
@@ -132,7 +141,7 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
-        var chatOptions = await CreateChatOptionsAsync(cancellationToken);
+        var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
 
@@ -214,7 +223,7 @@ public class AgentLoop : IAgentLoop
         return preparedHistory;
     }
 
-    private async Task<ChatOptions> CreateChatOptionsAsync(CancellationToken cancellationToken)
+    private async Task<ChatOptions> CreateChatOptionsAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
     {
         var tools = _options.Tools;
 
@@ -236,12 +245,14 @@ public class AgentLoop : IAgentLoop
             tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
         }
 
-        return new ChatOptions
+        var chatOptions = new ChatOptions
         {
             Temperature = _options.Temperature,
             MaxOutputTokens = _options.MaxTokens,
             Tools = tools
         };
+
+        return ChatOptionsOverride.Apply(chatOptions, overrideOptions);
     }
 
     private string GetLatestUserQuery()

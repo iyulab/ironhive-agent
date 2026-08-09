@@ -38,8 +38,23 @@ public class OrchestratedAgentLoop : IAgentLoop
     }
 
     /// <inheritdoc />
-    public async Task<AgentResponse> RunAsync(string prompt, CancellationToken cancellationToken = default)
+    public Task<AgentResponse> RunAsync(string prompt, CancellationToken cancellationToken = default)
+        => RunAsync(prompt, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">
+    /// <paramref name="overrideOptions"/> is not <c>null</c>. This loop delegates to
+    /// <see cref="IAgentOrchestrator"/>, which has no per-turn <see cref="ChatOptions"/> concept —
+    /// there is nowhere to apply the override, so it is rejected rather than silently dropped.
+    /// </exception>
+    public async Task<AgentResponse> RunAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
+        if (overrideOptions is not null)
+        {
+            throw new NotSupportedException(
+                "OrchestratedAgentLoop delegates to IAgentOrchestrator, which has no per-turn ChatOptions concept. overrideOptions must be null.");
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
         var response = _preferredAgentName is not null
@@ -67,10 +82,26 @@ public class OrchestratedAgentLoop : IAgentLoop
     }
 
     /// <inheritdoc />
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, CancellationToken cancellationToken = default)
+        => RunStreamingAsync(prompt, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">
+    /// <paramref name="overrideOptions"/> is not <c>null</c>. This loop delegates to
+    /// <see cref="IAgentOrchestrator"/>, which has no per-turn <see cref="ChatOptions"/> concept —
+    /// there is nowhere to apply the override, so it is rejected rather than silently dropped.
+    /// </exception>
     public async IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(
         string prompt,
+        ChatOptions? overrideOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (overrideOptions is not null)
+        {
+            throw new NotSupportedException(
+                "OrchestratedAgentLoop delegates to IAgentOrchestrator, which has no per-turn ChatOptions concept. overrideOptions must be null.");
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
         var stream = _preferredAgentName is not null

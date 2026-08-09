@@ -202,4 +202,37 @@ public class ThinkingAgentLoopTests
         Assert.Equal("Here is the answer.", response.Content);
         Assert.NotNull(response.ThinkingContent);
     }
+
+    [Fact]
+    public async Task RunStreamingAsync_SecondCallWithOverrideOptions_OnlySecondCallCarriesOverride()
+    {
+        // Arrange — the initial (pre-turn-manager) streaming request goes straight to the wrapped
+        // IChatClient, so a plain MockChatClient observes the merged ChatOptions directly.
+        var mockClient = new MockChatClient()
+            .EnqueueResponse("first")
+            .EnqueueResponse("second");
+
+        var loop = new ThinkingAgentLoop(
+            mockClient,
+            BuildTurnManager(new ChatResponse([new ChatMessage(ChatRole.Assistant, string.Empty)])),
+            new IronHive.Agent.Loop.AgentOptions { Temperature = 0.7f });
+
+        var overrideOptions = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { ["enable_thinking"] = false }
+        };
+
+        // Act
+        await foreach (var _ in loop.RunStreamingAsync("first prompt")) { }
+        await foreach (var _ in loop.RunStreamingAsync("second prompt", overrideOptions)) { }
+
+        // Assert
+        Assert.Equal(2, mockClient.ReceivedOptions.Count);
+        Assert.Null(mockClient.ReceivedOptions[0]!.AdditionalProperties);
+        Assert.Equal(0.7f, mockClient.ReceivedOptions[0]!.Temperature);
+
+        Assert.NotNull(mockClient.ReceivedOptions[1]!.AdditionalProperties);
+        Assert.False((bool)mockClient.ReceivedOptions[1]!.AdditionalProperties!["enable_thinking"]!);
+        Assert.Equal(0.7f, mockClient.ReceivedOptions[1]!.Temperature); // inherited, not overridden
+    }
 }

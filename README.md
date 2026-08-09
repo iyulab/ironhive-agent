@@ -4,7 +4,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 
 ## Features
 
-- **Agent Loop**: Single-threaded master loop with streaming support
+- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn
 - **Context Management**: Auto-compaction (92% threshold), goal reminders, prompt caching
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks

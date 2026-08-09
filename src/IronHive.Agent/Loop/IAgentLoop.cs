@@ -17,12 +17,40 @@ public interface IAgentLoop
     Task<AgentResponse> RunAsync(string prompt, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Runs the agent loop with the given prompt, overriding per-turn chat options.
+    /// </summary>
+    /// <param name="prompt">User input prompt</param>
+    /// <param name="overrideOptions">
+    /// Per-turn <see cref="ChatOptions"/> overrides. <see cref="ChatOptions.Temperature"/>,
+    /// <see cref="ChatOptions.MaxOutputTokens"/> and <see cref="ChatOptions.Tools"/> replace the
+    /// loop's configured defaults for this turn only when set; unset fields fall back to the loop's
+    /// own configuration. <see cref="ChatOptions.AdditionalProperties"/> entries are merged into the
+    /// loop's own, with entries on <paramref name="overrideOptions"/> winning on key conflicts. Pass
+    /// <c>null</c> for the same behavior as the two-argument overload.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token for graceful shutdown</param>
+    /// <returns>Agent response</returns>
+    Task<AgentResponse> RunAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Runs the agent loop with streaming output.
     /// </summary>
     /// <param name="prompt">User input prompt</param>
     /// <param name="cancellationToken">Cancellation token for graceful shutdown</param>
     /// <returns>Async enumerable of response chunks</returns>
     IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs the agent loop with streaming output, overriding per-turn chat options.
+    /// </summary>
+    /// <param name="prompt">User input prompt</param>
+    /// <param name="overrideOptions">
+    /// Per-turn <see cref="ChatOptions"/> overrides — same merge semantics as the
+    /// <see cref="RunAsync(string, ChatOptions?, CancellationToken)"/> overload.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token for graceful shutdown</param>
+    /// <returns>Async enumerable of response chunks</returns>
+    IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Initializes the conversation history with existing messages.
