@@ -160,6 +160,28 @@ score = nameCoverage * 0.75 + descriptionCoverage * 0.25
 Scores are on a different scale than before this rule; if you hand-tuned `MinRelevanceScore`,
 re-check it against the default of `0.3`.
 
+### Reserved scored-slot budget
+
+Both `KeywordToolRetriever` and `EmbeddingToolRetriever` select `AlwaysInclude` pins first, then fill
+the remaining budget with the top-scored tools. If a caller grows `AlwaysInclude` at runtime (e.g.
+merging enabled-plugin tool names into the pin list on every turn), pins can accumulate past
+`MaxTools` — and without a reserved floor, every extra pin silently shrinks the scored tail, down to
+zero once pins alone reach `MaxTools`. `ToolRetrievalOptions.MinScoredSlots` guarantees the scored
+tail at least this many slots regardless of how many pins already consumed the nominal `MaxTools`
+budget:
+
+```
+floor        = min(MinScoredSlots, MaxTools)
+scoredBudget = max(floor, MaxTools - pinnedCount)
+```
+
+- Pins can still exceed `MaxTools`; worst-case total selection size is `pinnedCount + MinScoredSlots`,
+  not `pinnedCount` alone.
+- The floor is clamped to `MaxTools`, so a caller that has deliberately lowered `MaxTools` (e.g. a
+  small-context model capping tool-schema token cost) is respected rather than silently overridden.
+- Default: `0` — reproduces the pre-existing behavior exactly (pins can shrink the scored tail to
+  zero). Set it explicitly to opt into the reserved floor.
+
 ## Permission Defaults
 
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:

@@ -173,6 +173,51 @@ public class EmbeddingToolRetrieverTests
 
     #endregion
 
+    #region MinScoredSlots (reserved scored-slot budget)
+
+    /// <summary>
+    /// Same budget-reservation contract as KeywordToolRetriever — this retriever shares the
+    /// identical AlwaysInclude-then-top-N selection shape (and, before this fix, the identical
+    /// pin-crowding bug: pins alone exceeding MaxTools left zero budget for the scored tail).
+    /// </summary>
+    [Fact]
+    public async Task RetrieveAsync_PinsExceedMaxTools_ScoredTailStillReservesMinScoredSlots()
+    {
+        var retriever = CreateRetriever();
+        var tools = CreateTestTools();
+        var options = new ToolRetrievalOptions
+        {
+            MaxTools = 2,
+            MinRelevanceScore = 0.0f,
+            AlwaysInclude = ["ReadFile", "WriteFile", "ListDirectory"], // 3 pins, already > MaxTools
+            MinScoredSlots = 2
+        };
+
+        var result = await retriever.RetrieveAsync("grep execute", tools, options);
+
+        var names = result.SelectedTools.Select(GetName).ToList();
+        Assert.Equal(5, names.Count); // 3 pins + 2 reserved scored slots
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_MinScoredSlotsDefault_PinsExceedingMaxTools_LeavesNoScoredBudget()
+    {
+        var retriever = CreateRetriever();
+        var tools = CreateTestTools();
+        var options = new ToolRetrievalOptions
+        {
+            MaxTools = 2,
+            MinRelevanceScore = 0.0f,
+            AlwaysInclude = ["ReadFile", "WriteFile", "ListDirectory"] // 3 pins, already > MaxTools
+        };
+
+        var result = await retriever.RetrieveAsync("grep execute", tools, options);
+
+        Assert.Equal(3, result.SelectedTools.Count); // pins only, no scored tail
+    }
+
+    #endregion
+
     #region Index Caching
 
     [Fact]

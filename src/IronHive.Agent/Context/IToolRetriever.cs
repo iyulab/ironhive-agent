@@ -21,6 +21,24 @@ public record ToolRetrievalOptions
     /// Tool names that should always be included regardless of score.
     /// </summary>
     public IReadOnlyList<string>? AlwaysInclude { get; init; }
+
+    /// <summary>
+    /// Guarantees at least this many scored (non-pinned) slots in the selection, even when
+    /// <see cref="AlwaysInclude"/> pins alone already meet or exceed <see cref="MaxTools"/>. Without
+    /// this, a caller that grows <c>AlwaysInclude</c> at runtime (e.g. merging plugin-provided tool
+    /// names into the pin list) sees the scored tail shrink toward zero as pins accumulate past
+    /// <c>MaxTools</c> — silently reintroducing the same starvation that score-based selection exists
+    /// to avoid, just via pin growth instead of query-length dilution. Pins can still exceed
+    /// <c>MaxTools</c>; worst-case total selection size is <c>pinnedCount + MinScoredSlots</c>, not
+    /// <c>pinnedCount</c> alone.
+    /// <para>
+    /// The floor itself is clamped to <c>MaxTools</c>, so a caller that has deliberately lowered
+    /// <c>MaxTools</c> below this value (e.g. a small-context model capping tool-schema token cost)
+    /// is respected rather than silently overridden.
+    /// </para>
+    /// <para>Default: 0 — preserves prior behavior, where pins can shrink the scored tail to zero.</para>
+    /// </summary>
+    public int MinScoredSlots { get; init; }
 }
 
 /// <summary>

@@ -397,6 +397,81 @@ public class KeywordToolRetrieverTests
         Assert.Equal(10, options.MaxTools);
         Assert.Equal(0.3f, options.MinRelevanceScore);
         Assert.Null(options.AlwaysInclude);
+        Assert.Equal(0, options.MinScoredSlots);
+    }
+
+    #endregion
+
+    #region MinScoredSlots (reserved scored-slot budget)
+
+    /// <summary>
+    /// A caller that grows AlwaysInclude at runtime (e.g. merging plugin tool names into the pin
+    /// list) can push pinnedCount past MaxTools. Without a reserved floor the scored tail collapses
+    /// to zero — MinScoredSlots exists exactly to stop that.
+    /// </summary>
+    [Fact]
+    public async Task RetrieveAsync_PinsExceedMaxTools_ScoredTailStillReservesMinScoredSlots()
+    {
+        var tools = CreateTestTools();
+        var options = new ToolRetrievalOptions
+        {
+            MaxTools = 2,
+            MinRelevanceScore = 0.0f,
+            AlwaysInclude = ["ReadFile", "WriteFile", "ListDirectory"], // 3 pins, already > MaxTools
+            MinScoredSlots = 2
+        };
+
+        var result = await _retriever.RetrieveAsync("grep execute", tools, options);
+
+        var names = result.SelectedTools.Select(GetName).ToList();
+        Assert.Equal(5, names.Count); // 3 pins + 2 reserved scored slots
+        Assert.Contains("GrepFiles", names);
+        Assert.Contains("ExecuteCommand", names);
+    }
+
+    /// <summary>
+    /// Default MinScoredSlots (0) must reproduce the exact prior behavior: pins alone exceeding
+    /// MaxTools leave zero budget for scored tools. This pins the backward-compat contract.
+    /// </summary>
+    [Fact]
+    public async Task RetrieveAsync_MinScoredSlotsDefault_PinsExceedingMaxTools_LeavesNoScoredBudget()
+    {
+        var tools = CreateTestTools();
+        var options = new ToolRetrievalOptions
+        {
+            MaxTools = 2,
+            MinRelevanceScore = 0.0f,
+            AlwaysInclude = ["ReadFile", "WriteFile", "ListDirectory"] // 3 pins, already > MaxTools
+            // MinScoredSlots left at default (0)
+        };
+
+        var result = await _retriever.RetrieveAsync("grep execute", tools, options);
+
+        var names = result.SelectedTools.Select(GetName).ToList();
+        Assert.Equal(3, names.Count); // pins only, no scored tail
+        Assert.DoesNotContain("GrepFiles", names);
+        Assert.DoesNotContain("ExecuteCommand", names);
+    }
+
+    /// <summary>
+    /// The floor must never exceed MaxTools, so a deployment that has deliberately lowered MaxTools
+    /// (e.g. a small-context model capping tool-schema token cost) is respected.
+    /// </summary>
+    [Fact]
+    public async Task RetrieveAsync_MinScoredSlotsAboveMaxTools_ClampedToMaxTools()
+    {
+        var tools = CreateTestTools();
+        var options = new ToolRetrievalOptions
+        {
+            MaxTools = 2,
+            MinRelevanceScore = 0.0f,
+            MinScoredSlots = 10 // far above MaxTools and the tool count
+        };
+
+        var result = await _retriever.RetrieveAsync("file read write list grep execute", tools, options);
+
+        Assert.True(result.SelectedTools.Count <= 2,
+            $"MinScoredSlots must clamp to MaxTools, got {result.SelectedTools.Count} tools");
     }
 
     #endregion

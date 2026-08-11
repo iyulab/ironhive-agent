@@ -77,10 +77,16 @@ public class KeywordToolRetriever : IToolRetriever
             }
         }
 
-        // 2. Top-scored tools above threshold
+        // 2. Top-scored tools above threshold. The scored tail reserves at least MinScoredSlots
+        // regardless of how many pins already consumed the nominal MaxTools budget — pins no longer
+        // count against this budget. Do NOT go back to breaking on `selected.Count >= options.MaxTools`;
+        // that recouples the two floors. See ToolSelectionBudget.
+        var scoredBudget = ToolSelectionBudget.ScoredBudget(options, selected.Count);
+        var scoredCount = 0;
+
         foreach (var (tool, name, score) in scored.OrderByDescending(x => x.Score))
         {
-            if (selected.Count >= options.MaxTools)
+            if (scoredCount >= scoredBudget)
             {
                 break;
             }
@@ -96,6 +102,7 @@ public class KeywordToolRetriever : IToolRetriever
             }
 
             selected.Add(tool);
+            scoredCount++;
         }
 
         return Task.FromResult(new ToolRetrievalResult
