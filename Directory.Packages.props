@@ -4,10 +4,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.19.1" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.20.0" />
     <!-- Ironbees (multi-agent orchestration) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.12.1" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.12.1" />
+    <PackageVersion Include="Ironbees.Core" Version="0.13.1" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.13.1" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.0" />
     <!-- Microsoft.Extensions.AI -->
