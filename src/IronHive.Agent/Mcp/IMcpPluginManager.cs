@@ -122,6 +122,11 @@ public record McpPluginConfig
     public string? Url { get; init; }
 
     /// <summary>
+    /// Additional HTTP headers sent with every request (for http transport).
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Headers { get; init; }
+
+    /// <summary>
     /// Whether to auto-reconnect on disconnect.
     /// </summary>
     public bool AutoReconnect { get; init; } = true;

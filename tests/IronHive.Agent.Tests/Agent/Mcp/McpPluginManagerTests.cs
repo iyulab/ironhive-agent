@@ -78,6 +78,23 @@ public class McpPluginManagerTests
     }
 
     [Fact]
+    public async Task ConnectAsync_HttpTransport_WithHeaders_DoesNotThrowArgumentException()
+    {
+        var config = new McpPluginConfig
+        {
+            Transport = McpTransportType.Http,
+            Url = "http://localhost:9999/not-a-real-server",
+            Headers = new Dictionary<string, string> { ["X-Session-Id"] = "abc123" }
+        };
+
+        var manager = new McpPluginManager();
+        var ex = await Record.ExceptionAsync(() =>
+            manager.ConnectAsync("test-http-headers", config));
+
+        Assert.IsNotType<ArgumentException>(ex);
+    }
+
+    [Fact]
     public async Task ConnectAsync_HttpTransport_WithEmptyUrl_ThrowsArgumentException()
     {
         var config = new McpPluginConfig
@@ -194,6 +211,7 @@ public class McpPluginConfigTests
         Assert.Null(config.Environment);
         Assert.Null(config.WorkingDirectory);
         Assert.Null(config.Url);
+        Assert.Null(config.Headers);
         Assert.True(config.AutoReconnect);
         Assert.Equal(30000, config.TimeoutMs);
     }
@@ -209,6 +227,19 @@ public class McpPluginConfigTests
 
         Assert.Equal("npx", config.Command);
         Assert.Equal(2, config.Arguments!.Count);
+    }
+
+    [Fact]
+    public void Config_WithHeaders_SetsCorrectly()
+    {
+        var config = new McpPluginConfig
+        {
+            Transport = McpTransportType.Http,
+            Url = "http://localhost:3000/mcp",
+            Headers = new Dictionary<string, string> { ["X-Session-Id"] = "abc123" }
+        };
+
+        Assert.Equal("abc123", config.Headers!["X-Session-Id"]);
     }
 }
 
@@ -367,6 +398,11 @@ public class McpPluginsConfigLoaderTests
                     "command": "code-beaker",
                     "autoReconnect": false,
                     "timeoutMs": 60000
+                },
+                "remote": {
+                    "transport": "http",
+                    "url": "http://localhost:3000/mcp",
+                    "headers": { "X-Session-Id": "abc123" }
                 }
             },
             "defaultTimeoutMs": 45000,
@@ -380,9 +416,10 @@ public class McpPluginsConfigLoaderTests
         {
             var config = McpPluginsConfigLoader.LoadFromFile(tempFile);
 
-            Assert.Equal(2, config.Plugins.Count);
+            Assert.Equal(3, config.Plugins.Count);
             Assert.True(config.Plugins.ContainsKey("memory"));
             Assert.True(config.Plugins.ContainsKey("code"));
+            Assert.True(config.Plugins.ContainsKey("remote"));
 
             var memory = config.Plugins["memory"];
             Assert.Equal("memory-indexer", memory.Command);
@@ -393,6 +430,10 @@ public class McpPluginsConfigLoaderTests
             Assert.Equal("code-beaker", code.Command);
             Assert.False(code.AutoReconnect);
             Assert.Equal(60000, code.TimeoutMs);
+
+            var remote = config.Plugins["remote"];
+            Assert.Equal(McpTransportType.Http, remote.Transport);
+            Assert.Equal("abc123", remote.Headers!["X-Session-Id"]);
 
             Assert.Equal(45000, config.DefaultTimeoutMs);
             Assert.True(config.AutoConnect);
@@ -422,6 +463,11 @@ public class McpPluginsConfigLoaderTests
           code:
             command: code-beaker
             autoReconnect: false
+          remote:
+            transport: http
+            url: http://localhost:3000/mcp
+            headers:
+              X-Session-Id: abc123
         defaultTimeoutMs: 45000
         autoConnect: true
         """;
@@ -431,10 +477,14 @@ public class McpPluginsConfigLoaderTests
         {
             var config = McpPluginsConfigLoader.LoadFromFile(tempFile);
 
-            Assert.Equal(2, config.Plugins.Count);
+            Assert.Equal(3, config.Plugins.Count);
             Assert.True(config.Plugins.ContainsKey("memory"));
             Assert.Equal("memory-indexer", config.Plugins["memory"].Command);
             Assert.Equal(45000, config.DefaultTimeoutMs);
+
+            var remote = config.Plugins["remote"];
+            Assert.Equal(McpTransportType.Http, remote.Transport);
+            Assert.Equal("abc123", remote.Headers!["X-Session-Id"]);
         }
         finally
         {

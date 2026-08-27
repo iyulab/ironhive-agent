@@ -149,7 +149,9 @@ await manager.ConnectAsync("filesystem", new McpPluginConfig
 await manager.ConnectAsync("my-server", new McpPluginConfig
 {
     Transport = McpTransportType.Http,
-    Url = "http://localhost:3000/mcp"
+    Url = "http://localhost:3000/mcp",
+    // Optional: custom headers sent with every request (e.g. session/tenant scoping)
+    Headers = new Dictionary<string, string> { ["X-Session-Id"] = sessionId }
 });
 ```
 
@@ -160,6 +162,8 @@ plugins:
   remote-tool:
     transport: http
     url: http://localhost:3000/mcp
+    headers:
+      X-Session-Id: abc123
 ```
 
 ## Available Tools Context

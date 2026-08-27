@@ -123,6 +123,10 @@ public static class McpPluginsConfigLoader
                     .ToDictionary(c => c.Key, c => c.Value!),
                 WorkingDirectory = pluginSection["workingDirectory"],
                 Url = pluginSection["url"],
+                Headers = pluginSection.GetSection("headers")
+                    .GetChildren()
+                    .Where(c => c.Value != null)
+                    .ToDictionary(c => c.Key, c => c.Value!),
                 AutoReconnect = bool.TryParse(pluginSection["autoReconnect"], out var autoReconnect)
                     ? autoReconnect
                     : true,
@@ -174,6 +178,7 @@ public static class McpPluginsConfigLoader
                     Environment = rawPlugin.Environment,
                     WorkingDirectory = rawPlugin.WorkingDirectory,
                     Url = rawPlugin.Url,
+                    Headers = rawPlugin.Headers,
                     AutoReconnect = rawPlugin.AutoReconnect ?? true,
                     TimeoutMs = rawPlugin.TimeoutMs ?? 30000
                 };
@@ -206,6 +211,7 @@ public static class McpPluginsConfigLoader
         public Dictionary<string, string>? Environment { get; set; }
         public string? WorkingDirectory { get; set; }
         public string? Url { get; set; }
+        public Dictionary<string, string>? Headers { get; set; }
         public bool? AutoReconnect { get; set; }
         public int? TimeoutMs { get; set; }
     }

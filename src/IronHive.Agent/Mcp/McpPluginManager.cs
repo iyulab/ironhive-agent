@@ -286,6 +286,11 @@ public class McpPluginManager : IMcpPluginManager
             Endpoint = new Uri(config.Url)
         };
 
+        if (config.Headers != null)
+        {
+            options.AdditionalHeaders = new Dictionary<string, string>(config.Headers);
+        }
+
         return new HttpClientTransport(options);
     }
 
