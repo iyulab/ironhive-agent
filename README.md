@@ -166,6 +166,32 @@ plugins:
       X-Session-Id: abc123
 ```
 
+## MCP Tool-Call Guardrail (opt-in)
+
+`McpPluginManager` accepts an optional `FluxGuard.Remote.MCP.IMCPGuardrail` — when supplied, every
+`CallToolAsync` validates the request before dispatch and the result before returning it (server/
+tool allowlisting, dangerous-argument detection, indirect-injection and sensitive-data checks on
+tool results). Nothing changes if you don't pass one — this is off by default.
+
+```csharp
+using FluxGuard.Remote.MCP;
+
+// Or register it via DI: services.AddFluxGuardMcpGuardrail();
+var guardrail = new MCPToolValidator();
+guardrail.RegisterServer(new MCPServerInfo { Name = "filesystem", IsTrusted = true });
+
+var manager = new McpPluginManager(guardrail: guardrail);
+await manager.ConnectAsync("filesystem", config);
+
+// A call to an unregistered server, or one whose result trips the injection/sensitive-data
+// checks, comes back as an error result (result.IsError == true) — the underlying tool call is
+// never dispatched in the request-block case, and its result is never surfaced in the
+// result-block case.
+```
+
+A guardrail that itself throws is treated as fail-closed (the call is blocked, not silently
+dispatched unguarded) — see `McpPluginManager.CallToolAsync`'s XML doc remarks for the reasoning.
+
 ## Available Tools Context
 
 After the agent loop factory filters tools via `IModeToolFilter.FilterTools()`, it should populate

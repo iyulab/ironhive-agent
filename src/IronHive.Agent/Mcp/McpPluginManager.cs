@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using FluxGuard.Remote.MCP;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
@@ -14,11 +15,21 @@ public class McpPluginManager : IMcpPluginManager
 {
     private readonly ConcurrentDictionary<string, McpClientWrapper> _clients = new();
     private readonly ILogger<McpPluginManager>? _logger;
+    private readonly IMCPGuardrail? _guardrail;
     private bool _disposed;
 
-    public McpPluginManager(ILogger<McpPluginManager>? logger = null)
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="guardrail">
+    /// Optional MCP tool-call guardrail (<c>FluxGuard.Remote</c>'s <c>IMCPGuardrail</c>, e.g.
+    /// <c>MCPToolValidator</c>). Opt-in: when null (the default), tool calls dispatch exactly as
+    /// before this parameter existed. When provided, every <see cref="CallToolAsync"/> validates
+    /// the request before dispatch and the result before returning it — see that method's remarks
+    /// for the fail-closed policy on a guard-side exception.
+    /// </param>
+    public McpPluginManager(ILogger<McpPluginManager>? logger = null, IMCPGuardrail? guardrail = null)
     {
         _logger = logger;
+        _guardrail = guardrail;
     }
 
     /// <inheritdoc />
@@ -131,6 +142,22 @@ public class McpPluginManager : IMcpPluginManager
         return tools.Cast<AITool>().ToList().AsReadOnly();
     }
 
+    /// <summary>
+    /// Calls a tool on a connected MCP plugin.
+    /// </summary>
+    /// <remarks>
+    /// When a guardrail was supplied to the constructor, both the request (before dispatch) and
+    /// the result (before it is returned) are validated. A guard-reported block is reported as an
+    /// error result — the underlying tool call is never dispatched in the request case, and its
+    /// result is never surfaced to the caller in the result case. An exception raised BY the
+    /// guardrail itself (as opposed to a request/result it validates and blocks) is treated as
+    /// fail-closed: the call is blocked rather than silently dispatched unguarded. This differs
+    /// from FluxGuard's own base <c>FailMode</c> (which defaults fail-open outside the
+    /// <c>Strict</c> preset) because registering an <see cref="IMCPGuardrail"/> here is itself an
+    /// explicit per-consumer opt-in, not a broadly-applied default guard — a consumer who wired
+    /// this up clearly wants it enforced, so a guard malfunction should not silently disable the
+    /// protection they asked for.
+    /// </remarks>
     /// <inheritdoc />
     public async Task<McpToolResult> CallToolAsync(
         string pluginName,
@@ -145,36 +172,90 @@ public class McpPluginManager : IMcpPluginManager
             return McpToolResult.Error($"Plugin '{pluginName}' is not connected.");
         }
 
+        // Convert IDictionary to IReadOnlyDictionary
+        IReadOnlyDictionary<string, object?>? args = arguments != null
+            ? new Dictionary<string, object?>(arguments)
+            : null;
+
+        if (_guardrail != null)
+        {
+            var guardRequest = new MCPToolRequest
+            {
+                ServerName = pluginName,
+                ToolName = toolName,
+                Arguments = arguments?.ToDictionary(kv => kv.Key, kv => kv.Value ?? (object)string.Empty)
+            };
+
+            MCPValidationResult requestValidation;
+            try
+            {
+                requestValidation = await _guardrail.ValidateToolCallAsync(guardRequest, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+                _logger?.LogWarning(ex, "MCP guardrail threw while validating a tool call to '{Plugin}.{Tool}' — blocking (fail-closed)", pluginName, toolName);
+#pragma warning restore CA1848
+                return McpToolResult.Error($"Tool call blocked: guardrail error ({ex.Message})");
+            }
+
+            if (requestValidation.ShouldBlock || !requestValidation.IsValid)
+            {
+                return McpToolResult.Error($"Tool call blocked by guardrail: {requestValidation.Reason ?? "policy violation"}");
+            }
+
+            try
+            {
+                var result = await wrapper.Client.CallToolAsync(
+                    toolName,
+                    args,
+                    progress: null,
+                    cancellationToken: cancellationToken);
+
+                var content = ExtractTextContent(result);
+
+                MCPValidationResult resultValidation;
+                try
+                {
+                    resultValidation = await _guardrail.ValidateToolResultAsync(guardRequest, content, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+                    _logger?.LogWarning(ex, "MCP guardrail threw while validating a tool result from '{Plugin}.{Tool}' — blocking (fail-closed)", pluginName, toolName);
+#pragma warning restore CA1848
+                    return McpToolResult.Error($"Tool result blocked: guardrail error ({ex.Message})");
+                }
+
+                if (resultValidation.ShouldBlock || !resultValidation.IsValid)
+                {
+                    return McpToolResult.Error($"Tool result blocked by guardrail: {resultValidation.Reason ?? "policy violation"}");
+                }
+
+                return new McpToolResult
+                {
+                    Content = resultValidation.SanitizedResult ?? content,
+                    IsError = result.IsError ?? false,
+                    StructuredContent = result.StructuredContent
+                };
+            }
+            catch (Exception ex)
+            {
+                return McpToolResult.Error($"Tool call failed: {ex.Message}");
+            }
+        }
+
         try
         {
-            // Convert IDictionary to IReadOnlyDictionary
-            IReadOnlyDictionary<string, object?>? args = arguments != null
-                ? new Dictionary<string, object?>(arguments)
-                : null;
-
             var result = await wrapper.Client.CallToolAsync(
                 toolName,
                 args,
                 progress: null,
                 cancellationToken: cancellationToken);
 
-            // Extract text content from result
-            var contentBuilder = new StringBuilder();
-            foreach (var content in result.Content)
-            {
-                if (content is TextContentBlock textBlock && textBlock.Text != null)
-                {
-                    if (contentBuilder.Length > 0)
-                    {
-                        contentBuilder.AppendLine();
-                    }
-                    contentBuilder.Append(textBlock.Text);
-                }
-            }
-
             return new McpToolResult
             {
-                Content = contentBuilder.ToString(),
+                Content = ExtractTextContent(result),
                 IsError = result.IsError ?? false,
                 StructuredContent = result.StructuredContent
             };
@@ -183,6 +264,24 @@ public class McpPluginManager : IMcpPluginManager
         {
             return McpToolResult.Error($"Tool call failed: {ex.Message}");
         }
+    }
+
+    private static string ExtractTextContent(ModelContextProtocol.Protocol.CallToolResult result)
+    {
+        var contentBuilder = new StringBuilder();
+        foreach (var content in result.Content)
+        {
+            if (content is TextContentBlock textBlock && textBlock.Text != null)
+            {
+                if (contentBuilder.Length > 0)
+                {
+                    contentBuilder.AppendLine();
+                }
+                contentBuilder.Append(textBlock.Text);
+            }
+        }
+
+        return contentBuilder.ToString();
     }
 
     /// <inheritdoc />

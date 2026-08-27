@@ -38,6 +38,8 @@
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageReference Include="MemoryIndexer" />
     <PackageReference Include="MemoryIndexer.Sdk" />
+    <!-- FluxGuard (opt-in MCP tool-call guardrail) -->
+    <PackageReference Include="FluxGuard.Remote" />
   </ItemGroup>
 
   <ItemGroup>
