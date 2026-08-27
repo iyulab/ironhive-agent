@@ -46,6 +46,65 @@ await foreach (var chunk in agentLoop.RunStreamingAsync("Hello!"))
 }
 ```
 
+`AgentLoop`'s constructor only requires `chatClient` — `AgentOptions`, `IUsageTracker`,
+`ContextManager`, `IErrorRecoveryService`, and `IToolRetriever` are all optional and can be added
+incrementally as your application needs them.
+
+### Multi-Provider Setup (Advanced)
+
+`AddIronHiveAgent()` registers `IUsageTracker`, `ContextManager`, and `IErrorRecoveryService`, but
+deliberately does **not** register `IChatClientProvider`/`IChatClientFactory`/`IAgentLoopFactory` —
+picking an `IChatClient` for a specific backend (OpenAI, a local server, ...) is an application
+decision, not something this library can default to. If your app needs to select between multiple
+backends at runtime (e.g. a CLI that switches between a cloud and a local model), implement
+`IChatClientProvider` per backend and compose them:
+
+```csharp
+using IronHive.Agent.Context;
+using IronHive.Agent.Providers;
+
+// One IChatClientProvider per backend
+public class OpenAiChatClientProvider : IChatClientProvider
+{
+    public string ProviderName => "openai";
+    public bool IsAvailable => true;
+
+    public Task<IChatClient> GetChatClientAsync(string? modelOverride = null, CancellationToken ct = default)
+        => Task.FromResult(new OpenAIClient("YOUR_API_KEY")
+            .GetChatClient(modelOverride ?? "gpt-4o")
+            .AsIChatClient());
+
+    public Task<bool> CheckHealthAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+// Compose providers into a single lookup-by-name factory
+var openAiProvider = new OpenAiChatClientProvider();
+var factory = new ChatClientFactory(
+    providers: new Dictionary<string, IChatClientProvider> { ["openai"] = openAiProvider },
+    defaultProvider: openAiProvider);
+
+// Implement IAgentLoopFactory to turn AgentLoopFactoryOptions into an AgentLoop, e.g.:
+public class MyAgentLoopFactory(IChatClientFactory chatClients, ContextManager contextManager) : IAgentLoopFactory
+{
+    public Task<IAgentLoop> CreateAsync(CancellationToken ct = default)
+        => CreateAsync(new AgentLoopFactoryOptions(), ct);
+
+    public async Task<IAgentLoop> CreateAsync(AgentLoopFactoryOptions options, CancellationToken ct = default)
+    {
+        var chatClient = options.Provider is not null
+            ? await chatClients.CreateAsync(options.Provider, options.Model, ct)
+            : await chatClients.CreateAsync(options.Model, ct);
+
+        return new AgentLoop(chatClient, new AgentOptions { SystemPrompt = options.SystemPrompt }, contextManager: contextManager);
+    }
+}
+```
+
+Register your `IAgentLoopFactory` implementation and `IChatClientFactory`/`IChatClientProvider`s in
+DI alongside `AddIronHiveAgent()` — this library has no vendor-neutral default to offer for them.
+
 ## Architecture
 
 ```
