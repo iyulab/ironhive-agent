@@ -78,7 +78,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         // Add assistant response to history
         _history.AddRange(response.Messages);
 
-        var toolCalls = ExtractToolCalls(response);
+        var toolCalls = ToolCallResultFactory.Extract(response);
         var thinkingContent = ExtractThinkingContent(response);
         var usage = MapUsage(response.Usage);
 
@@ -329,27 +329,6 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             }
         }
         return string.Empty;
-    }
-
-    private static List<ToolCallResult> ExtractToolCalls(ChatResponse response)
-    {
-        var results = new List<ToolCallResult>();
-
-        foreach (var message in response.Messages)
-        {
-            foreach (var content in message.Contents.OfType<FunctionCallContent>())
-            {
-                results.Add(new ToolCallResult
-                {
-                    ToolName = content.Name,
-                    Arguments = content.Arguments?.ToString() ?? "{}",
-                    Result = string.Empty,
-                    Success = true
-                });
-            }
-        }
-
-        return results;
     }
 
     private static ThinkingContent? ExtractThinkingContent(ChatResponse response)

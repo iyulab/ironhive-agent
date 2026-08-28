@@ -159,8 +159,11 @@ var agentLoop = new AgentLoop(chatClient, new AgentOptions
 ```
 
 Without `UseFunctionInvocation()`, the tool's schema still reaches the model and the model can
-still request a call — but nothing executes it, and the agent loop reports the call as succeeded
-regardless.
+still request a call — but nothing executes it, and `ToolCallResult.Success` on the returned call is
+`null` (unknown), not `true`. `AgentLoop`/`ThinkingAgentLoop` only know the real outcome when the
+`IChatClient`'s function-invocation middleware appended a matching result to the same response: in
+that case `Success` reflects whether the invocation actually succeeded, and `Result` carries the
+real return value.
 
 No MCP transport, child process, or server is required to expose an in-process capability as a
 tool — that machinery exists only for tools that genuinely live in a separate process or remote

@@ -66,6 +66,43 @@ public class MockChatClient : IChatClient
     }
 
     /// <summary>
+    /// Enqueues a response where the tool call is already resolved -- as if the <c>IChatClient</c>
+    /// were wrapped with Microsoft.Extensions.AI's function-invocation middleware, which invokes the
+    /// tool and appends a matching <see cref="FunctionResultContent"/> before the response is
+    /// returned.
+    /// </summary>
+    public MockChatClient EnqueueResolvedToolCallResponse(
+        string toolName, string arguments, string resultText, Exception? resultException = null)
+    {
+        var callId = Guid.NewGuid().ToString();
+        var argsDict = JsonSerializer.Deserialize<Dictionary<string, object?>>(arguments)
+            ?? new Dictionary<string, object?>();
+
+        var callMessage = new ChatMessage(ChatRole.Assistant,
+            [new FunctionCallContent(callId, toolName, argsDict)]);
+        var resultMessage = new ChatMessage(ChatRole.Tool,
+            [new FunctionResultContent(callId, resultText) { Exception = resultException }]);
+
+        _responses.Enqueue(new ChatResponse([callMessage, resultMessage]));
+        return this;
+    }
+
+    /// <summary>
+    /// Enqueues a response with a tool call whose arguments the provider failed to parse, as
+    /// surfaced by Microsoft.Extensions.AI via <see cref="FunctionCallContent.Exception"/>.
+    /// </summary>
+    public MockChatClient EnqueueMalformedToolCallResponse(string toolName, Exception parseException)
+    {
+        var content = new FunctionCallContent(Guid.NewGuid().ToString(), toolName, null)
+        {
+            Exception = parseException
+        };
+        var message = new ChatMessage(ChatRole.Assistant, [content]);
+        _responses.Enqueue(new ChatResponse([message]));
+        return this;
+    }
+
+    /// <summary>
     /// Enqueues a response with no text content (thinking-only or tool-only turn).
     /// </summary>
     public MockChatClient EnqueueEmptyResponse(UsageDetails? usage = null)

@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.Json;
 using IronHive.Agent.Context;
 using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Tracking;
@@ -103,7 +102,7 @@ public class AgentLoop : IAgentLoop
         // Add assistant response to history
         _history.AddRange(response.Messages);
 
-        var toolCalls = ExtractToolCalls(response);
+        var toolCalls = ToolCallResultFactory.Extract(response);
         var usage = MapUsage(response.Usage);
 
         // Record usage for session tracking
@@ -265,29 +264,6 @@ public class AgentLoop : IAgentLoop
             }
         }
         return string.Empty;
-    }
-
-    private static List<ToolCallResult> ExtractToolCalls(ChatResponse response)
-    {
-        var results = new List<ToolCallResult>();
-
-        foreach (var message in response.Messages)
-        {
-            foreach (var content in message.Contents.OfType<FunctionCallContent>())
-            {
-                results.Add(new ToolCallResult
-                {
-                    ToolName = content.Name,
-                    Arguments = content.Arguments is not null
-                        ? JsonSerializer.Serialize(content.Arguments)
-                        : "{}",
-                    Result = string.Empty, // Will be filled after execution
-                    Success = true
-                });
-            }
-        }
-
-        return results;
     }
 
     private static TokenUsage? MapUsage(UsageDetails? usage)

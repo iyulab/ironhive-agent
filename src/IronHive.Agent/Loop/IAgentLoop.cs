@@ -193,9 +193,16 @@ public record ToolCallResult
     public required string Result { get; init; }
 
     /// <summary>
-    /// Whether the tool call succeeded.
+    /// Whether the tool call succeeded, or <c>null</c> if the outcome is unknown.
     /// </summary>
-    public bool Success { get; init; } = true;
+    /// <remarks>
+    /// An <see cref="IAgentLoop"/> only extracts this call from the model's response — it does not
+    /// invoke the tool itself. This is <c>null</c> unless the underlying <c>IChatClient</c> was
+    /// wrapped with Microsoft.Extensions.AI's function-invocation middleware
+    /// (<c>UseFunctionInvocation()</c>), in which case it reflects whether that middleware's
+    /// invocation actually succeeded.
+    /// </remarks>
+    public bool? Success { get; init; }
 }
 
 /// <summary>

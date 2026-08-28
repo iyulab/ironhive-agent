@@ -235,4 +235,49 @@ public class ThinkingAgentLoopTests
         Assert.False((bool)mockClient.ReceivedOptions[1]!.AdditionalProperties!["enable_thinking"]!);
         Assert.Equal(0.7f, mockClient.ReceivedOptions[1]!.Temperature); // inherited, not overridden
     }
+
+    [Fact]
+    public async Task RunAsync_WithToolCall_SerializesArgumentsAsJson()
+    {
+        // Arrange - regression: ExtractToolCalls used to call Arguments?.ToString(), which returns
+        // the dictionary's type name (e.g. "System.Collections.Generic.Dictionary`2[...]") instead
+        // of the actual argument values.
+        var response = new ChatResponse([new ChatMessage(ChatRole.Assistant,
+            [new FunctionCallContent("call-1", "read_file", new Dictionary<string, object?> { ["path"] = "test.txt" })])]);
+        var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
+
+        var result = await loop.RunAsync("q");
+
+        Assert.Contains("test.txt", result.ToolCalls[0].Arguments);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithUnresolvedToolCall_ReportsUnknownSuccess()
+    {
+        // Arrange - no function-invocation middleware, so the loop never learns the outcome.
+        var response = new ChatResponse([new ChatMessage(ChatRole.Assistant,
+            [new FunctionCallContent("call-1", "read_file", new Dictionary<string, object?> { ["path"] = "test.txt" })])]);
+        var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
+
+        var result = await loop.RunAsync("q");
+
+        Assert.Null(result.ToolCalls[0].Success);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithMiddlewareResolvedToolCall_ReportsActualResultAndSuccess()
+    {
+        // Arrange - simulates a chatClient wrapped with UseFunctionInvocation().
+        var callMessage = new ChatMessage(ChatRole.Assistant,
+            [new FunctionCallContent("call-1", "read_file", new Dictionary<string, object?> { ["path"] = "test.txt" })]);
+        var resultMessage = new ChatMessage(ChatRole.Tool,
+            [new FunctionResultContent("call-1", "file contents")]);
+        var response = new ChatResponse([callMessage, resultMessage]);
+        var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
+
+        var result = await loop.RunAsync("q");
+
+        Assert.True(result.ToolCalls[0].Success);
+        Assert.Equal("file contents", result.ToolCalls[0].Result);
+    }
 }

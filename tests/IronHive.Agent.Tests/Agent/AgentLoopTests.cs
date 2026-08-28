@@ -1,3 +1,4 @@
+using System.Text.Json;
 using IronHive.Agent.Loop;
 using IronHive.Agent.Tracking;
 using IronHive.Agent.Context;
@@ -183,6 +184,77 @@ public class AgentLoopTests
         // Assert
         Assert.Single(response1.ToolCalls);
         Assert.Equal("list_directory", response1.ToolCalls[0].ToolName);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithUnresolvedToolCall_ReportsUnknownSuccess()
+    {
+        // Arrange - no function-invocation middleware wraps the client, so the loop never learns
+        // whether the call actually ran.
+        var mockClient = new MockChatClient()
+            .EnqueueToolCallResponse("read_file", """{"path": "test.txt"}""");
+
+        var agentLoop = new AgentLoop(mockClient);
+
+        // Act
+        var response = await agentLoop.RunAsync("Read the test.txt file");
+
+        // Assert
+        Assert.Null(response.ToolCalls[0].Success);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithMiddlewareResolvedToolCall_ReportsActualResultAndSuccess()
+    {
+        // Arrange - simulates a chatClient wrapped with UseFunctionInvocation(): the returned
+        // ChatResponse already contains a FunctionResultContent matching the call's CallId.
+        var mockClient = new MockChatClient()
+            .EnqueueResolvedToolCallResponse("read_file", """{"path": "test.txt"}""", "file contents");
+
+        var agentLoop = new AgentLoop(mockClient);
+
+        // Act
+        var response = await agentLoop.RunAsync("Read the test.txt file");
+
+        // Assert
+        Assert.True(response.ToolCalls[0].Success);
+        Assert.Equal("file contents", response.ToolCalls[0].Result);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithMiddlewareResolvedToolCallException_ReportsFailure()
+    {
+        // Arrange
+        var mockClient = new MockChatClient()
+            .EnqueueResolvedToolCallResponse(
+                "read_file", """{"path": "missing.txt"}""", "file not found",
+                resultException: new FileNotFoundException("file not found"));
+
+        var agentLoop = new AgentLoop(mockClient);
+
+        // Act
+        var response = await agentLoop.RunAsync("Read the missing.txt file");
+
+        // Assert
+        Assert.False(response.ToolCalls[0].Success);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithMalformedToolCallArguments_ReportsFailure()
+    {
+        // Arrange - the provider produced a call whose arguments Microsoft.Extensions.AI could not
+        // parse; it surfaces this as FunctionCallContent.Exception rather than a valid call.
+        var mockClient = new MockChatClient()
+            .EnqueueMalformedToolCallResponse("read_file", new JsonException("invalid arguments"));
+
+        var agentLoop = new AgentLoop(mockClient);
+
+        // Act
+        var response = await agentLoop.RunAsync("Read a file");
+
+        // Assert
+        Assert.False(response.ToolCalls[0].Success);
+        Assert.Equal("invalid arguments", response.ToolCalls[0].Result);
     }
 
     [Fact]
