@@ -10,16 +10,16 @@ namespace IronHive.Agent.Tests.Agent;
 /// Exercises the per-call <c>overrideOptions</c> seam (<see cref="ChatOptionsOverride.Apply"/>,
 /// invoked internally by both <see cref="AgentLoop"/> and <c>ThinkingAgentLoop</c>) through the
 /// public <see cref="AgentLoop.RunAsync(string, ChatOptions?, CancellationToken)"/> surface, so the
-/// assertions cover the same path a caller like docket #135 (iyulab/ironhive-agent) actually hit.
+/// assertions cover the same path a real caller of the override seam actually hits.
 /// </summary>
 public class ChatOptionsOverrideTests
 {
     [Fact]
     public async Task RunAsync_ToolModeOverride_ReachesTheRequest()
     {
-        // Regression guard for docket #135 (iyulab/ironhive-agent): ChatOptionsOverride.Apply
-        // silently dropped ToolMode, so a caller retrying with ToolMode.None to force a text-only
-        // response still had tool calls executed against it.
+        // Regression guard: ChatOptionsOverride.Apply used to silently drop ToolMode, so a
+        // caller retrying with ToolMode.None to force a text-only response still had tool calls
+        // executed against it.
         var mockClient = new MockChatClient().EnqueueResponse("done");
         var agentLoop = new AgentLoop(mockClient);
 
@@ -93,11 +93,11 @@ public class ChatOptionsOverrideTests
     }
 
     /// <summary>
-    /// Convention teeth (CONVENTIONS.md §1 — "봉인된 변형 집합 확장 시 조용한 흡수 금지"):
-    /// <see cref="ChatOptionsOverride.Apply"/> merges a fixed, hand-written list of
-    /// <see cref="ChatOptions"/> properties. If a future <c>Microsoft.Extensions.AI.Abstractions</c>
-    /// upgrade adds a new property, this test fails instead of the new property silently becoming
-    /// unreachable through the per-call override seam the way <c>ToolMode</c> did (docket #135).
+    /// Closed-set completeness guard: <see cref="ChatOptionsOverride.Apply"/> merges a fixed,
+    /// hand-written list of <see cref="ChatOptions"/> properties. If a future
+    /// <c>Microsoft.Extensions.AI.Abstractions</c> upgrade adds a new property, this test fails
+    /// instead of the new property silently becoming unreachable through the per-call override
+    /// seam the way one property already did.
     /// </summary>
     [Fact]
     public void ChatOptionsOverrideSource_ReferencesEveryChatOptionsProperty()

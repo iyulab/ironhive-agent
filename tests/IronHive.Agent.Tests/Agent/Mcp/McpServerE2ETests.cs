@@ -227,7 +227,7 @@ public class McpServerE2ETests : IAsyncLifetime
         Assert.True(result.IsError);
     }
 
-    // ----- FluxGuard.Remote MCPToolValidator opt-in guardrail (docket BD-20260827-01) -----
+    // ----- FluxGuard.Remote MCPToolValidator opt-in guardrail -----
     // Uses the real MCPToolValidator (not a mock) against the live "everything" server so the
     // guard's actual regex-based detection is what's under test, not a stand-in for it.
 
