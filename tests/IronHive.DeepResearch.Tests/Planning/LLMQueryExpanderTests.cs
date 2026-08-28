@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Models.Planning;
 using IronHive.DeepResearch.Search.QueryExpansion;

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.DeepResearch.Models.Search;
 using IronHive.DeepResearch.Options;
 using IronHive.DeepResearch.Search.Caching;

@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.DeepResearch.Models.Search;
 using IronHive.DeepResearch.Options;
 using IronHive.DeepResearch.Search.Caching;

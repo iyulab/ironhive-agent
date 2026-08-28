@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.DeepResearch.Content;
 using IronHive.DeepResearch.Models.Content;
 using Microsoft.Extensions.Logging.Abstractions;

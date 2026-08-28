@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.Agent.Context;
 using Microsoft.Extensions.AI;
 

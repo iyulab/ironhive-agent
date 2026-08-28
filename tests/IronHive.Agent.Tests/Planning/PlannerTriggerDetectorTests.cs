@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.Agent.Planning;
 
 namespace IronHive.Agent.Tests.Planning;

@@ -1,5 +1,5 @@
 using System.Net;
-using FluentAssertions;
+using AwesomeAssertions;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Content;
 using IronHive.DeepResearch.Options;
