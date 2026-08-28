@@ -127,6 +127,33 @@ IronHive.Agent/
 └── Extensions/     # DI registration extensions
 ```
 
+## Native (In-Process) Tools
+
+`AgentOptions.Tools` accepts a plain `IList<AITool>` — `McpPluginManager` is only one way to
+populate it. If your app already references a library directly (no separate process needed), wrap
+its methods with `Microsoft.Extensions.AI.AIFunctionFactory.Create(...)` and add them to the same
+list; the agent loop, tool retrieval, and schema compression all treat these identically to
+MCP-discovered tools since both are just `AITool` instances. This is exactly how `BuiltInTools`
+(`ReadFile`, `WriteFile`, `ExecuteCommand`, ...) is implemented — see `Tools/BuiltInTools.cs`.
+
+```csharp
+public class SandboxTools(ISandboxRunner sandbox)
+{
+    [Description("Run a command in the sandbox and return its output.")]
+    public Task<string> RunCommand(string command) => sandbox.RunAsync(command);
+}
+
+var sandboxTools = new SandboxTools(mySandboxRunner);
+var agentLoop = new AgentLoop(chatClient, new AgentOptions
+{
+    Tools = [AIFunctionFactory.Create(sandboxTools.RunCommand)]
+});
+```
+
+No MCP transport, child process, or server is required to expose an in-process capability as a
+tool — that machinery exists only for tools that genuinely live in a separate process or remote
+service.
+
 ## MCP Transport Options
 
 `McpPluginManager` supports two transport types via `McpPluginConfig.Transport`:
