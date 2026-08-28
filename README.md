@@ -136,7 +136,15 @@ list; the agent loop, tool retrieval, and schema compression all treat these ide
 MCP-discovered tools since both are just `AITool` instances. This is exactly how `BuiltInTools`
 (`ReadFile`, `WriteFile`, `ExecuteCommand`, ...) is implemented — see `Tools/BuiltInTools.cs`.
 
+**Registering a tool here is not enough to make it run.** The agent loop only extracts
+`FunctionCallContent` from the model's response — it does not itself invoke a matching tool. The
+`IChatClient` you pass to the agent loop's constructor must be wrapped with
+`Microsoft.Extensions.AI`'s function-invocation middleware for a registered tool to ever actually
+execute:
+
 ```csharp
+var chatClient = baseChatClient.AsBuilder().UseFunctionInvocation().Build();
+
 public class SandboxTools(ISandboxRunner sandbox)
 {
     [Description("Run a command in the sandbox and return its output.")]
@@ -149,6 +157,10 @@ var agentLoop = new AgentLoop(chatClient, new AgentOptions
     Tools = [AIFunctionFactory.Create(sandboxTools.RunCommand)]
 });
 ```
+
+Without `UseFunctionInvocation()`, the tool's schema still reaches the model and the model can
+still request a call — but nothing executes it, and the agent loop reports the call as succeeded
+regardless.
 
 No MCP transport, child process, or server is required to expose an in-process capability as a
 tool — that machinery exists only for tools that genuinely live in a separate process or remote

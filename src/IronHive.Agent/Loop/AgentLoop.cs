@@ -390,6 +390,15 @@ public class AgentOptions
     /// <summary>
     /// Available tools for the agent.
     /// </summary>
+    /// <remarks>
+    /// The agent loop only extracts <see cref="Microsoft.Extensions.AI.FunctionCallContent"/> from
+    /// the model's response — it does not itself invoke a matching tool. The <c>IChatClient</c>
+    /// passed to the agent loop's constructor must be wrapped with
+    /// <c>Microsoft.Extensions.AI</c>'s function-invocation middleware
+    /// (<c>chatClient.AsBuilder().UseFunctionInvocation().Build()</c>) for a tool listed here to
+    /// ever actually run; without it, registering a tool has no effect beyond exposing its schema
+    /// to the model.
+    /// </remarks>
     public IList<AITool>? Tools { get; set; }
 
     /// <summary>
