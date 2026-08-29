@@ -26,9 +26,9 @@ public class AgentLoopScenarioTests
         });
 
         // Act - Multi-turn conversation
-        var response1 = await agentLoop.RunAsync("Help me write a function");
-        var response2 = await agentLoop.RunAsync("Make it add two numbers");
-        var response3 = await agentLoop.RunAsync("Add validation for positive numbers only");
+        var response1 = await agentLoop.RunAsync("Help me write a function", TestContext.Current.CancellationToken);
+        var response2 = await agentLoop.RunAsync("Make it add two numbers", TestContext.Current.CancellationToken);
+        var response3 = await agentLoop.RunAsync("Add validation for positive numbers only", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("function", response1.Content);
@@ -56,14 +56,14 @@ public class AgentLoopScenarioTests
         var agentLoop = new AgentLoop(mockClient);
 
         // Act - First call returns tool call
-        var response1 = await agentLoop.RunAsync("What's in the config.json file?");
+        var response1 = await agentLoop.RunAsync("What's in the config.json file?", TestContext.Current.CancellationToken);
 
         // Verify tool call was captured
         Assert.Single(response1.ToolCalls);
         Assert.Equal("read_file", response1.ToolCalls[0].ToolName);
 
         // Simulate tool execution by continuing conversation
-        var response2 = await agentLoop.RunAsync("Tool result: {\"database\": \"localhost\", \"port\": 5432}");
+        var response2 = await agentLoop.RunAsync("Tool result: {\"database\": \"localhost\", \"port\": 5432}", TestContext.Current.CancellationToken);
 
         // Assert - Final response incorporates tool result
         Assert.Contains("database", response2.Content, StringComparison.OrdinalIgnoreCase);
@@ -81,7 +81,7 @@ public class AgentLoopScenarioTests
 
         // Act - First streaming call
         var chunks1 = new List<string>();
-        await foreach (var chunk in agentLoop.RunStreamingAsync("Hello"))
+        await foreach (var chunk in agentLoop.RunStreamingAsync("Hello", TestContext.Current.CancellationToken))
         {
             if (!string.IsNullOrEmpty(chunk.TextDelta))
             {
@@ -91,7 +91,7 @@ public class AgentLoopScenarioTests
 
         // Second streaming call
         var chunks2 = new List<string>();
-        await foreach (var chunk in agentLoop.RunStreamingAsync("I need help with Python"))
+        await foreach (var chunk in agentLoop.RunStreamingAsync("I need help with Python", TestContext.Current.CancellationToken))
         {
             if (!string.IsNullOrEmpty(chunk.TextDelta))
             {
@@ -121,7 +121,7 @@ public class AgentLoopScenarioTests
 
         // Act & Assert - First call throws
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => agentLoop.RunAsync("First request"));
+            () => agentLoop.RunAsync("First request", TestContext.Current.CancellationToken));
 
         // History should still have the user message (depends on implementation)
         // For now, we verify the agent can continue
@@ -129,7 +129,7 @@ public class AgentLoopScenarioTests
         mockClient.EnqueueResponse("Here's the information you requested.");
 
         var newAgentLoop = new AgentLoop(mockClient);
-        var response = await newAgentLoop.RunAsync("Second request");
+        var response = await newAgentLoop.RunAsync("Second request", TestContext.Current.CancellationToken);
 
         Assert.Contains("information", response.Content);
     }
@@ -152,7 +152,7 @@ public class AgentLoopScenarioTests
         // Act - 10 turns
         for (int i = 1; i <= 10; i++)
         {
-            var response = await agentLoop.RunAsync($"Message #{i}");
+            var response = await agentLoop.RunAsync($"Message #{i}", TestContext.Current.CancellationToken);
             Assert.Equal($"Response #{i}", response.Content);
         }
 
@@ -181,13 +181,13 @@ public class AgentLoopScenarioTests
         var agentLoop = new AgentLoop(mockClient, options);
 
         // Act - First turn
-        await agentLoop.RunAsync("Remember this: my favorite color is blue");
+        await agentLoop.RunAsync("Remember this: my favorite color is blue", TestContext.Current.CancellationToken);
 
         // Clear history
         agentLoop.ClearHistory();
 
         // Second turn - should only have system prompt
-        await agentLoop.RunAsync("What's my favorite color?");
+        await agentLoop.RunAsync("What's my favorite color?", TestContext.Current.CancellationToken);
 
         // Assert - Second call should only receive system + user message
         Assert.Equal(2, mockClient.ReceivedMessages[1].Count);
@@ -210,7 +210,7 @@ public class AgentLoopScenarioTests
         var agentLoop = new AgentLoop(mockClient, options);
 
         // Act
-        var response = await agentLoop.RunAsync("Tell me a story");
+        var response = await agentLoop.RunAsync("Tell me a story", TestContext.Current.CancellationToken);
 
         // Assert - Response received (options are passed internally to ChatOptions)
         Assert.NotEmpty(response.Content);
@@ -227,7 +227,7 @@ public class AgentLoopScenarioTests
         var agentLoop = new AgentLoop(mockClient);
 
         // Act
-        var response = await agentLoop.RunAsync("Say nothing");
+        var response = await agentLoop.RunAsync("Say nothing", TestContext.Current.CancellationToken);
 
         // Assert - Empty response is handled
         Assert.Equal(string.Empty, response.Content);
@@ -246,17 +246,17 @@ public class AgentLoopScenarioTests
         var agentLoop = new AgentLoop(mockClient);
 
         // Act - First call
-        var response1 = await agentLoop.RunAsync("Analyze this project");
+        var response1 = await agentLoop.RunAsync("Analyze this project", TestContext.Current.CancellationToken);
         Assert.Single(response1.ToolCalls);
         Assert.Equal("list_files", response1.ToolCalls[0].ToolName);
 
         // Second call after "tool result"
-        var response2 = await agentLoop.RunAsync("Files: README.md, Program.cs");
+        var response2 = await agentLoop.RunAsync("Files: README.md, Program.cs", TestContext.Current.CancellationToken);
         Assert.Single(response2.ToolCalls);
         Assert.Equal("read_file", response2.ToolCalls[0].ToolName);
 
         // Third call with final answer
-        var response3 = await agentLoop.RunAsync("Content: # IronHive CLI");
+        var response3 = await agentLoop.RunAsync("Content: # IronHive CLI", TestContext.Current.CancellationToken);
         Assert.Empty(response3.ToolCalls);
         Assert.Contains(".NET", response3.Content);
     }
@@ -274,7 +274,7 @@ public class AgentLoopScenarioTests
         var textChunks = new List<string>();
         var toolCallChunks = new List<ToolCallChunk>();
 
-        await foreach (var chunk in agentLoop.RunStreamingAsync("Search for test"))
+        await foreach (var chunk in agentLoop.RunStreamingAsync("Search for test", TestContext.Current.CancellationToken))
         {
             if (!string.IsNullOrEmpty(chunk.TextDelta))
             {
@@ -304,8 +304,8 @@ public class AgentLoopScenarioTests
         var agentLoop = new AgentLoop(mockClient);
 
         // Act
-        var response1 = await agentLoop.RunAsync("First");
-        var response2 = await agentLoop.RunAsync("Second");
+        var response1 = await agentLoop.RunAsync("First", TestContext.Current.CancellationToken);
+        var response2 = await agentLoop.RunAsync("Second", TestContext.Current.CancellationToken);
 
         // Assert - Each response has its own usage
         Assert.Equal(10, response1.Usage!.InputTokens);

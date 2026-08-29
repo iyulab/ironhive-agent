@@ -32,7 +32,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = true, Output = "done" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Continue);
         evaluation.Reason.Should().BeNull();
@@ -56,7 +56,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "", Error = $"Failed: {errorPattern} encountered" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
         evaluation.Reason.Should().Contain("Critical error");
@@ -70,7 +70,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "", Error = "OUT OF MEMORY" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
         evaluation.Reason.Should().Contain("OUT OF MEMORY");
@@ -84,7 +84,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "", Error = "Disk Full" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
         evaluation.Reason.Should().Contain("Disk Full");
@@ -102,7 +102,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "", Error = "File not found" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Replan);
         evaluation.Reason.Should().Contain("File not found");
@@ -116,7 +116,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Replan);
         evaluation.Reason.Should().Be("Step failed without error details");
@@ -142,7 +142,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(steps);
         var result = new StepResult { Success = false, Output = "", Error = "timeout" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, steps[2], result);
+        var evaluation = await evaluator.EvaluateAsync(plan, steps[2], result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
         evaluation.Reason.Should().Contain("consecutive failures");
@@ -163,7 +163,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(steps);
         var result = new StepResult { Success = false, Output = "", Error = "timeout" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, steps[1], result);
+        var evaluation = await evaluator.EvaluateAsync(plan, steps[1], result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Replan);
     }
@@ -185,7 +185,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(steps);
         var result = new StepResult { Success = false, Output = "", Error = "timeout" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, steps[3], result);
+        var evaluation = await evaluator.EvaluateAsync(plan, steps[3], result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
     }
@@ -206,7 +206,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(steps);
         var result = new StepResult { Success = false, Output = "", Error = "timeout" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, steps[2], result);
+        var evaluation = await evaluator.EvaluateAsync(plan, steps[2], result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Replan);
     }
@@ -229,7 +229,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(steps);
         var result = new StepResult { Success = false, Output = "", Error = "timeout" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, steps[4], result);
+        var evaluation = await evaluator.EvaluateAsync(plan, steps[4], result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Replan);
     }
@@ -250,12 +250,12 @@ public sealed class HeuristicPlanEvaluatorTests
 
         // "fatal" should be critical
         var fatalResult = new StepResult { Success = false, Output = "", Error = "Fatal error occurred" };
-        var fatalEval = await evaluator.EvaluateAsync(plan, step, fatalResult);
+        var fatalEval = await evaluator.EvaluateAsync(plan, step, fatalResult, TestContext.Current.CancellationToken);
         fatalEval.Action.Should().Be(EvaluationAction.Abort);
 
         // "out of memory" should NOT be critical with custom patterns (default cleared)
         var oomResult = new StepResult { Success = false, Output = "", Error = "out of memory" };
-        var oomEval = await evaluator.EvaluateAsync(plan, step, oomResult);
+        var oomEval = await evaluator.EvaluateAsync(plan, step, oomResult, TestContext.Current.CancellationToken);
         oomEval.Action.Should().Be(EvaluationAction.Replan);
     }
 
@@ -270,7 +270,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "", Error = "some error" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
         evaluation.Reason.Should().Contain("consecutive failures");
@@ -317,7 +317,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = false, Output = "", Error = "out of memory" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
         evaluation.Reason.Should().Contain("Critical error"); // not "consecutive failures"
@@ -335,7 +335,7 @@ public sealed class HeuristicPlanEvaluatorTests
         var plan = CreatePlan(step);
         var result = new StepResult { Success = true, Output = "done" };
 
-        var evaluation = await evaluator.EvaluateAsync(plan, step, result);
+        var evaluation = await evaluator.EvaluateAsync(plan, step, result, TestContext.Current.CancellationToken);
 
         evaluation.Action.Should().Be(EvaluationAction.Abort);
     }

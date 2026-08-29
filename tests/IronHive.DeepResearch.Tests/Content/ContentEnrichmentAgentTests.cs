@@ -49,7 +49,7 @@ public class ContentEnrichmentAgentTests
             CreateExtractedContent("https://example.com/page1", "Test content for page 1."));
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().HaveCount(1);
@@ -76,7 +76,7 @@ public class ContentEnrichmentAgentTests
             CreateExtractedContent("https://example.com/page2/source1", "Content 3"));
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().HaveCount(3);
@@ -97,7 +97,7 @@ public class ContentEnrichmentAgentTests
             CreateExtractedContent("https://example.com/duplicate", "Content"));
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().HaveCount(1);
@@ -134,7 +134,7 @@ public class ContentEnrichmentAgentTests
         };
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults, options);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().HaveCount(1);
@@ -166,7 +166,7 @@ public class ContentEnrichmentAgentTests
         };
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults, options);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().HaveCount(1);
@@ -187,7 +187,7 @@ public class ContentEnrichmentAgentTests
             new HttpRequestException("Connection refused"));
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().BeEmpty();
@@ -214,7 +214,7 @@ public class ContentEnrichmentAgentTests
             });
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().BeEmpty();
@@ -249,11 +249,11 @@ public class ContentEnrichmentAgentTests
         });
 
         // Act
-        await _agent.EnrichSearchResultsAsync(searchResults, progress: progress);
+        await _agent.EnrichSearchResultsAsync(searchResults, progress: progress, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert — wait for the Progress<T> SynchronizationContext dispatch to flush.
         // Task.Delay alone is flaky on CI runners; SemaphoreSlim with timeout is robust.
-        var signaled = await progressGate.WaitAsync(TimeSpan.FromSeconds(5));
+        var signaled = await progressGate.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         signaled.Should().BeTrue("progress callback for CompletedUrls=2 should fire within 5s");
         progressReports.Should().NotBeEmpty();
         progressReports.Last().CompletedUrls.Should().Be(2);
@@ -281,7 +281,7 @@ public class ContentEnrichmentAgentTests
             CreateExtractedContent("https://example.com/state-test", "State test content"));
 
         // Act
-        await _agent.EnrichFromStateAsync(state, searchExecution);
+        await _agent.EnrichFromStateAsync(state, searchExecution, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         state.CollectedSources.Should().HaveCount(1);
@@ -311,7 +311,7 @@ public class ContentEnrichmentAgentTests
             });
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Documents.Should().HaveCount(1);
@@ -331,7 +331,7 @@ public class ContentEnrichmentAgentTests
             new HttpRequestException("Forbidden", null, System.Net.HttpStatusCode.Forbidden));
 
         // Act
-        var result = await _agent.EnrichSearchResultsAsync(searchResults);
+        var result = await _agent.EnrichSearchResultsAsync(searchResults, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.FailedExtractions.Should().HaveCount(1);

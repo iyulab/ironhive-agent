@@ -30,7 +30,7 @@ public class TextCompletionServiceAdapterTests
             .Returns(Task.FromResult(response));
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
-        var result = await adapter.CompleteAsync("Say hello");
+        var result = await adapter.CompleteAsync("Say hello", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Hello world", result);
     }
@@ -48,7 +48,7 @@ public class TextCompletionServiceAdapterTests
             .Returns(Task.FromResult(response));
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
-        var result = await adapter.CompleteAsync("test");
+        var result = await adapter.CompleteAsync("test", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(string.Empty, result);
     }
@@ -65,7 +65,7 @@ public class TextCompletionServiceAdapterTests
             .Returns(Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "ok")])));
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
-        await adapter.CompleteAsync("my prompt");
+        await adapter.CompleteAsync("my prompt", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(capturedMessages);
         var messages = capturedMessages!.ToList();
@@ -86,7 +86,7 @@ public class TextCompletionServiceAdapterTests
             .Returns(Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "ok")])));
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
-        await adapter.CompleteAsync("test", options: null);
+        await adapter.CompleteAsync("test", options: null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Null(capturedOptions);
     }
@@ -112,7 +112,7 @@ public class TextCompletionServiceAdapterTests
             FrequencyPenalty = 0.2f,
             StopSequences = ["stop1", "stop2"]
         };
-        await adapter.CompleteAsync("test", options);
+        await adapter.CompleteAsync("test", options, TestContext.Current.CancellationToken);
 
         Assert.NotNull(capturedOptions);
         Assert.Equal(0.5f, capturedOptions!.Temperature);
@@ -166,7 +166,7 @@ public class TextCompletionServiceAdapterTests
             });
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
-        var results = await adapter.CompleteBatchAsync(["prompt1", "prompt2", "prompt3"]);
+        var results = await adapter.CompleteBatchAsync(["prompt1", "prompt2", "prompt3"], cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, results.Count);
         Assert.Equal("response-1", results[0]);
@@ -180,7 +180,7 @@ public class TextCompletionServiceAdapterTests
         var chatClient = Substitute.For<IChatClient>();
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
-        var results = await adapter.CompleteBatchAsync([]);
+        var results = await adapter.CompleteBatchAsync([], cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
         await chatClient.DidNotReceive().GetResponseAsync(
@@ -202,7 +202,7 @@ public class TextCompletionServiceAdapterTests
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
         var options = new TextCompletionOptions { Temperature = 0.3f };
-        await adapter.CompleteBatchAsync(["a", "b"], options);
+        await adapter.CompleteBatchAsync(["a", "b"], options, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, capturedOptionsList.Count);
         // Both calls should get the same mapped options (same Temperature)
@@ -230,7 +230,7 @@ public class TextCompletionServiceAdapterTests
             MaxTokens = 500,
             StopSequences = null
         };
-        await adapter.CompleteAsync("test", options);
+        await adapter.CompleteAsync("test", options, TestContext.Current.CancellationToken);
 
         Assert.NotNull(capturedOptions);
         Assert.Null(capturedOptions!.StopSequences);

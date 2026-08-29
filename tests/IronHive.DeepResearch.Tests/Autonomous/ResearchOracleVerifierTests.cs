@@ -23,7 +23,7 @@ public class ResearchOracleVerifierTests
     [Fact]
     public async Task VerifyAsync_NullOutput_ReturnsContinueWithLowConfidence()
     {
-        var verdict = await _verifier.VerifyAsync("prompt", null!);
+        var verdict = await _verifier.VerifyAsync("prompt", null!, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.CanContinue.Should().BeTrue();
@@ -34,7 +34,7 @@ public class ResearchOracleVerifierTests
     [Fact]
     public async Task VerifyAsync_EmptyOutput_ReturnsContinue()
     {
-        var verdict = await _verifier.VerifyAsync("prompt", "");
+        var verdict = await _verifier.VerifyAsync("prompt", "", cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.CanContinue.Should().BeTrue();
@@ -44,7 +44,7 @@ public class ResearchOracleVerifierTests
     [Fact]
     public async Task VerifyAsync_WhitespaceOutput_ReturnsContinue()
     {
-        var verdict = await _verifier.VerifyAsync("prompt", "   \n  ");
+        var verdict = await _verifier.VerifyAsync("prompt", "   \n  ", cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.CanContinue.Should().BeTrue();
@@ -60,7 +60,7 @@ public class ResearchOracleVerifierTests
         // <100 chars → length score 0.0
         var output = "Short report.";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.Confidence.Should().BeLessThan(0.5);
@@ -72,7 +72,7 @@ public class ResearchOracleVerifierTests
         // >500 chars → length score 0.2, no sections/refs → total 0.2
         var output = new string('A', 501);
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.Confidence.Should().BeApproximately(0.2, 0.01);
@@ -84,7 +84,7 @@ public class ResearchOracleVerifierTests
         // >2000 chars → length score 0.3
         var output = new string('A', 2001);
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.Confidence.Should().BeApproximately(0.3, 0.01);
     }
@@ -95,7 +95,7 @@ public class ResearchOracleVerifierTests
         // >5000 chars → length score 0.4
         var output = new string('A', 5001);
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.Confidence.Should().BeApproximately(0.4, 0.01);
     }
@@ -110,7 +110,7 @@ public class ResearchOracleVerifierTests
         // >500 chars with # → 0.2 + 0.3 = 0.5
         var output = new string('A', 501) + "\n# Section\nContent";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.Confidence.Should().BeApproximately(0.5, 0.01);
     }
@@ -121,7 +121,7 @@ public class ResearchOracleVerifierTests
         // >500 chars with [] → 0.2 + 0.3 = 0.5
         var output = new string('A', 501) + " [ref1] more text";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.Confidence.Should().BeApproximately(0.5, 0.01);
     }
@@ -132,7 +132,7 @@ public class ResearchOracleVerifierTests
         // >5000 chars + # + [] → 0.4 + 0.3 + 0.3 = 1.0 >= 0.8 → GoalAchieved
         var output = new string('A', 5001) + "\n# Section\n[ref1]";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeTrue();
         verdict.CanContinue.Should().BeFalse();
@@ -146,7 +146,7 @@ public class ResearchOracleVerifierTests
         // Actually: 0.7 < 0.8, so NOT GoalAchieved. Let's make it >2000 + # + [] = 0.3 + 0.3 + 0.3 = 0.9
         var output = new string('A', 2001) + "\n# Section\n[ref1]";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeTrue();
         verdict.Confidence.Should().BeApproximately(0.9, 0.01);
@@ -162,7 +162,7 @@ public class ResearchOracleVerifierTests
         // >500 chars + # + [] → 0.2 + 0.3 + 0.3 = 0.8 (exactly)
         var output = new string('A', 501) + "\n# Section\nSee [ref1]";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeTrue();
         verdict.CanContinue.Should().BeFalse();
@@ -175,7 +175,7 @@ public class ResearchOracleVerifierTests
         // >5000 chars + # but no refs → 0.4 + 0.3 = 0.7
         var output = new string('A', 5001) + "\n# Section";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.CanContinue.Should().BeTrue();
@@ -193,7 +193,7 @@ public class ResearchOracleVerifierTests
         // >100 chars, no sections, no refs → 0.1
         var output = new string('A', 101);
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.CanContinue.Should().BeTrue();
@@ -207,7 +207,7 @@ public class ResearchOracleVerifierTests
         // >500 chars + # → 0.2 + 0.3 = 0.5 (exactly)
         var output = new string('A', 501) + "\n# Heading";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.IsComplete.Should().BeFalse();
         verdict.CanContinue.Should().BeTrue();
@@ -224,7 +224,7 @@ public class ResearchOracleVerifierTests
         // Maximum possible: 0.4 + 0.3 + 0.3 = 1.0, already at cap
         var output = new string('A', 5001) + "\n# Sec [ref]";
 
-        var verdict = await _verifier.VerifyAsync("prompt", output);
+        var verdict = await _verifier.VerifyAsync("prompt", output, cancellationToken: TestContext.Current.CancellationToken);
 
         verdict.Confidence.Should().BeLessThanOrEqualTo(1.0);
     }

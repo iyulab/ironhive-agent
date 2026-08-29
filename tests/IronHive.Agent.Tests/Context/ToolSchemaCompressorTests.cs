@@ -246,7 +246,7 @@ public class ToolSchemaCompressorTests
         var result = await compressed.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?>
         {
             ["input"] = "test"
-        }));
+        }), TestContext.Current.CancellationToken);
 
         Assert.Equal("echo: test", result?.ToString());
     }

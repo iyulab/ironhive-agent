@@ -64,7 +64,7 @@ public class McpPluginHotReloaderTests
         };
         await using var reloader = new McpPluginHotReloader(manager, config, enableFileWatcher: false);
 
-        await reloader.InitializeAsync();
+        await reloader.InitializeAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(manager.ConnectedPlugins);
     }
@@ -86,7 +86,7 @@ public class McpPluginHotReloaderTests
         await using var reloader = new McpPluginHotReloader(manager, config, enableFileWatcher: false);
 
         // Note: This will fail to connect (invalid command) but should skip test1
-        await reloader.InitializeAsync();
+        await reloader.InitializeAsync(TestContext.Current.CancellationToken);
 
         // No plugins connected due to invalid commands, but test1 was skipped
         Assert.Empty(manager.ConnectedPlugins);
@@ -114,7 +114,7 @@ public class McpPluginHotReloaderTests
             reloadedPlugins.AddRange(args.AddedPlugins);
         };
 
-        await reloader.ReloadAsync(newConfig);
+        await reloader.ReloadAsync(newConfig, TestContext.Current.CancellationToken);
 
         Assert.Same(newConfig, reloader.CurrentConfig);
     }
@@ -140,7 +140,7 @@ public class McpPluginHotReloaderTests
             removedPlugins.AddRange(args.RemovedPlugins);
         };
 
-        await reloader.ReloadAsync(newConfig);
+        await reloader.ReloadAsync(newConfig, TestContext.Current.CancellationToken);
 
         Assert.Empty(reloader.CurrentConfig.Plugins);
     }
@@ -152,7 +152,7 @@ public class McpPluginHotReloaderTests
         var config = new McpPluginsConfig();
         await using var reloader = new McpPluginHotReloader(manager, config, enableFileWatcher: false);
 
-        await reloader.ExcludePluginAsync("test-plugin");
+        await reloader.ExcludePluginAsync("test-plugin", TestContext.Current.CancellationToken);
 
         Assert.Contains("test-plugin", reloader.ExcludedPlugins);
     }
@@ -164,7 +164,7 @@ public class McpPluginHotReloaderTests
         var config = new McpPluginsConfig();
         await using var reloader = new McpPluginHotReloader(manager, config, enableFileWatcher: false);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => reloader.ExcludePluginAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => reloader.ExcludePluginAsync(null!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public class McpPluginHotReloaderTests
         var config = new McpPluginsConfig();
         await using var reloader = new McpPluginHotReloader(manager, config, enableFileWatcher: false);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => reloader.ExcludePluginAsync(""));
+        await Assert.ThrowsAsync<ArgumentException>(() => reloader.ExcludePluginAsync("", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class McpPluginHotReloaderTests
 
         Assert.Contains("test-plugin", reloader.ExcludedPlugins);
 
-        await reloader.IncludePluginAsync("test-plugin");
+        await reloader.IncludePluginAsync("test-plugin", TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("test-plugin", reloader.ExcludedPlugins);
     }
@@ -216,10 +216,10 @@ public class McpPluginHotReloaderTests
 
         await reloader.DisposeAsync();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.InitializeAsync());
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.ReloadAsync(config));
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.ExcludePluginAsync("test"));
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.IncludePluginAsync("test"));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.InitializeAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.ReloadAsync(config, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.ExcludePluginAsync("test", TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => reloader.IncludePluginAsync("test", TestContext.Current.CancellationToken));
 
         await manager.DisposeAsync();
     }

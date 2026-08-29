@@ -32,7 +32,7 @@ public class ContextManagerForModelTests
 
         var history = CreateSmallContextHistory(20);
 
-        var result = await manager.CompactIfNeededAsync(history);
+        var result = await manager.CompactIfNeededAsync(history, TestContext.Current.CancellationToken);
         result.MessagesCompacted.Should().BeGreaterThan(0,
             "compaction must remove at least one message");
         result.CompactedTokens.Should().BeLessThan(result.OriginalTokens,

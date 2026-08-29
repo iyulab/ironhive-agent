@@ -28,7 +28,7 @@ public class BuiltInToolsTests : IDisposable
     {
         // Arrange
         var testFile = Path.Combine(_testDir, "test.txt");
-        await File.WriteAllTextAsync(testFile, "Hello, World!");
+        await File.WriteAllTextAsync(testFile, "Hello, World!", TestContext.Current.CancellationToken);
 
         // Act
         var result = await _tools.ReadFile("test.txt");
@@ -52,7 +52,7 @@ public class BuiltInToolsTests : IDisposable
     {
         // Arrange
         var testFile = Path.Combine(_testDir, "lines.txt");
-        await File.WriteAllTextAsync(testFile, "Line1\nLine2\nLine3\nLine4\nLine5");
+        await File.WriteAllTextAsync(testFile, "Line1\nLine2\nLine3\nLine4\nLine5", TestContext.Current.CancellationToken);
 
         // Act
         var result = await _tools.ReadFile("lines.txt", startLine: 2, lineCount: 2);
@@ -70,7 +70,7 @@ public class BuiltInToolsTests : IDisposable
         // Assert
         Assert.Contains("Successfully wrote", result);
         Assert.True(File.Exists(Path.Combine(_testDir, "new.txt")));
-        Assert.Equal("New content", await File.ReadAllTextAsync(Path.Combine(_testDir, "new.txt")));
+        Assert.Equal("New content", await File.ReadAllTextAsync(Path.Combine(_testDir, "new.txt"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -78,14 +78,14 @@ public class BuiltInToolsTests : IDisposable
     {
         // Arrange
         var testFile = Path.Combine(_testDir, "append.txt");
-        await File.WriteAllTextAsync(testFile, "First");
+        await File.WriteAllTextAsync(testFile, "First", TestContext.Current.CancellationToken);
 
         // Act
         var result = await _tools.WriteFile("append.txt", "Second", append: true);
 
         // Assert
         Assert.Contains("Successfully appended", result);
-        Assert.Equal("FirstSecond", await File.ReadAllTextAsync(testFile));
+        Assert.Equal("FirstSecond", await File.ReadAllTextAsync(testFile, TestContext.Current.CancellationToken));
     }
 
     [Fact]

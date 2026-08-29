@@ -123,7 +123,7 @@ public class UsageTrackerTests
             tasks.Add(Task.Run(() =>
             {
                 tracker.Record(new TokenUsage { InputTokens = 10, OutputTokens = 5 });
-            }));
+            }, TestContext.Current.CancellationToken));
         }
 
         await Task.WhenAll(tasks);

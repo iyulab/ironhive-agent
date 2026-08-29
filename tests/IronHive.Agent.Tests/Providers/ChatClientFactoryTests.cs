@@ -94,7 +94,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        var client = await factory.CreateAsync(null);
+        var client = await factory.CreateAsync(null, TestContext.Current.CancellationToken);
 
         Assert.Same(_mockClient, client);
         await _defaultProvider.Received(1).GetChatClientAsync(null, Arg.Any<CancellationToken>());
@@ -105,7 +105,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        await factory.CreateAsync("gpt-4o");
+        await factory.CreateAsync("gpt-4o", TestContext.Current.CancellationToken);
 
         await _defaultProvider.Received(1).GetChatClientAsync("gpt-4o", Arg.Any<CancellationToken>());
     }
@@ -115,7 +115,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        await factory.CreateAsync("second/my-model");
+        await factory.CreateAsync("second/my-model", TestContext.Current.CancellationToken);
 
         await _secondProvider.Received(1).GetChatClientAsync("my-model", Arg.Any<CancellationToken>());
     }
@@ -125,7 +125,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        await factory.CreateAsync("SECOND/my-model");
+        await factory.CreateAsync("SECOND/my-model", TestContext.Current.CancellationToken);
 
         await _secondProvider.Received(1).GetChatClientAsync("my-model", Arg.Any<CancellationToken>());
     }
@@ -135,7 +135,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        await factory.CreateAsync("unknown/model-x");
+        await factory.CreateAsync("unknown/model-x", TestContext.Current.CancellationToken);
 
         // Falls through to default provider with full string
         await _defaultProvider.Received(1).GetChatClientAsync("unknown/model-x", Arg.Any<CancellationToken>());
@@ -147,7 +147,7 @@ public class ChatClientFactoryTests
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
         // "/" → parts[0]="" or parts[1]="" → empty check fails → default
-        await factory.CreateAsync("/");
+        await factory.CreateAsync("/", TestContext.Current.CancellationToken);
 
         await _defaultProvider.Received(1).GetChatClientAsync("/", Arg.Any<CancellationToken>());
     }
@@ -160,7 +160,7 @@ public class ChatClientFactoryTests
             _providers, _defaultProvider,
             client => decoratedClient);
 
-        var result = await factory.CreateAsync("test");
+        var result = await factory.CreateAsync("test", TestContext.Current.CancellationToken);
 
         Assert.Same(decoratedClient, result);
     }
@@ -170,7 +170,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider, null);
 
-        var result = await factory.CreateAsync("test");
+        var result = await factory.CreateAsync("test", TestContext.Current.CancellationToken);
 
         Assert.Same(_mockClient, result);
     }
@@ -184,7 +184,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        await factory.CreateAsync("second", "my-model");
+        await factory.CreateAsync("second", "my-model", TestContext.Current.CancellationToken);
 
         await _secondProvider.Received(1).GetChatClientAsync("my-model", Arg.Any<CancellationToken>());
     }
@@ -194,7 +194,7 @@ public class ChatClientFactoryTests
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        await factory.CreateAsync("SECOND", "model");
+        await factory.CreateAsync("SECOND", "model", TestContext.Current.CancellationToken);
 
         await _secondProvider.Received(1).GetChatClientAsync("model", Arg.Any<CancellationToken>());
     }
@@ -205,7 +205,7 @@ public class ChatClientFactoryTests
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(
-            () => factory.CreateAsync("nonexistent", "model"));
+            () => factory.CreateAsync("nonexistent", "model", TestContext.Current.CancellationToken));
 
         Assert.Contains("nonexistent", ex.Message);
         Assert.Contains("Available", ex.Message);
@@ -218,7 +218,7 @@ public class ChatClientFactoryTests
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => factory.CreateAsync("second", "model"));
+            () => factory.CreateAsync("second", "model", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public class ChatClientFactoryTests
             _providers, _defaultProvider,
             client => decoratedClient);
 
-        var result = await factory.CreateAsync("second", "model");
+        var result = await factory.CreateAsync("second", "model", TestContext.Current.CancellationToken);
 
         Assert.Same(decoratedClient, result);
     }
@@ -255,7 +255,7 @@ public class ChatClientFactoryTests
             .Returns(models2);
 
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAllAvailableModelsAsync();
+        var result = await factory.GetAllAvailableModelsAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Count);
     }
@@ -272,7 +272,7 @@ public class ChatClientFactoryTests
             .Returns(models);
 
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAllAvailableModelsAsync();
+        var result = await factory.GetAllAvailableModelsAsync(TestContext.Current.CancellationToken);
 
         Assert.Single(result);
     }
@@ -290,7 +290,7 @@ public class ChatClientFactoryTests
             .Returns(models);
 
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAllAvailableModelsAsync();
+        var result = await factory.GetAllAvailableModelsAsync(TestContext.Current.CancellationToken);
 
         Assert.Single(result);
     }
@@ -310,7 +310,7 @@ public class ChatClientFactoryTests
             .Returns(models);
 
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAvailableModelsAsync("default");
+        var result = await factory.GetAvailableModelsAsync("default", TestContext.Current.CancellationToken);
 
         Assert.Single(result);
     }
@@ -319,7 +319,7 @@ public class ChatClientFactoryTests
     public async Task GetAvailableModelsAsync_UnknownProvider_ReturnsEmpty()
     {
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAvailableModelsAsync("nonexistent");
+        var result = await factory.GetAvailableModelsAsync("nonexistent", TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
     }
@@ -330,7 +330,7 @@ public class ChatClientFactoryTests
         _secondProvider.IsAvailable.Returns(false);
         var factory = new ChatClientFactory(_providers, _defaultProvider);
 
-        var result = await factory.GetAvailableModelsAsync("second");
+        var result = await factory.GetAvailableModelsAsync("second", TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
     }
@@ -342,7 +342,7 @@ public class ChatClientFactoryTests
             .Throws(new InvalidOperationException("error"));
 
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAvailableModelsAsync("default");
+        var result = await factory.GetAvailableModelsAsync("default", TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
     }
@@ -358,7 +358,7 @@ public class ChatClientFactoryTests
             .Returns(models);
 
         var factory = new ChatClientFactory(_providers, _defaultProvider);
-        var result = await factory.GetAvailableModelsAsync("SECOND");
+        var result = await factory.GetAvailableModelsAsync("SECOND", TestContext.Current.CancellationToken);
 
         Assert.Single(result);
     }

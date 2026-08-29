@@ -26,7 +26,7 @@ public class ChatClientFrameworkAdapterTests
         var adapter = new ChatClientFrameworkAdapter(mockClient);
 
         // Act
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(agent);
@@ -40,10 +40,10 @@ public class ChatClientFrameworkAdapterTests
         // Arrange
         var mockClient = new MockChatClient().EnqueueResponse("Hello from agent!");
         var adapter = new ChatClientFrameworkAdapter(mockClient);
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Act
-        var response = await adapter.RunAsync(agent, "Hello");
+        var response = await adapter.RunAsync(agent, "Hello", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Hello from agent!", response);
@@ -55,11 +55,11 @@ public class ChatClientFrameworkAdapterTests
         // Arrange - MockChatClient streams text in 10-char chunks from EnqueueResponse
         var mockClient = new MockChatClient().EnqueueResponse("Hello World!");
         var adapter = new ChatClientFrameworkAdapter(mockClient);
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Act
         var chunks = new List<string>();
-        await foreach (var chunk in adapter.StreamAsync(agent, "Hello"))
+        await foreach (var chunk in adapter.StreamAsync(agent, "Hello", TestContext.Current.CancellationToken))
         {
             chunks.Add(chunk);
         }
@@ -79,7 +79,7 @@ public class ChatClientFrameworkAdapterTests
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => adapter.RunAsync(wrongAgent, "Hello"));
+            () => adapter.RunAsync(wrongAgent, "Hello", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -101,10 +101,10 @@ public class ChatClientFrameworkAdapterTests
             _ => mockClient,
             toolsFactory: () => [testTool]);
 
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Act
-        var response = await adapter.RunAsync(agent, "Use the tool");
+        var response = await adapter.RunAsync(agent, "Use the tool", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(toolInvoked);
@@ -130,10 +130,10 @@ public class ChatClientFrameworkAdapterTests
             toolsFactory: () => [testTool],
             maxToolTurns: 3);
 
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Act - should not hang, returns after maxToolTurns
-        var response = await adapter.RunAsync(agent, "Loop forever");
+        var response = await adapter.RunAsync(agent, "Loop forever", TestContext.Current.CancellationToken);
 
         // Assert: returned something (either empty or last message)
         Assert.NotNull(response);
@@ -158,10 +158,10 @@ public class ChatClientFrameworkAdapterTests
             toolsFactory: () => [testTool],
             permissionEvaluator: mockPermission);
 
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Act
-        var response = await adapter.RunAsync(agent, "Do something dangerous");
+        var response = await adapter.RunAsync(agent, "Do something dangerous", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Handled denial", response);
@@ -174,7 +174,7 @@ public class ChatClientFrameworkAdapterTests
         // Arrange
         var mockClient = new MockChatClient().EnqueueResponse("Continuing conversation");
         var adapter = new ChatClientFrameworkAdapter(mockClient);
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         var history = new List<ChatMessage>
         {
@@ -183,7 +183,7 @@ public class ChatClientFrameworkAdapterTests
         };
 
         // Act
-        var response = await adapter.RunAsync(agent, "Follow-up question", history);
+        var response = await adapter.RunAsync(agent, "Follow-up question", history, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Continuing conversation", response);
@@ -223,10 +223,10 @@ public class ChatClientFrameworkAdapterTests
             Capabilities = ["AllowedTool"]
         };
 
-        var agent = await adapter.CreateAgentAsync(config);
+        var agent = await adapter.CreateAgentAsync(config, TestContext.Current.CancellationToken);
 
         // Act
-        var response = await adapter.RunAsync(agent, "Use tools");
+        var response = await adapter.RunAsync(agent, "Use tools", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Done", response);
@@ -239,10 +239,10 @@ public class ChatClientFrameworkAdapterTests
         // Arrange: simple adapter without tools
         var mockClient = new MockChatClient().EnqueueResponse("Simple response");
         var adapter = new ChatClientFrameworkAdapter(mockClient);
-        var agent = await adapter.CreateAgentAsync(CreateTestConfig());
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
         // Act
-        var response = await adapter.RunAsync(agent, "Hello");
+        var response = await adapter.RunAsync(agent, "Hello", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Simple response", response);

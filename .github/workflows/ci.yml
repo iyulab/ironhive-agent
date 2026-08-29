@@ -44,14 +44,16 @@ jobs:
       run: dotnet build IronHive.Agent.slnx --configuration Release --no-restore
 
     - name: Test Agent
-      # --blame-hang turns a silent ride to the job's 20-minute timeout-cancel into a 5-minute
-      # dump naming the hung test (ironhive/ironhive ci.yml precedent; same job-timeout shape
-      # observed directly on this ecosystem's ironhive-agent/ironhive nuget-publish.yml, run
-      # 33171897265, 2026-08-28).
-      run: dotnet test tests/IronHive.Agent.Tests/IronHive.Agent.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=agent-test-results.trx" --blame-hang --blame-hang-timeout 5m
+      # --report-trx/--report-trx-filename and --hangdump/--hangdump-timeout are MTP's
+      # equivalents of VSTest's --logger trx and --blame-hang (native MTP mode via global.json
+      # needs no -- separator before these flags). --blame-hang turned a silent ride to the job's
+      # 20-minute timeout-cancel into a 5-minute dump naming the hung test (ironhive/ironhive
+      # ci.yml precedent; same job-timeout shape observed directly on this ecosystem's
+      # ironhive-agent/ironhive nuget-publish.yml, run 33171897265, 2026-08-28).
+      run: dotnet test tests/IronHive.Agent.Tests/IronHive.Agent.Tests.csproj --configuration Release --no-build --verbosity normal --report-trx --report-trx-filename agent-test-results.trx --hangdump --hangdump-timeout 5m
 
     - name: Test DeepResearch
-      run: dotnet test tests/IronHive.DeepResearch.Tests/IronHive.DeepResearch.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=deepresearch-test-results.trx" --blame-hang --blame-hang-timeout 5m
+      run: dotnet test tests/IronHive.DeepResearch.Tests/IronHive.DeepResearch.Tests.csproj --configuration Release --no-build --verbosity normal --report-trx --report-trx-filename deepresearch-test-results.trx --hangdump --hangdump-timeout 5m
 
     - name: Publish test results
       uses: EnricoMi/publish-unit-test-result-action@v2

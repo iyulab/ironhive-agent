@@ -74,7 +74,7 @@ public class TavilySearchProviderTests
         };
 
         // Act
-        var result = await provider.SearchAsync(query);
+        var result = await provider.SearchAsync(query, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().NotBeNull();
@@ -110,7 +110,7 @@ public class TavilySearchProviderTests
         var query = new SearchQuery { Query = "test" };
 
         // Act
-        var result = await provider.SearchAsync(query);
+        var result = await provider.SearchAsync(query, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().Be(cachedResult);
@@ -128,7 +128,7 @@ public class TavilySearchProviderTests
         var query = new SearchQuery { Query = "test" };
 
         // Act
-        await provider.SearchAsync(query);
+        await provider.SearchAsync(query, TestContext.Current.CancellationToken);
 
         // Assert
         _mockCache.Received(1).SetEntry(
@@ -161,7 +161,7 @@ public class TavilySearchProviderTests
         };
 
         // Act
-        await provider.SearchAsync(query);
+        await provider.SearchAsync(query, TestContext.Current.CancellationToken);
 
         // Assert
         capturedBody.Should().NotBeNull();
@@ -207,7 +207,7 @@ public class TavilySearchProviderTests
         };
 
         // Act
-        var results = await provider.SearchBatchAsync(queries);
+        var results = await provider.SearchBatchAsync(queries, TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(3);
@@ -246,7 +246,7 @@ public class TavilySearchProviderTests
         };
 
         // Act
-        var results = await provider.SearchBatchAsync(queries);
+        var results = await provider.SearchBatchAsync(queries, TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(3);

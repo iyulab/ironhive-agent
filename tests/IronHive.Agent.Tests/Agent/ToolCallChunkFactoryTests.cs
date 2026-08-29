@@ -140,7 +140,7 @@ public class ToolCallChunkFactoryTests
         var agentLoop = new AgentLoop(mockClient);
 
         var toolCallChunks = new List<ToolCallChunk>();
-        await foreach (var chunk in agentLoop.RunStreamingAsync("please write the file"))
+        await foreach (var chunk in agentLoop.RunStreamingAsync("please write the file", TestContext.Current.CancellationToken))
         {
             if (chunk.ToolCallDelta is not null)
             {

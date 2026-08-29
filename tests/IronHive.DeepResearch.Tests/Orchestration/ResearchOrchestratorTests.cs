@@ -55,7 +55,7 @@ public class ResearchOrchestratorTests
         SetupDefaultMocks(needsMoreResearch: false);
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().NotBeNull();
@@ -71,7 +71,7 @@ public class ResearchOrchestratorTests
         SetupDefaultMocks(needsMoreResearch: false);
 
         // Act
-        await _orchestrator.ExecuteAsync(request);
+        await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         _mockQueryPlanner.PlanCalled.Should().BeTrue();
@@ -98,7 +98,7 @@ public class ResearchOrchestratorTests
         ]);
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.Metadata.IterationCount.Should().Be(2);
@@ -119,7 +119,7 @@ public class ResearchOrchestratorTests
         _mockAnalysisAgent.SetupInfiniteResults(CreateAnalysisResult(needsMore: true, score: 0.5m));
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         // Quick 모드는 최대 2회 반복
@@ -139,7 +139,7 @@ public class ResearchOrchestratorTests
         _mockAnalysisAgent.SetupInfiniteResults(CreateAnalysisResult(needsMore: true, score: 0.5m));
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         // Standard 모드는 최대 5회 반복
@@ -171,7 +171,7 @@ public class ResearchOrchestratorTests
         _mockQueryPlanner.SetupFailure(new InvalidOperationException("Planning failed"));
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.IsPartial.Should().BeTrue();
@@ -188,7 +188,7 @@ public class ResearchOrchestratorTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request))
+        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -210,7 +210,7 @@ public class ResearchOrchestratorTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request))
+        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -230,7 +230,7 @@ public class ResearchOrchestratorTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request))
+        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -250,7 +250,7 @@ public class ResearchOrchestratorTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request))
+        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -269,7 +269,7 @@ public class ResearchOrchestratorTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request))
+        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -289,7 +289,7 @@ public class ResearchOrchestratorTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request))
+        await foreach (var progress in _orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -306,7 +306,7 @@ public class ResearchOrchestratorTests
         SetupDefaultMocks(needsMoreResearch: false);
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.AllSources.Should().NotBeEmpty();
@@ -320,7 +320,7 @@ public class ResearchOrchestratorTests
         SetupDefaultMocks(needsMoreResearch: false);
 
         // Act
-        var result = await _orchestrator.ExecuteAsync(request);
+        var result = await _orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.Metadata.Should().NotBeNull();

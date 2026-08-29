@@ -14,7 +14,7 @@ public class OrchestratedAgentLoopTests
         orchestrator.ProcessAsync("Hello", Arg.Any<CancellationToken>()).Returns("Hi there!");
         var loop = new OrchestratedAgentLoop(orchestrator);
 
-        var response = await loop.RunAsync("Hello", overrideOptions: null);
+        var response = await loop.RunAsync("Hello", overrideOptions: null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Hi there!", response.Content);
     }
@@ -26,7 +26,7 @@ public class OrchestratedAgentLoopTests
         var loop = new OrchestratedAgentLoop(orchestrator);
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => loop.RunAsync("Hello", new ChatOptions { Temperature = 0.5f }));
+            () => loop.RunAsync("Hello", new ChatOptions { Temperature = 0.5f }, TestContext.Current.CancellationToken));
     }
 
     [Fact]

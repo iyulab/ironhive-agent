@@ -49,7 +49,7 @@ public class EmbeddingServiceAdapterTests
             .Returns(Task.FromResult(expected));
 
         var adapter = new EmbeddingServiceAdapter(provider);
-        var result = await adapter.GenerateEmbeddingAsync("hello");
+        var result = await adapter.GenerateEmbeddingAsync("hello", TestContext.Current.CancellationToken);
 
         Assert.Equal(3, result.Length);
         Assert.Equal(0.1f, result.Span[0]);
@@ -65,7 +65,7 @@ public class EmbeddingServiceAdapterTests
             .Returns(Task.FromResult(Array.Empty<float>()));
 
         var adapter = new EmbeddingServiceAdapter(provider);
-        var result = await adapter.GenerateEmbeddingAsync("");
+        var result = await adapter.GenerateEmbeddingAsync("", TestContext.Current.CancellationToken);
 
         Assert.Equal(0, result.Length);
     }
@@ -99,7 +99,7 @@ public class EmbeddingServiceAdapterTests
             .Returns(Task.FromResult<IReadOnlyList<float[]>>(embeddings));
 
         var adapter = new EmbeddingServiceAdapter(provider);
-        var result = await adapter.GenerateBatchEmbeddingsAsync(["hello", "world"]);
+        var result = await adapter.GenerateBatchEmbeddingsAsync(["hello", "world"], TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Count);
         Assert.Equal(1.0f, result[0].Span[0]);
@@ -114,7 +114,7 @@ public class EmbeddingServiceAdapterTests
             .Returns(Task.FromResult<IReadOnlyList<float[]>>(new List<float[]>()));
 
         var adapter = new EmbeddingServiceAdapter(provider);
-        var result = await adapter.GenerateBatchEmbeddingsAsync([]);
+        var result = await adapter.GenerateBatchEmbeddingsAsync([], TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
     }
@@ -129,7 +129,7 @@ public class EmbeddingServiceAdapterTests
             .Returns(Task.FromResult<IReadOnlyList<float[]>>(new List<float[]> { singleVec }));
 
         var adapter = new EmbeddingServiceAdapter(provider);
-        await adapter.GenerateBatchEmbeddingsAsync(["text1"]);
+        await adapter.GenerateBatchEmbeddingsAsync(["text1"], TestContext.Current.CancellationToken);
 
         // The adapter converts to List<string> before passing
         Assert.NotNull(capturedTexts);

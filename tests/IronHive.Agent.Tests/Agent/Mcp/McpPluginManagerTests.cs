@@ -24,7 +24,7 @@ public class McpPluginManagerTests
         var config = new McpPluginConfig { Command = "test" };
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => manager.ConnectAsync(null!, config));
+            () => manager.ConnectAsync(null!, config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class McpPluginManagerTests
         var config = new McpPluginConfig { Command = "test" };
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => manager.ConnectAsync("", config));
+            () => manager.ConnectAsync("", config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class McpPluginManagerTests
         await using var manager = new McpPluginManager();
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => manager.ConnectAsync("test", null!));
+            () => manager.ConnectAsync("test", null!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class McpPluginManagerTests
 
         // Should throw when trying to start the process
         await Assert.ThrowsAnyAsync<Exception>(
-            () => manager.ConnectAsync("test", config));
+            () => manager.ConnectAsync("test", config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class McpPluginManagerTests
 
         var manager = new McpPluginManager();
         var ex = await Record.ExceptionAsync(() =>
-            manager.ConnectAsync("test-http", config));
+            manager.ConnectAsync("test-http", config, TestContext.Current.CancellationToken));
 
         Assert.IsNotType<ArgumentException>(ex);
     }
@@ -89,7 +89,7 @@ public class McpPluginManagerTests
 
         var manager = new McpPluginManager();
         var ex = await Record.ExceptionAsync(() =>
-            manager.ConnectAsync("test-http-headers", config));
+            manager.ConnectAsync("test-http-headers", config, TestContext.Current.CancellationToken));
 
         Assert.IsNotType<ArgumentException>(ex);
     }
@@ -105,7 +105,7 @@ public class McpPluginManagerTests
 
         var manager = new McpPluginManager();
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            manager.ConnectAsync("test-http-empty", config));
+            manager.ConnectAsync("test-http-empty", config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class McpPluginManagerTests
 
         var manager = new McpPluginManager();
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            manager.ConnectAsync("test-http-null", config));
+            manager.ConnectAsync("test-http-null", config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class McpPluginManagerTests
         await using var manager = new McpPluginManager();
 
         // Should not throw
-        await manager.DisconnectAsync("nonexistent");
+        await manager.DisconnectAsync("nonexistent", TestContext.Current.CancellationToken);
 
         Assert.Empty(manager.ConnectedPlugins);
     }
@@ -138,7 +138,7 @@ public class McpPluginManagerTests
     {
         await using var manager = new McpPluginManager();
 
-        await manager.DisconnectAllAsync();
+        await manager.DisconnectAllAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(manager.ConnectedPlugins);
     }
@@ -148,7 +148,7 @@ public class McpPluginManagerTests
     {
         await using var manager = new McpPluginManager();
 
-        var tools = await manager.GetToolsAsync();
+        var tools = await manager.GetToolsAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(tools);
     }
@@ -159,7 +159,7 @@ public class McpPluginManagerTests
         await using var manager = new McpPluginManager();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => manager.GetToolsAsync("nonexistent"));
+            () => manager.GetToolsAsync("nonexistent", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public class McpPluginManagerTests
     {
         await using var manager = new McpPluginManager();
 
-        var result = await manager.CallToolAsync("nonexistent", "tool", null);
+        var result = await manager.CallToolAsync("nonexistent", "tool", null, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError);
         Assert.Contains("not connected", result.Content);
@@ -182,7 +182,7 @@ public class McpPluginManagerTests
 
         // After disposal, operations should throw
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => manager.GetToolsAsync());
+            () => manager.GetToolsAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

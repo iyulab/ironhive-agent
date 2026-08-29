@@ -37,7 +37,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(mockClient, options, toolRetriever: retriever);
 
         // Act
-        await loop.RunAsync("read the config file");
+        await loop.RunAsync("read the config file", TestContext.Current.CancellationToken);
 
         // Assert: retriever was called with the user query
         await retriever.Received(1).RetrieveAsync(
@@ -78,7 +78,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(chatClient, options, toolRetriever: retriever);
 
         // Act
-        await loop.RunAsync("read file");
+        await loop.RunAsync("read file", TestContext.Current.CancellationToken);
 
         // Assert: only filtered tools were sent to chat client
         Assert.NotNull(capturedOptions);
@@ -118,7 +118,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(mockClient, options, toolRetriever: retriever);
 
         // Act
-        await loop.RunAsync("test");
+        await loop.RunAsync("test", TestContext.Current.CancellationToken);
 
         // Assert: retrieval options were passed through
         await retriever.Received(1).RetrieveAsync(
@@ -145,7 +145,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(chatClient, options);
 
         // Act
-        await loop.RunAsync("hello");
+        await loop.RunAsync("hello", TestContext.Current.CancellationToken);
 
         // Assert: all tools sent (no retriever = no filtering)
         Assert.NotNull(capturedOptions);
@@ -162,7 +162,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(mockClient, options, toolRetriever: retriever);
 
         // Act
-        await loop.RunAsync("hello");
+        await loop.RunAsync("hello", TestContext.Current.CancellationToken);
 
         // Assert: retriever not called when tools is null
         await retriever.DidNotReceive().RetrieveAsync(
@@ -197,7 +197,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(chatClient, options);
 
         // Act
-        await loop.RunAsync("hello");
+        await loop.RunAsync("hello", TestContext.Current.CancellationToken);
 
         // Assert: tools should be wrapped in CompressedAIFunction
         Assert.NotNull(capturedOptions);
@@ -229,7 +229,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(chatClient, options);
 
         // Act
-        await loop.RunAsync("hello");
+        await loop.RunAsync("hello", TestContext.Current.CancellationToken);
 
         // Assert: tools should be the original references
         Assert.NotNull(capturedOptions);
@@ -275,7 +275,7 @@ public class AgentLoopToolIntegrationTests
         var loop = new AgentLoop(chatClient, options, toolRetriever: retriever);
 
         // Act
-        await loop.RunAsync("read file");
+        await loop.RunAsync("read file", TestContext.Current.CancellationToken);
 
         // Assert: filtered to 2 tools + compressed
         Assert.NotNull(capturedOptions);

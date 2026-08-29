@@ -21,7 +21,7 @@ public class AnchoredHistoryCompactorTests
 
         var history = CreateHistory(5); // 500 tokens
 
-        var result = await compactor.CompactAsync(history, targetTokens: 1000);
+        var result = await compactor.CompactAsync(history, targetTokens: 1000, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(history.Count, result.CompactedHistory.Count);
         Assert.Equal(0, result.MessagesCompacted);
@@ -34,7 +34,7 @@ public class AnchoredHistoryCompactorTests
         var compactor = new AnchoredHistoryCompactor(tokenCounter);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            compactor.CompactAsync(null!, targetTokens: 1000));
+            compactor.CompactAsync(null!, targetTokens: 1000, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class AnchoredHistoryCompactorTests
         var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
         var compactor = new AnchoredHistoryCompactor(tokenCounter);
 
-        var result = await compactor.CompactAsync([], targetTokens: 1000);
+        var result = await compactor.CompactAsync([], targetTokens: 1000, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(result.CompactedHistory);
         Assert.Equal(0, result.OriginalTokens);
@@ -72,7 +72,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // System messages should be at the beginning
         Assert.Equal(ChatRole.System, result.CompactedHistory[0].Role);
@@ -101,7 +101,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Most recent"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Most recent message should be preserved
         Assert.Equal("Most recent", result.CompactedHistory[^1].Text);
@@ -133,7 +133,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Most recent message"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Should contain a state block with the goal
         var stateMessage = result.CompactedHistory.FirstOrDefault(m =>
@@ -167,7 +167,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         var stateMessage = result.CompactedHistory.FirstOrDefault(m =>
             m.Text?.Contains(AnchoredHistoryCompactor.StateBlockStart, StringComparison.Ordinal) == true);
@@ -212,7 +212,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent message"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         var stateMessage = result.CompactedHistory.FirstOrDefault(m =>
             m.Text?.Contains("Files modified:", StringComparison.Ordinal) == true);
@@ -249,7 +249,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         var stateMessage = result.CompactedHistory.FirstOrDefault(m =>
             m.Text?.Contains("Files modified:", StringComparison.Ordinal) == true);
@@ -284,7 +284,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent message"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         var stateMessage = result.CompactedHistory.FirstOrDefault(m =>
             m.Text?.Contains("Errors:", StringComparison.Ordinal) == true);
@@ -336,7 +336,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent message"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 500);
+        var result = await compactor.CompactAsync(history, targetTokens: 500, cancellationToken: TestContext.Current.CancellationToken);
 
         var stateMessage = result.CompactedHistory.FirstOrDefault(m =>
             m.Text?.Contains(AnchoredHistoryCompactor.StateBlockStart, StringComparison.Ordinal) == true);
@@ -469,7 +469,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Should have summary message
         var summaryMessage = result.CompactedHistory.FirstOrDefault(m =>
@@ -500,7 +500,7 @@ public class AnchoredHistoryCompactorTests
 
         var history = CreateHistory(10); // 1000 tokens
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Should still compact (via truncation fallback)
         Assert.True(result.CompactedHistory.Count < history.Count);
@@ -523,7 +523,7 @@ public class AnchoredHistoryCompactorTests
 
         var history = CreateHistory(10); // 1000 tokens
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.CompactedHistory.Count < history.Count);
         Assert.True(result.MessagesCompacted > 0);
@@ -551,7 +551,7 @@ public class AnchoredHistoryCompactorTests
             new(ChatRole.User, "Recent message"),
         };
 
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Should have a state block with the goal
         var hasStateBlock = result.CompactedHistory.Any(m =>
@@ -595,7 +595,7 @@ public class AnchoredHistoryCompactorTests
 
         var history = CreateHistory(10); // 1000 tokens
 
-        var result = await compactor.CompactAsync(history, targetTokens: 500);
+        var result = await compactor.CompactAsync(history, targetTokens: 500, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1000, result.OriginalTokens);
         Assert.True(result.CompactedTokens <= 600); // Allow buffer

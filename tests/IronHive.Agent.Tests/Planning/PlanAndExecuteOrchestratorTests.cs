@@ -94,7 +94,7 @@ public class PlanAndExecuteOrchestratorTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context, TestContext.Current.CancellationToken));
 
         // Assert — PlanCreated + 2x(StepStarted + StepCompleted) + PlanCompleted = 6
         events.Should().HaveCount(6);
@@ -146,7 +146,7 @@ public class PlanAndExecuteOrchestratorTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context, TestContext.Current.CancellationToken));
 
         // Assert
         events.Should().ContainSingle(e => e is PlanReplanEvent);
@@ -188,7 +188,7 @@ public class PlanAndExecuteOrchestratorTests
         var orchestrator = CreateOrchestrator(options);
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context, TestContext.Current.CancellationToken));
 
         // Assert — should have 2 replans then abort
         events.OfType<PlanReplanEvent>().Should().HaveCount(2);
@@ -220,7 +220,7 @@ public class PlanAndExecuteOrchestratorTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context, TestContext.Current.CancellationToken));
 
         // Assert
         events.OfType<StepStartedEvent>().Should().HaveCount(1);
@@ -255,7 +255,7 @@ public class PlanAndExecuteOrchestratorTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Test goal", context, TestContext.Current.CancellationToken));
 
         // Assert
         // Step 1 should be skipped — no StepStartedEvent for index 1

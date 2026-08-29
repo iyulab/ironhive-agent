@@ -50,7 +50,7 @@ public class ReportGeneratorAgentTests
             new SectionContentResponse { Content = "Section content here." });
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Outline.Should().NotBeNull();
@@ -66,7 +66,7 @@ public class ReportGeneratorAgentTests
         SetupDefaultMocks();
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Sections.Should().NotBeEmpty();
@@ -81,7 +81,7 @@ public class ReportGeneratorAgentTests
         SetupDefaultMocks();
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Report.Should().NotBeNullOrEmpty();
@@ -117,7 +117,7 @@ public class ReportGeneratorAgentTests
             });
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Citations.Should().NotBeEmpty();
@@ -140,7 +140,7 @@ public class ReportGeneratorAgentTests
         };
 
         // Act
-        var result = await _agent.GenerateReportAsync(state, options);
+        var result = await _agent.GenerateReportAsync(state, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Report.Should().Contain("참고문헌");
@@ -157,10 +157,10 @@ public class ReportGeneratorAgentTests
         var progress = new Progress<ReportGenerationProgress>(p => progressReports.Add(p));
 
         // Act
-        await _agent.GenerateReportAsync(state, progress: progress);
+        await _agent.GenerateReportAsync(state, progress: progress, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         progressReports.Should().NotBeEmpty();
         progressReports.Should().Contain(p => p.Phase == ReportGenerationPhase.GeneratingOutline);
         progressReports.Should().Contain(p => p.Phase == ReportGenerationPhase.GeneratingSections);
@@ -175,7 +175,7 @@ public class ReportGeneratorAgentTests
         SetupDefaultMocks();
 
         // Act
-        await _agent.GenerateReportAsync(state);
+        await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         state.Outline.Should().NotBeNull();
@@ -190,7 +190,7 @@ public class ReportGeneratorAgentTests
         _mockTextService.SetupFailure(new InvalidOperationException("LLM unavailable"));
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Outline.Should().NotBeNull();
@@ -220,7 +220,7 @@ public class ReportGeneratorAgentTests
         var options = new ReportGenerationOptions { MaxSections = 5 };
 
         // Act
-        var result = await _agent.GenerateReportAsync(state, options);
+        var result = await _agent.GenerateReportAsync(state, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Sections.Count.Should().BeLessThanOrEqualTo(5);
@@ -234,7 +234,7 @@ public class ReportGeneratorAgentTests
         SetupDefaultMocks();
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Duration.Should().BeGreaterThan(TimeSpan.Zero);
@@ -258,7 +258,7 @@ public class ReportGeneratorAgentTests
         };
 
         // Act
-        var result = await _agent.GenerateReportAsync(state, numberedOptions);
+        var result = await _agent.GenerateReportAsync(state, numberedOptions, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Report.Should().Contain("[1]");
@@ -298,7 +298,7 @@ public class ReportGeneratorAgentTests
             });
 
         // Act
-        var result = await _agent.GenerateReportAsync(state);
+        var result = await _agent.GenerateReportAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Sections[0].RelatedFindings.Should().Contain("find_1");

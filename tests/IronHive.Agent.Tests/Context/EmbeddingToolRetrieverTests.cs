@@ -18,7 +18,7 @@ public class EmbeddingToolRetrieverTests
     {
         var retriever = CreateRetriever();
 
-        var result = await retriever.RetrieveAsync("read a file", []);
+        var result = await retriever.RetrieveAsync("read a file", [], cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SelectedTools);
     }
@@ -30,7 +30,7 @@ public class EmbeddingToolRetrieverTests
         var tools = CreateTestTools();
         var options = new ToolRetrievalOptions { AlwaysInclude = ["ReadFile"] };
 
-        var result = await retriever.RetrieveAsync("", tools, options);
+        var result = await retriever.RetrieveAsync("", tools, options, TestContext.Current.CancellationToken);
 
         Assert.Single(result.SelectedTools);
         Assert.Equal("ReadFile", GetName(result.SelectedTools[0]));
@@ -42,7 +42,7 @@ public class EmbeddingToolRetrieverTests
         var retriever = CreateRetriever();
         var tools = CreateTestTools();
 
-        var result = await retriever.RetrieveAsync("   ", tools);
+        var result = await retriever.RetrieveAsync("   ", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SelectedTools);
     }
@@ -58,7 +58,7 @@ public class EmbeddingToolRetrieverTests
         var tools = CreateTestTools();
 
         // "read file" should match ReadFile tool
-        var result = await retriever.RetrieveAsync("read file content", tools);
+        var result = await retriever.RetrieveAsync("read file content", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Contains("ReadFile", names);
@@ -70,7 +70,7 @@ public class EmbeddingToolRetrieverTests
         var retriever = CreateRetriever();
         var tools = CreateTestTools();
 
-        var result = await retriever.RetrieveAsync("execute command shell", tools);
+        var result = await retriever.RetrieveAsync("execute command shell", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         // ExecuteCommand should be top result
         Assert.Equal("ExecuteCommand", GetName(result.SelectedTools[0]));
@@ -82,7 +82,7 @@ public class EmbeddingToolRetrieverTests
         var retriever = CreateRetriever();
         var tools = CreateTestTools();
 
-        var result = await retriever.RetrieveAsync("read", tools);
+        var result = await retriever.RetrieveAsync("read", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(tools.Count, result.RelevanceScores!.Count);
     }
@@ -93,7 +93,7 @@ public class EmbeddingToolRetrieverTests
         var retriever = CreateRetriever();
         var tools = CreateTestTools();
 
-        var result = await retriever.RetrieveAsync("grep files pattern regex", tools);
+        var result = await retriever.RetrieveAsync("grep files pattern regex", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var scores = result.RelevanceScores!;
         // GrepFiles should have higher score than unrelated tools
@@ -116,7 +116,7 @@ public class EmbeddingToolRetrieverTests
             MinRelevanceScore = 0.0f
         };
 
-        var result = await retriever.RetrieveAsync("read write list grep execute", tools, options);
+        var result = await retriever.RetrieveAsync("read write list grep execute", tools, options, TestContext.Current.CancellationToken);
 
         Assert.True(result.SelectedTools.Count <= 2);
     }
@@ -128,7 +128,7 @@ public class EmbeddingToolRetrieverTests
         var tools = CreateTestTools();
         var options = new ToolRetrievalOptions { MinRelevanceScore = 0.99f };
 
-        var result = await retriever.RetrieveAsync("something unrelated xyz", tools, options);
+        var result = await retriever.RetrieveAsync("something unrelated xyz", tools, options, TestContext.Current.CancellationToken);
 
         // Very high threshold should filter most/all tools
         Assert.True(result.SelectedTools.Count <= 1);
@@ -149,7 +149,7 @@ public class EmbeddingToolRetrieverTests
             MaxTools = 10
         };
 
-        var result = await retriever.RetrieveAsync("write content output", tools, options);
+        var result = await retriever.RetrieveAsync("write content output", tools, options, TestContext.Current.CancellationToken);
 
         Assert.Contains("GrepFiles", result.SelectedTools.Select(GetName));
     }
@@ -165,7 +165,7 @@ public class EmbeddingToolRetrieverTests
             MinRelevanceScore = 0.0f
         };
 
-        var result = await retriever.RetrieveAsync("read file", tools, options);
+        var result = await retriever.RetrieveAsync("read file", tools, options, TestContext.Current.CancellationToken);
 
         var count = result.SelectedTools.Count(t => GetName(t) == "ReadFile");
         Assert.Equal(1, count);
@@ -193,7 +193,7 @@ public class EmbeddingToolRetrieverTests
             MinScoredSlots = 2
         };
 
-        var result = await retriever.RetrieveAsync("grep execute", tools, options);
+        var result = await retriever.RetrieveAsync("grep execute", tools, options, TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Equal(5, names.Count); // 3 pins + 2 reserved scored slots
@@ -211,7 +211,7 @@ public class EmbeddingToolRetrieverTests
             AlwaysInclude = ["ReadFile", "WriteFile", "ListDirectory"] // 3 pins, already > MaxTools
         };
 
-        var result = await retriever.RetrieveAsync("grep execute", tools, options);
+        var result = await retriever.RetrieveAsync("grep execute", tools, options, TestContext.Current.CancellationToken);
 
         Assert.Equal(3, result.SelectedTools.Count); // pins only, no scored tail
     }
@@ -228,11 +228,11 @@ public class EmbeddingToolRetrieverTests
         var tools = CreateTestTools();
 
         // First call builds index
-        await retriever.RetrieveAsync("read", tools);
+        await retriever.RetrieveAsync("read", tools, cancellationToken: TestContext.Current.CancellationToken);
         var firstBatchCount = provider.BatchCallCount;
 
         // Second call with same reference should not rebuild
-        await retriever.RetrieveAsync("write", tools);
+        await retriever.RetrieveAsync("write", tools, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(firstBatchCount, provider.BatchCallCount);
     }
 
@@ -244,10 +244,10 @@ public class EmbeddingToolRetrieverTests
         var tools1 = CreateTestTools();
         var tools2 = CreateTestTools(); // Different reference
 
-        await retriever.RetrieveAsync("read", tools1);
+        await retriever.RetrieveAsync("read", tools1, cancellationToken: TestContext.Current.CancellationToken);
         var firstBatchCount = provider.BatchCallCount;
 
-        await retriever.RetrieveAsync("read", tools2);
+        await retriever.RetrieveAsync("read", tools2, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(provider.BatchCallCount > firstBatchCount);
     }
 
@@ -258,10 +258,10 @@ public class EmbeddingToolRetrieverTests
         var retriever = new EmbeddingToolRetriever(provider);
         var tools = CreateTestTools();
 
-        await retriever.RetrieveAsync("read", tools);
+        await retriever.RetrieveAsync("read", tools, cancellationToken: TestContext.Current.CancellationToken);
         var firstBatchCount = provider.BatchCallCount;
 
-        await retriever.RebuildIndexAsync(tools);
+        await retriever.RebuildIndexAsync(tools, TestContext.Current.CancellationToken);
         Assert.True(provider.BatchCallCount > firstBatchCount);
     }
 
@@ -342,7 +342,7 @@ public class EmbeddingToolRetrieverTests
         var retriever = CreateRetriever();
         var tools = CreateTestTools();
 
-        var result = await retriever.RetrieveAsync("test", tools);
+        var result = await retriever.RetrieveAsync("test", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.NotNull(result.SelectedTools);

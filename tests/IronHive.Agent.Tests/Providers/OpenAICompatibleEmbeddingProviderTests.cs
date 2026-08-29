@@ -127,7 +127,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(0, expected)]));
 
         // Act
-        var result = await _sut.EmbedAsync("hello world");
+        var result = await _sut.EmbedAsync("hello world", TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEquivalentTo(expected);
@@ -142,7 +142,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(0, embedding0), (1, embedding1)]));
 
         // Act
-        var results = await _sut.EmbedBatchAsync(["text1", "text2"]);
+        var results = await _sut.EmbedBatchAsync(["text1", "text2"], TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(2);
@@ -179,7 +179,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(0, expected)]));
 
         // Act
-        var result = await _sut.GenerateEmbeddingAsync("hello world");
+        var result = await _sut.GenerateEmbeddingAsync("hello world", TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEquivalentTo(expected);
@@ -194,7 +194,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(0, embedding0), (1, embedding1)]));
 
         // Act
-        var results = await _sut.GenerateEmbeddingsAsync(["text1", "text2"]);
+        var results = await _sut.GenerateEmbeddingsAsync(["text1", "text2"], TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(2);
@@ -225,7 +225,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(1, embedding1), (0, embedding0)]));
 
         // Act
-        var results = await _sut.EmbedBatchAsync(["text0", "text1"]);
+        var results = await _sut.EmbedBatchAsync(["text0", "text1"], TestContext.Current.CancellationToken);
 
         // Assert - Should be ordered by index, not by response order
         results[0].Should().BeEquivalentTo(embedding0);
@@ -242,7 +242,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(0, embedding)]));
 
         // Act
-        await _sut.EmbedAsync("test input");
+        await _sut.EmbedAsync("test input", TestContext.Current.CancellationToken);
 
         // Assert
         _handler.LastRequest.Should().NotBeNull();
@@ -313,7 +313,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
             TestEndpoint, TestModel, TestDimensions, apiKey: apiKey, httpClient: httpClient);
 
         // Act
-        await provider.EmbedAsync("test");
+        await provider.EmbedAsync("test", TestContext.Current.CancellationToken);
 
         // Assert
         handler.LastRequest.Should().NotBeNull();
@@ -341,7 +341,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
             TestEndpoint, TestModel, TestDimensions, apiKey: null, httpClient: httpClient);
 
         // Act
-        await provider.EmbedAsync("test");
+        await provider.EmbedAsync("test", TestContext.Current.CancellationToken);
 
         // Assert
         handler.LastRequest.Should().NotBeNull();
@@ -367,7 +367,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
             TestEndpoint, TestModel, TestDimensions, apiKey: "   ", httpClient: httpClient);
 
         // Act
-        await provider.EmbedAsync("test");
+        await provider.EmbedAsync("test", TestContext.Current.CancellationToken);
 
         // Assert
         handler.LastRequest.Should().NotBeNull();

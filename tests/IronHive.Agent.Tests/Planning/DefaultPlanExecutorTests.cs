@@ -57,7 +57,7 @@ public class DefaultPlanExecutorTests
 
         // Act
         var events = await CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         // Assert
         events.Should().ContainSingle();
@@ -85,7 +85,7 @@ public class DefaultPlanExecutorTests
 
         // Act
         var events = await CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         // Assert
         events.Should().ContainSingle();
@@ -113,7 +113,7 @@ public class DefaultPlanExecutorTests
 
         // Act & Assert
         var act = () => CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
@@ -135,7 +135,7 @@ public class DefaultPlanExecutorTests
 
         // Act & Assert
         var act = () => CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         await act.Should().ThrowAsync<TaskCanceledException>();
     }
@@ -161,7 +161,7 @@ public class DefaultPlanExecutorTests
 
         // Act
         var events = await CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         // Assert
         var completed = events.OfType<StepCompletedEvent>().Single();
@@ -191,7 +191,7 @@ public class DefaultPlanExecutorTests
         var plan = CreateSingleStepPlan();
 
         // Act
-        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[0])) { }
+        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken)) { }
 
         // Assert
         await chatClient.Received(1).GetResponseAsync(
@@ -217,7 +217,7 @@ public class DefaultPlanExecutorTests
         var plan = CreateSingleStepPlan();
 
         // Act
-        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[0])) { }
+        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken)) { }
 
         // Assert — empty tool list should be treated the same as no tools
         await chatClient.Received(1).GetResponseAsync(
@@ -262,7 +262,7 @@ public class DefaultPlanExecutorTests
         };
 
         // Act
-        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[1])) { }
+        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[1], TestContext.Current.CancellationToken)) { }
 
         // Assert — verify the prompt includes the plan goal and completed step context
         await chatClient.Received(1).GetResponseAsync(
@@ -289,7 +289,7 @@ public class DefaultPlanExecutorTests
         var plan = CreateSingleStepPlan("Find files");
 
         // Act
-        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[0])) { }
+        await foreach (var _ in executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken)) { }
 
         // Assert — no "Completed steps so far" section when no steps are completed
         await chatClient.Received(1).GetResponseAsync(
@@ -317,7 +317,7 @@ public class DefaultPlanExecutorTests
 
         // Act
         var events = await CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         // Assert
         var completed = events.OfType<StepCompletedEvent>().Single();
@@ -351,7 +351,7 @@ public class DefaultPlanExecutorTests
 
         // Act — execute step with index 5
         var events = await CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[2]));
+            executor.ExecuteStepAsync(plan, plan.Steps[2], TestContext.Current.CancellationToken));
 
         // Assert
         var completed = events.OfType<StepCompletedEvent>().Single();
@@ -375,7 +375,7 @@ public class DefaultPlanExecutorTests
 
         // Act
         var events = await CollectEventsAsync(
-            executor.ExecuteStepAsync(plan, plan.Steps[0]));
+            executor.ExecuteStepAsync(plan, plan.Steps[0], TestContext.Current.CancellationToken));
 
         // Assert
         var completed = events.OfType<StepCompletedEvent>().Single();

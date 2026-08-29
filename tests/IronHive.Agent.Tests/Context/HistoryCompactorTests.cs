@@ -13,7 +13,7 @@ public class HistoryCompactorTests
         var compactor = new HistoryCompactor(_tokenCounter);
         var history = CreateHistory(5);
 
-        var result = await compactor.CompactAsync(history, 100000);
+        var result = await compactor.CompactAsync(history, 100000, TestContext.Current.CancellationToken);
 
         Assert.Equal(history.Count, result.CompactedHistory.Count);
         Assert.Equal(0, result.MessagesCompacted);
@@ -30,7 +30,7 @@ public class HistoryCompactorTests
             new(ChatRole.Assistant, "Hi there!")
         };
 
-        var result = await compactor.CompactAsync(history, 100000);
+        var result = await compactor.CompactAsync(history, 100000, TestContext.Current.CancellationToken);
 
         Assert.Equal(ChatRole.System, result.CompactedHistory[0].Role);
         Assert.Equal("You are a helpful assistant.", result.CompactedHistory[0].Text);
@@ -56,7 +56,7 @@ public class HistoryCompactorTests
         };
 
         // Force compaction with very low target
-        var result = await compactor.CompactAsync(history, 100);
+        var result = await compactor.CompactAsync(history, 100, TestContext.Current.CancellationToken);
 
         // Should preserve system and recent messages
         Assert.Contains(result.CompactedHistory, m => m.Text == "Recent message 2");
@@ -72,7 +72,7 @@ public class HistoryCompactorTests
 
         // Target much smaller than original
         var targetTokens = originalTokens / 2;
-        var result = await compactor.CompactAsync(history, targetTokens);
+        var result = await compactor.CompactAsync(history, targetTokens, TestContext.Current.CancellationToken);
 
         Assert.True(result.CompactedTokens <= targetTokens + 100); // Allow small overhead
         Assert.True(result.MessagesCompacted > 0);
@@ -84,7 +84,7 @@ public class HistoryCompactorTests
         var compactor = new HistoryCompactor(_tokenCounter);
         var history = CreateLargeHistory(20);
 
-        var result = await compactor.CompactAsync(history, 500);
+        var result = await compactor.CompactAsync(history, 500, TestContext.Current.CancellationToken);
 
         var expectedRatio = (float)result.CompactedTokens / result.OriginalTokens;
         Assert.Equal(expectedRatio, result.CompressionRatio, 3);
@@ -96,7 +96,7 @@ public class HistoryCompactorTests
         var compactor = new HistoryCompactor(_tokenCounter);
         var history = new List<ChatMessage>();
 
-        var result = await compactor.CompactAsync(history, 1000);
+        var result = await compactor.CompactAsync(history, 1000, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.CompactedHistory);
         // Empty history still has conversation overhead (3 tokens)
@@ -112,7 +112,7 @@ public class HistoryCompactorTests
             new(ChatRole.System, "You are a helpful assistant.")
         };
 
-        var result = await compactor.CompactAsync(history, 1000);
+        var result = await compactor.CompactAsync(history, 1000, TestContext.Current.CancellationToken);
 
         Assert.Single(result.CompactedHistory);
         Assert.Equal(ChatRole.System, result.CompactedHistory[0].Role);
@@ -131,7 +131,7 @@ public class HistoryCompactorTests
         var history = CreateLargeHistory(10);
 
         // Very low target to force truncation
-        var result = await compactor.CompactAsync(history, 50);
+        var result = await compactor.CompactAsync(history, 50, TestContext.Current.CancellationToken);
 
         // Should have some kind of marker about omitted content
         var hasOmissionMarker = result.CompactedHistory.Any(m =>

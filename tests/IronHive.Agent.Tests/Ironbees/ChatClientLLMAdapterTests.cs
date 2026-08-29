@@ -49,7 +49,7 @@ public class ChatClientLLMAdapterTests
     {
         var config = CreateConfig("test-agent", "Test agent description");
 
-        var agent = await _adapter.CreateAgentAsync(config);
+        var agent = await _adapter.CreateAgentAsync(config, TestContext.Current.CancellationToken);
 
         agent.Name.Should().Be("test-agent");
         agent.Description.Should().Be("Test agent description");
@@ -68,7 +68,7 @@ public class ChatClientLLMAdapterTests
     {
         var config = CreateConfig("my-agent", "My description");
 
-        var agent = await _adapter.CreateAgentAsync(config);
+        var agent = await _adapter.CreateAgentAsync(config, TestContext.Current.CancellationToken);
 
         agent.Should().BeOfType<ChatClientLLMAdapter.SimpleAgent>();
     }
@@ -84,7 +84,7 @@ public class ChatClientLLMAdapterTests
         SetupClientFactory("openai");
         SetupChatResponse("Analysis complete.");
 
-        var result = await _adapter.RunAsync(agent, "analyze this code");
+        var result = await _adapter.RunAsync(agent, "analyze this code", TestContext.Current.CancellationToken);
 
         result.Should().Be("Analysis complete.");
     }
@@ -125,7 +125,7 @@ public class ChatClientLLMAdapterTests
             new(ChatRole.Assistant, "first answer"),
         };
 
-        var result = await _adapter.RunAsync(agent, "follow-up", history);
+        var result = await _adapter.RunAsync(agent, "follow-up", history, TestContext.Current.CancellationToken);
 
         result.Should().Be("Follow-up result.");
         // Verify chat client was called with messages including history
@@ -142,7 +142,7 @@ public class ChatClientLLMAdapterTests
         SetupClientFactory("openai");
         SetupChatResponse("Direct result.");
 
-        var result = await _adapter.RunAsync(agent, "direct question", (IReadOnlyList<ChatMessage>?)null);
+        var result = await _adapter.RunAsync(agent, "direct question", (IReadOnlyList<ChatMessage>?)null, TestContext.Current.CancellationToken);
 
         result.Should().Be("Direct result.");
         await _chatClient.Received(1).GetResponseAsync(
@@ -158,7 +158,7 @@ public class ChatClientLLMAdapterTests
         SetupClientFactory("openai");
         SetupChatResponse(null);
 
-        var result = await _adapter.RunAsync(agent, "test input");
+        var result = await _adapter.RunAsync(agent, "test input", TestContext.Current.CancellationToken);
 
         result.Should().BeEmpty();
     }
@@ -175,7 +175,7 @@ public class ChatClientLLMAdapterTests
         SetupStreamingResponse("Hello", " world");
 
         var chunks = new List<string>();
-        await foreach (var chunk in _adapter.StreamAsync(agent, "test"))
+        await foreach (var chunk in _adapter.StreamAsync(agent, "test", TestContext.Current.CancellationToken))
         {
             chunks.Add(chunk);
         }
@@ -197,7 +197,7 @@ public class ChatClientLLMAdapterTests
         };
 
         var chunks = new List<string>();
-        await foreach (var chunk in _adapter.StreamAsync(agent, "follow-up", history))
+        await foreach (var chunk in _adapter.StreamAsync(agent, "follow-up", history, TestContext.Current.CancellationToken))
         {
             chunks.Add(chunk);
         }
@@ -255,12 +255,12 @@ public class ChatClientLLMAdapterTests
     public async Task RunAsync_NormalizesProviderName(string inputProvider, string expectedProvider)
     {
         var config = CreateConfig("test", "test", inputProvider);
-        var agent = await _adapter.CreateAgentAsync(config);
+        var agent = await _adapter.CreateAgentAsync(config, TestContext.Current.CancellationToken);
         _clientFactory.CreateAsync(expectedProvider, Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(_chatClient);
         SetupChatResponse("ok");
 
-        await _adapter.RunAsync(agent, "test input");
+        await _adapter.RunAsync(agent, "test input", TestContext.Current.CancellationToken);
 
         await _clientFactory.Received(1).CreateAsync(
             expectedProvider, Arg.Any<string?>(), Arg.Any<CancellationToken>());

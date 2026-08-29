@@ -92,7 +92,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, config, currentDepth: 2);
 
         // Act
-        var result = await service.ExploreAsync("test task");
+        var result = await service.ExploreAsync("test task", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.Success);
@@ -145,7 +145,7 @@ public class SubAgentServiceTests : IDisposable
             workingDirectory: ".");
 
         // Act
-        var result = await service.SpawnAsync(context);
+        var result = await service.SpawnAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.Success);
@@ -173,7 +173,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, config);
 
         // Act
-        var result = await service.ExploreAsync("Find all test files");
+        var result = await service.ExploreAsync("Find all test files", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.Success);
@@ -201,7 +201,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, config);
 
         // Act
-        var result = await service.GeneralAsync("Complex multi-step task");
+        var result = await service.GeneralAsync("Complex multi-step task", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.Success);
@@ -224,7 +224,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act
-        var result = await service.ExploreAsync("Find test files", context: "Look in src/ directory");
+        var result = await service.ExploreAsync("Find test files", context: "Look in src/ directory", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.Success);
@@ -248,7 +248,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act
-        var result = await service.ExploreAsync("Quick task");
+        var result = await service.ExploreAsync("Quick task", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.Duration.TotalMilliseconds >= 0);
@@ -267,7 +267,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act
-        var result = await service.ExploreAsync("task");
+        var result = await service.ExploreAsync("task", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.Success);
@@ -287,7 +287,7 @@ public class SubAgentServiceTests : IDisposable
         using var service = new SubAgentService(_mockOrchestrator, new SubAgentConfig());
 
         // Act
-        var result = await service.ExploreAsync("task");
+        var result = await service.ExploreAsync("task", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.Success);

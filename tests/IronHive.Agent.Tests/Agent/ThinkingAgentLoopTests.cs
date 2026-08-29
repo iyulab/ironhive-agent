@@ -71,7 +71,7 @@ public class ThinkingAgentLoopTests
             [new TextReasoningContent("non-stream reasoning"), new TextContent("answer")])]);
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
 
-        var result = await loop.RunAsync("q");
+        var result = await loop.RunAsync("q", TestContext.Current.CancellationToken);
 
         Assert.NotNull(result.ThinkingContent);
         Assert.Equal("non-stream reasoning", result.ThinkingContent.Content);
@@ -156,7 +156,7 @@ public class ThinkingAgentLoopTests
         var chatResponse = new ChatResponse([new ChatMessage(ChatRole.Assistant, "Hello!")]);
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(chatResponse));
 
-        var response = await loop.RunAsync("Hi");
+        var response = await loop.RunAsync("Hi", TestContext.Current.CancellationToken);
 
         Assert.True(response.HasTextOutput);
         Assert.Equal("Hello!", response.Content);
@@ -168,7 +168,7 @@ public class ThinkingAgentLoopTests
         var chatResponse = new ChatResponse([new ChatMessage(ChatRole.Assistant, [])]);
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(chatResponse));
 
-        var response = await loop.RunAsync("Think about this");
+        var response = await loop.RunAsync("Think about this", TestContext.Current.CancellationToken);
 
         Assert.False(response.HasTextOutput);
         Assert.Equal(string.Empty, response.Content);
@@ -181,7 +181,7 @@ public class ThinkingAgentLoopTests
         var thinking = new IndexThinkingContent { Text = "deep thought", TokenCount = 42 };
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(chatResponse, thinking));
 
-        var response = await loop.RunAsync("Think");
+        var response = await loop.RunAsync("Think", TestContext.Current.CancellationToken);
 
         Assert.False(response.HasTextOutput);
         Assert.Equal(string.Empty, response.Content);
@@ -196,7 +196,7 @@ public class ThinkingAgentLoopTests
         var thinking = new IndexThinkingContent { Text = "I reasoned through it" };
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(chatResponse, thinking));
 
-        var response = await loop.RunAsync("What is the answer?");
+        var response = await loop.RunAsync("What is the answer?", TestContext.Current.CancellationToken);
 
         Assert.True(response.HasTextOutput);
         Assert.Equal("Here is the answer.", response.Content);
@@ -223,8 +223,8 @@ public class ThinkingAgentLoopTests
         };
 
         // Act
-        await foreach (var _ in loop.RunStreamingAsync("first prompt")) { }
-        await foreach (var _ in loop.RunStreamingAsync("second prompt", overrideOptions)) { }
+        await foreach (var _ in loop.RunStreamingAsync("first prompt", TestContext.Current.CancellationToken)) { }
+        await foreach (var _ in loop.RunStreamingAsync("second prompt", overrideOptions, TestContext.Current.CancellationToken)) { }
 
         // Assert
         Assert.Equal(2, mockClient.ReceivedOptions.Count);
@@ -246,7 +246,7 @@ public class ThinkingAgentLoopTests
             [new FunctionCallContent("call-1", "read_file", new Dictionary<string, object?> { ["path"] = "test.txt" })])]);
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
 
-        var result = await loop.RunAsync("q");
+        var result = await loop.RunAsync("q", TestContext.Current.CancellationToken);
 
         Assert.Contains("test.txt", result.ToolCalls[0].Arguments);
     }
@@ -259,7 +259,7 @@ public class ThinkingAgentLoopTests
             [new FunctionCallContent("call-1", "read_file", new Dictionary<string, object?> { ["path"] = "test.txt" })])]);
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
 
-        var result = await loop.RunAsync("q");
+        var result = await loop.RunAsync("q", TestContext.Current.CancellationToken);
 
         Assert.Null(result.ToolCalls[0].Success);
     }
@@ -275,7 +275,7 @@ public class ThinkingAgentLoopTests
         var response = new ChatResponse([callMessage, resultMessage]);
         var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
 
-        var result = await loop.RunAsync("q");
+        var result = await loop.RunAsync("q", TestContext.Current.CancellationToken);
 
         Assert.True(result.ToolCalls[0].Success);
         Assert.Equal("file contents", result.ToolCalls[0].Result);

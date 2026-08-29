@@ -25,7 +25,7 @@ public class TokenBasedHistoryCompactorTests
         var history = CreateHistory(5); // 5 * 100 = 500 tokens
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 1000);
+        var result = await compactor.CompactAsync(history, targetTokens: 1000, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(history.Count, result.CompactedHistory.Count);
@@ -57,7 +57,7 @@ public class TokenBasedHistoryCompactorTests
         };
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert: System messages are preserved
         var systemMessages = result.CompactedHistory.Where(m => m.Role == ChatRole.System).ToList();
@@ -88,7 +88,7 @@ public class TokenBasedHistoryCompactorTests
         };
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert: Recent messages are preserved
         var lastMessage = result.CompactedHistory[^1];
@@ -107,7 +107,7 @@ public class TokenBasedHistoryCompactorTests
         var compactor = new TokenBasedHistoryCompactor(tokenCounter);
 
         // Act
-        var result = await compactor.CompactAsync([], targetTokens: 1000);
+        var result = await compactor.CompactAsync([], targetTokens: 1000, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(result.CompactedHistory);
@@ -124,7 +124,7 @@ public class TokenBasedHistoryCompactorTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            compactor.CompactAsync(null!, targetTokens: 1000));
+            compactor.CompactAsync(null!, targetTokens: 1000, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class TokenBasedHistoryCompactorTests
         };
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 50);
+        var result = await compactor.CompactAsync(history, targetTokens: 50, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert: Even if over target, system messages are kept
         Assert.Equal(2, result.CompactedHistory.Count);
@@ -174,7 +174,7 @@ public class TokenBasedHistoryCompactorTests
         };
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 350);
+        var result = await compactor.CompactAsync(history, targetTokens: 350, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert: Tool output should be preserved (marked as important)
         var toolMessages = result.CompactedHistory.Where(m => m.Role == ChatRole.Tool).ToList();
@@ -200,7 +200,7 @@ public class TokenBasedHistoryCompactorTests
         var history = CreateHistory(10); // 1000 tokens
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert: Should use truncation (fewer messages)
         Assert.True(result.CompactedHistory.Count < history.Count);
@@ -222,7 +222,7 @@ public class TokenBasedHistoryCompactorTests
         var history = CreateHistory(10);
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 400);
+        var result = await compactor.CompactAsync(history, targetTokens: 400, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert: Should have a truncation marker
         var hasMarker = result.CompactedHistory.Any(m =>
@@ -250,7 +250,7 @@ public class TokenBasedHistoryCompactorTests
         var history = CreateHistory(10); // 1000 tokens
 
         // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 500);
+        var result = await compactor.CompactAsync(history, targetTokens: 500, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1000, result.OriginalTokens);

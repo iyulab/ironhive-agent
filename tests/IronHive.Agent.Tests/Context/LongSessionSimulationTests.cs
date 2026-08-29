@@ -37,7 +37,7 @@ public class LongSessionSimulationTests
 
         // Force compaction to 50% of original
         var targetTokens = originalTokens / 2;
-        var result = await _contextManager.CompactAsync(history, targetTokens);
+        var result = await _contextManager.CompactAsync(history, targetTokens, TestContext.Current.CancellationToken);
 
         Assert.True(result.CompactedTokens < originalTokens);
         Assert.True(result.MessagesCompacted > 0);
@@ -60,7 +60,7 @@ public class LongSessionSimulationTests
         var history = CreateLongHistory(50);
         _contextManager.SetGoalFromHistory(history);
 
-        var prepared = await _contextManager.PrepareHistoryAsync(history);
+        var prepared = await _contextManager.PrepareHistoryAsync(history, TestContext.Current.CancellationToken);
 
         // Should have goal reminder appended
         Assert.True(prepared.Count >= history.Count);
@@ -98,7 +98,7 @@ public class LongSessionSimulationTests
             history.Add(new ChatMessage(ChatRole.Assistant, $"Sure, here's help for task {turn}. " + new string('y', 100)));
 
             // Prepare history each turn (simulates real usage)
-            var prepared = await _contextManager.PrepareHistoryAsync(history);
+            var prepared = await _contextManager.PrepareHistoryAsync(history, TestContext.Current.CancellationToken);
 
             // Should never crash or fail
             Assert.NotNull(prepared);
@@ -132,7 +132,7 @@ public class LongSessionSimulationTests
         history.Add(new ChatMessage(ChatRole.User, "IMPORTANT_RECENT_USER_MESSAGE"));
         history.Add(new ChatMessage(ChatRole.Assistant, "IMPORTANT_RECENT_ASSISTANT_RESPONSE"));
 
-        var result = await _contextManager.CompactAsync(history, 1000);
+        var result = await _contextManager.CompactAsync(history, 1000, TestContext.Current.CancellationToken);
 
         // Recent messages should be preserved
         Assert.Contains(result.CompactedHistory,

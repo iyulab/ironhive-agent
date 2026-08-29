@@ -16,7 +16,7 @@ public class KeywordToolRetrieverTests
     [Fact]
     public async Task RetrieveAsync_EmptyTools_ReturnsEmpty()
     {
-        var result = await _retriever.RetrieveAsync("read a file", []);
+        var result = await _retriever.RetrieveAsync("read a file", [], cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SelectedTools);
         Assert.NotNull(result.RelevanceScores);
@@ -32,7 +32,7 @@ public class KeywordToolRetrieverTests
             AlwaysInclude = ["ReadFile"]
         };
 
-        var result = await _retriever.RetrieveAsync("", tools, options);
+        var result = await _retriever.RetrieveAsync("", tools, options, TestContext.Current.CancellationToken);
 
         Assert.Single(result.SelectedTools);
         Assert.Equal("ReadFile", GetName(result.SelectedTools[0]));
@@ -43,7 +43,7 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var result = await _retriever.RetrieveAsync("   ", tools);
+        var result = await _retriever.RetrieveAsync("   ", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SelectedTools);
     }
@@ -57,7 +57,7 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var result = await _retriever.RetrieveAsync("read file", tools);
+        var result = await _retriever.RetrieveAsync("read file", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(result.SelectedTools);
         var topTool = result.SelectedTools[0];
@@ -72,7 +72,7 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var result = await _retriever.RetrieveAsync("file operations", tools);
+        var result = await _retriever.RetrieveAsync("file operations", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         // Both ReadFile and WriteFile should match on "file"
         var names = result.SelectedTools.Select(GetName).ToList();
@@ -85,7 +85,7 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var result = await _retriever.RetrieveAsync("read_file", tools);
+        var result = await _retriever.RetrieveAsync("read_file", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Contains("ReadFile", names);
@@ -101,7 +101,7 @@ public class KeywordToolRetrieverTests
         var tools = CreateTestTools();
 
         // "directory" appears in ListDirectory description
-        var result = await _retriever.RetrieveAsync("list directory contents", tools);
+        var result = await _retriever.RetrieveAsync("list directory contents", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Contains("ListDirectory", names);
@@ -116,7 +116,7 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var result = await _retriever.RetrieveAsync("grep files", tools);
+        var result = await _retriever.RetrieveAsync("grep files", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         // GrepFiles should rank highest (name match)
         Assert.Equal("GrepFiles", GetName(result.SelectedTools[0]));
@@ -128,7 +128,7 @@ public class KeywordToolRetrieverTests
         var tools = CreateTestTools();
         var options = new ToolRetrievalOptions { MinRelevanceScore = 0.9f };
 
-        var result = await _retriever.RetrieveAsync("something completely unrelated xyz", tools, options);
+        var result = await _retriever.RetrieveAsync("something completely unrelated xyz", tools, options, TestContext.Current.CancellationToken);
 
         // Very high threshold + unrelated query → nothing should pass
         Assert.Empty(result.SelectedTools);
@@ -139,7 +139,7 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var result = await _retriever.RetrieveAsync("read", tools);
+        var result = await _retriever.RetrieveAsync("read", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         // RelevanceScores should contain entries for all tools
         Assert.Equal(tools.Count, result.RelevanceScores!.Count);
@@ -159,7 +159,7 @@ public class KeywordToolRetrieverTests
             MinRelevanceScore = 0.0f // Accept all
         };
 
-        var result = await _retriever.RetrieveAsync("file read write list grep", tools, options);
+        var result = await _retriever.RetrieveAsync("file read write list grep", tools, options, TestContext.Current.CancellationToken);
 
         Assert.True(result.SelectedTools.Count <= 2);
     }
@@ -175,7 +175,7 @@ public class KeywordToolRetrieverTests
             AlwaysInclude = ["ExecuteCommand"]
         };
 
-        var result = await _retriever.RetrieveAsync("read file", tools, options);
+        var result = await _retriever.RetrieveAsync("read file", tools, options, TestContext.Current.CancellationToken);
 
         Assert.True(result.SelectedTools.Count <= 2);
         Assert.Contains("ExecuteCommand", result.SelectedTools.Select(GetName));
@@ -196,7 +196,7 @@ public class KeywordToolRetrieverTests
         };
 
         // Query unrelated to grep
-        var result = await _retriever.RetrieveAsync("write content to output", tools, options);
+        var result = await _retriever.RetrieveAsync("write content to output", tools, options, TestContext.Current.CancellationToken);
 
         Assert.Contains("GrepFiles", result.SelectedTools.Select(GetName));
     }
@@ -211,7 +211,7 @@ public class KeywordToolRetrieverTests
             MinRelevanceScore = 0.0f
         };
 
-        var result = await _retriever.RetrieveAsync("read file", tools, options);
+        var result = await _retriever.RetrieveAsync("read file", tools, options, TestContext.Current.CancellationToken);
 
         var readFileCount = result.SelectedTools.Count(t => GetName(t) == "ReadFile");
         Assert.Equal(1, readFileCount);
@@ -226,7 +226,7 @@ public class KeywordToolRetrieverTests
             AlwaysInclude = ["NonExistentTool"]
         };
 
-        var result = await _retriever.RetrieveAsync("read file", tools, options);
+        var result = await _retriever.RetrieveAsync("read file", tools, options, TestContext.Current.CancellationToken);
 
         // Should not crash; NonExistentTool simply not found
         Assert.DoesNotContain("NonExistentTool", result.SelectedTools.Select(GetName));
@@ -242,7 +242,7 @@ public class KeywordToolRetrieverTests
         var tools = CreateTestTools();
 
         // "grep" matches tool name GrepFiles directly
-        var result = await _retriever.RetrieveAsync("grep", tools);
+        var result = await _retriever.RetrieveAsync("grep", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var scores = result.RelevanceScores!;
         // GrepFiles has name match, others only have description match at best
@@ -255,7 +255,7 @@ public class KeywordToolRetrieverTests
         var tools = CreateTestTools();
         var options = new ToolRetrievalOptions { MinRelevanceScore = 0.3f };
 
-        var result = await _retriever.RetrieveAsync("quantum physics xyz", tools, options);
+        var result = await _retriever.RetrieveAsync("quantum physics xyz", tools, options, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SelectedTools);
     }
@@ -266,7 +266,7 @@ public class KeywordToolRetrieverTests
         var tools = CreateTestTools();
 
         // Query "list" should match "ListDirectory" via camelCase split
-        var result = await _retriever.RetrieveAsync("list", tools);
+        var result = await _retriever.RetrieveAsync("list", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Contains("ListDirectory", names);
@@ -286,8 +286,8 @@ public class KeywordToolRetrieverTests
     {
         var tools = CreateTestTools();
 
-        var shortResult = await _retriever.RetrieveAsync("read file", tools);
-        var longResult = await _retriever.RetrieveAsync(ReadFilePromptWithInstructions, tools);
+        var shortResult = await _retriever.RetrieveAsync("read file", tools, cancellationToken: TestContext.Current.CancellationToken);
+        var longResult = await _retriever.RetrieveAsync(ReadFilePromptWithInstructions, tools, cancellationToken: TestContext.Current.CancellationToken);
 
         var shortScore = shortResult.RelevanceScores!["ReadFile"];
         var longScore = longResult.RelevanceScores!["ReadFile"];
@@ -304,7 +304,7 @@ public class KeywordToolRetrieverTests
         var tools = CreateTestTools();
         var options = new ToolRetrievalOptions { AlwaysInclude = ["ExecuteCommand"] };
 
-        var result = await _retriever.RetrieveAsync(ReadFilePromptWithInstructions, tools, options);
+        var result = await _retriever.RetrieveAsync(ReadFilePromptWithInstructions, tools, options, TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Contains("ReadFile", names);
@@ -323,7 +323,7 @@ public class KeywordToolRetrieverTests
             AIFunctionFactory.Create(DocumentationTools.ConvertVideo),
         ];
 
-        var result = await _retriever.RetrieveAsync("convert audio", tools);
+        var result = await _retriever.RetrieveAsync("convert audio", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(
             result.RelevanceScores!["ConvertAudio"] >= result.RelevanceScores!["ConvertVideo"],
@@ -337,7 +337,7 @@ public class KeywordToolRetrieverTests
 
         // "to" is a substring of "Directory". Accepting that as a name match hands an unrelated
         // tool full name coverage on a stopword.
-        var result = await _retriever.RetrieveAsync("to", tools);
+        var result = await _retriever.RetrieveAsync("to", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(
             result.RelevanceScores!["ListDirectory"] < 0.3f,
@@ -383,7 +383,7 @@ public class KeywordToolRetrieverTests
         var retriever = new KeywordToolRetriever();
         var tools = CreateTestTools();
 
-        var result = await retriever.RetrieveAsync("read file", tools);
+        var result = await retriever.RetrieveAsync("read file", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.NotNull(result.SelectedTools);
@@ -421,7 +421,7 @@ public class KeywordToolRetrieverTests
             MinScoredSlots = 2
         };
 
-        var result = await _retriever.RetrieveAsync("grep execute", tools, options);
+        var result = await _retriever.RetrieveAsync("grep execute", tools, options, TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Equal(5, names.Count); // 3 pins + 2 reserved scored slots
@@ -445,7 +445,7 @@ public class KeywordToolRetrieverTests
             // MinScoredSlots left at default (0)
         };
 
-        var result = await _retriever.RetrieveAsync("grep execute", tools, options);
+        var result = await _retriever.RetrieveAsync("grep execute", tools, options, TestContext.Current.CancellationToken);
 
         var names = result.SelectedTools.Select(GetName).ToList();
         Assert.Equal(3, names.Count); // pins only, no scored tail
@@ -468,7 +468,7 @@ public class KeywordToolRetrieverTests
             MinScoredSlots = 10 // far above MaxTools and the tool count
         };
 
-        var result = await _retriever.RetrieveAsync("file read write list grep execute", tools, options);
+        var result = await _retriever.RetrieveAsync("file read write list grep execute", tools, options, TestContext.Current.CancellationToken);
 
         Assert.True(result.SelectedTools.Count <= 2,
             $"MinScoredSlots must clamp to MaxTools, got {result.SelectedTools.Count} tools");

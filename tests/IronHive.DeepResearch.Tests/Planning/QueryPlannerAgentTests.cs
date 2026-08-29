@@ -49,7 +49,7 @@ public class QueryPlannerAgentTests
         ];
 
         // Act
-        var result = await _agent.PlanAsync(state);
+        var result = await _agent.PlanAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().NotBeNull();
@@ -70,7 +70,7 @@ public class QueryPlannerAgentTests
         _mockExpander.ExpandedQueries = [new ExpandedQuery { Query = "Q", Intent = "I", Priority = 1 }];
 
         // Act
-        await _agent.PlanAsync(state);
+        await _agent.PlanAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         _mockExpander.LastOptions.Should().NotBeNull();
@@ -93,7 +93,7 @@ public class QueryPlannerAgentTests
         ];
 
         // Act
-        var result = await _agent.PlanAsync(state);
+        var result = await _agent.PlanAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         result.InitialQueries.Should().HaveCount(2);
@@ -118,7 +118,7 @@ public class QueryPlannerAgentTests
         ];
 
         // Act
-        var result = await _agent.PlanAsync(state);
+        var result = await _agent.PlanAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         result.InitialQueries[0].Priority.Should().Be(1);
@@ -134,7 +134,7 @@ public class QueryPlannerAgentTests
         state.IdentifiedGaps.Clear();
 
         // Act
-        var result = await _agent.GenerateFollowUpQueriesAsync(state);
+        var result = await _agent.GenerateFollowUpQueriesAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEmpty();
@@ -159,7 +159,7 @@ public class QueryPlannerAgentTests
         ];
 
         // Act
-        var result = await _agent.GenerateFollowUpQueriesAsync(state);
+        var result = await _agent.GenerateFollowUpQueriesAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(1);
@@ -187,7 +187,7 @@ public class QueryPlannerAgentTests
         ];
 
         // Act
-        var result = await _agent.GenerateFollowUpQueriesAsync(state);
+        var result = await _agent.GenerateFollowUpQueriesAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(1);
@@ -215,7 +215,7 @@ public class QueryPlannerAgentTests
         ];
 
         // Act
-        await _agent.GenerateFollowUpQueriesAsync(state);
+        await _agent.GenerateFollowUpQueriesAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         // 기존 관점을 perspectives로 전달했는지 확인
@@ -236,7 +236,7 @@ public class QueryPlannerAgentTests
         _mockExpander.ExpandedQueries = [];
 
         // Act
-        await _agent.PlanAsync(state);
+        await _agent.PlanAsync(state, TestContext.Current.CancellationToken);
 
         // Assert
         _mockExpander.LastOptions!.IncludeAcademic.Should().BeTrue();

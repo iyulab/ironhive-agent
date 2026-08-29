@@ -44,7 +44,7 @@ public class DeepResearcherTests
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         // Act
-        var result = await _researcher.ResearchAsync(request);
+        var result = await _researcher.ResearchAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().NotBeNull();
@@ -60,7 +60,7 @@ public class DeepResearcherTests
         _mockOrchestrator.SetupResult(expectedResult);
 
         // Act
-        var result = await _researcher.ResearchAsync(request);
+        var result = await _researcher.ResearchAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.SessionId.Should().Be(expectedResult.SessionId);
@@ -76,7 +76,7 @@ public class DeepResearcherTests
 
         // Act
         var progressList = new List<ResearchProgress>();
-        await foreach (var progress in _researcher.ResearchStreamAsync(request))
+        await foreach (var progress in _researcher.ResearchStreamAsync(request, TestContext.Current.CancellationToken))
         {
             progressList.Add(progress);
         }
@@ -93,7 +93,7 @@ public class DeepResearcherTests
         var request = CreateTestRequest();
 
         // Act
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         session.Should().NotBeNull();
@@ -108,7 +108,7 @@ public class DeepResearcherTests
         var request = CreateTestRequest();
 
         // Act
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         session.CurrentState.Should().NotBeNull();
@@ -123,7 +123,7 @@ public class DeepResearcherTests
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _researcher.ResumeAsync(unknownSessionId));
+            () => _researcher.ResumeAsync(unknownSessionId, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -131,11 +131,11 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         // Act
-        var result = await _researcher.ResumeAsync(session.SessionId);
+        var result = await _researcher.ResumeAsync(session.SessionId, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().NotBeNull();
@@ -146,7 +146,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Act
         var checkpoint = await session.GetCheckpointAsync();
@@ -162,7 +162,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         var customQuery = "Custom follow-up query";
 
         // Act
@@ -177,7 +177,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Act & Assert — ContinueAsync throws synchronously before returning a Task
         var act = () => { _ = session.ContinueAsync(); };
@@ -189,7 +189,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Add a custom query to accumulate state before finalizing
         const string customQuery = "accumulated custom query";
@@ -212,7 +212,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         // Act
@@ -228,7 +228,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         await session.FinalizeAsync();
@@ -243,7 +243,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Act
         await session.DisposeAsync();
@@ -257,7 +257,7 @@ public class DeepResearcherTests
     {
         // Arrange
         var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request);
+        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         await session.FinalizeAsync();

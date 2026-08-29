@@ -101,7 +101,7 @@ public class McpToolDiscoveryTests
         };
         using var discovery = new McpToolDiscovery(manager, config);
 
-        var tools = await discovery.DiscoverAllToolsAsync(connectIfNeeded: false);
+        var tools = await discovery.DiscoverAllToolsAsync(connectIfNeeded: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(tools);
     }
@@ -120,7 +120,7 @@ public class McpToolDiscoveryTests
         };
         using var discovery = new McpToolDiscovery(manager, config);
 
-        var tools = await discovery.DiscoverAllToolsAsync(connectIfNeeded: true);
+        var tools = await discovery.DiscoverAllToolsAsync(connectIfNeeded: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(tools);
     }
@@ -132,7 +132,7 @@ public class McpToolDiscoveryTests
         var config = new McpPluginsConfig();
         using var discovery = new McpToolDiscovery(manager, config);
 
-        var results = await discovery.SearchToolsAsync("nonexistent");
+        var results = await discovery.SearchToolsAsync("nonexistent", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
     }
@@ -144,7 +144,7 @@ public class McpToolDiscoveryTests
         var config = new McpPluginsConfig();
         using var discovery = new McpToolDiscovery(manager, config);
 
-        var tool = await discovery.GetToolAsync("nonexistent", "tool");
+        var tool = await discovery.GetToolAsync("nonexistent", "tool", TestContext.Current.CancellationToken);
 
         Assert.Null(tool);
     }
@@ -156,7 +156,7 @@ public class McpToolDiscoveryTests
         var config = new McpPluginsConfig();
         using var discovery = new McpToolDiscovery(manager, config);
 
-        var result = await discovery.EnsurePluginConnectedAsync("nonexistent");
+        var result = await discovery.EnsurePluginConnectedAsync("nonexistent", TestContext.Current.CancellationToken);
 
         Assert.False(result);
     }
@@ -175,7 +175,7 @@ public class McpToolDiscoveryTests
         using var discovery = new McpToolDiscovery(manager, config);
 
         // Plugin not connected, but configured - will fail due to invalid command
-        var result = await discovery.EnsurePluginConnectedAsync("test");
+        var result = await discovery.EnsurePluginConnectedAsync("test", TestContext.Current.CancellationToken);
         Assert.False(result); // Should fail because cmd doesn't exist
     }
 

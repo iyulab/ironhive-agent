@@ -72,7 +72,7 @@ public class AnalysisAgentTests
             });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Findings.Should().NotBeEmpty();
@@ -120,7 +120,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.5m, CoverageScore = 0.5m, QualityScore = 0.6m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Gaps.Should().HaveCount(2);
@@ -154,7 +154,7 @@ public class AnalysisAgentTests
             });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SufficiencyScore.Should().NotBeNull();
@@ -191,7 +191,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.7m, CoverageScore = 0.7m, QualityScore = 0.7m });
 
         // Act
-        await _agent.AnalyzeAsync(state);
+        await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         state.Findings.Should().NotBeEmpty();
@@ -223,7 +223,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.4m, CoverageScore = 0.3m, QualityScore = 0.5m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.NeedsMoreResearch.Should().BeTrue();
@@ -259,7 +259,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.95m, CoverageScore = 0.95m, QualityScore = 0.95m, SourceDiversityScore = 0.9m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         // NeedsMoreResearch = !IsSufficient && Gaps.Count > 0
@@ -289,7 +289,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.8m, CoverageScore = 0.8m, QualityScore = 0.8m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state, options);
+        var result = await _agent.AnalyzeAsync(state, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SourcesAnalyzed.Should().Be(10);
@@ -305,7 +305,7 @@ public class AnalysisAgentTests
         _mockTextService.SetupFailure(new InvalidOperationException("LLM unavailable"));
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Findings.Should().BeEmpty();
@@ -349,7 +349,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.8m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         // 처음 50자가 동일하므로 중복 제거되어 1개만 남음 (높은 신뢰도가 우선)
@@ -372,7 +372,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.8m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Duration.Should().BeGreaterThan(TimeSpan.Zero);
@@ -405,7 +405,7 @@ public class AnalysisAgentTests
             new SufficiencyEvaluationResponse { OverallScore = 0.5m });
 
         // Act
-        var result = await _agent.AnalyzeAsync(state);
+        var result = await _agent.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Gaps.Should().HaveCount(4);

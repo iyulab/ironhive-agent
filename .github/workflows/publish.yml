@@ -44,10 +44,12 @@ jobs:
       run: dotnet build IronHive.Agent.slnx --configuration Release --no-restore
 
     - name: Run tests
-      # --blame-hang turns a silent ride to the job's 20-minute timeout-cancel into a 5-minute
-      # dump naming the hung test (same job-timeout shape observed directly on ironhive/ironhive's
-      # nuget-publish.yml, run 33171897265, 2026-08-28).
-      run: dotnet test IronHive.Agent.slnx --configuration Release --no-build --verbosity normal --blame-hang --blame-hang-timeout 5m
+      # --hangdump/--hangdump-timeout is MTP's equivalent of VSTest's --blame-hang (native MTP
+      # mode via global.json needs no -- separator before it). --blame-hang turned a silent ride
+      # to the job's 20-minute timeout-cancel into a 5-minute dump naming the hung test (same
+      # job-timeout shape observed directly on ironhive/ironhive's nuget-publish.yml, run
+      # 33171897265, 2026-08-28).
+      run: dotnet test IronHive.Agent.slnx --configuration Release --no-build --verbosity normal --hangdump --hangdump-timeout 5m
 
     - name: Extract version from Directory.Build.props
       id: extract_version

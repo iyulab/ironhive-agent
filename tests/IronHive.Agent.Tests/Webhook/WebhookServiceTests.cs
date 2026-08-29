@@ -52,7 +52,7 @@ public class WebhookServiceTests
     {
         var service = new WebhookService();
 
-        var results = await service.SendAsync(WebhookEventType.SessionStarted);
+        var results = await service.SendAsync(WebhookEventType.SessionStarted, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
     }
@@ -136,7 +136,7 @@ public class WebhookServiceTests
         var service = new WebhookService(config, httpClient);
 
         // Send an event that should be filtered out
-        await service.SendAsync(WebhookEventType.ToolCompleted);
+        await service.SendAsync(WebhookEventType.ToolCompleted, cancellationToken: TestContext.Current.CancellationToken);
 
         // Should not make any requests
         Assert.Equal(0, handler.CallCount);
@@ -162,7 +162,7 @@ public class WebhookServiceTests
         var httpClient = new HttpClient(handler);
         var service = new WebhookService(config, httpClient);
 
-        await service.SendAsync(WebhookEventType.SessionStarted);
+        await service.SendAsync(WebhookEventType.SessionStarted, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, handler.CallCount);
     }
@@ -187,7 +187,7 @@ public class WebhookServiceTests
         var httpClient = new HttpClient(handler);
         var service = new WebhookService(config, httpClient);
 
-        await service.SendAsync(WebhookEventType.SessionStarted);
+        await service.SendAsync(WebhookEventType.SessionStarted, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Contains("X-Webhook-Signature", handler.LastRequest.Headers.Select(h => h.Key));
@@ -216,7 +216,7 @@ public class WebhookServiceTests
         var httpClient = new HttpClient(handler);
         var service = new WebhookService(config, httpClient);
 
-        await service.SendAsync(WebhookEventType.SessionStarted);
+        await service.SendAsync(WebhookEventType.SessionStarted, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Contains("X-Custom-Header", handler.LastRequest.Headers.Select(h => h.Key));
@@ -244,11 +244,11 @@ public class WebhookServiceTests
         var service = new WebhookService(config, httpClient, logger);
 
         // Fire-and-forget returns empty immediately
-        var results = await service.SendAsync(WebhookEventType.SessionStarted);
+        var results = await service.SendAsync(WebhookEventType.SessionStarted, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Empty(results);
 
         // Wait briefly for the fire-and-forget task to complete
-        await Task.Delay(500);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Logger should have captured the warning
         Assert.True(logger.WarningLogged, "Expected a warning to be logged for async delivery failure");

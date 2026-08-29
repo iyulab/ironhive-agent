@@ -51,7 +51,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("test query", CreateSearchResult("test query", 3));
 
         // Act
-        var result = await _agent.ExecuteSearchesAsync(queries);
+        var result = await _agent.ExecuteSearchesAsync(queries, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SuccessfulResults.Should().HaveCount(1);
@@ -76,7 +76,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("query3", CreateSearchResult("query3", 1));
 
         // Act
-        var result = await _agent.ExecuteSearchesAsync(queries);
+        var result = await _agent.ExecuteSearchesAsync(queries, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SuccessfulResults.Should().HaveCount(3);
@@ -103,7 +103,7 @@ public class SearchCoordinatorAgentTests
         };
 
         // Act
-        var result = await _agent.ExecuteSearchesAsync(queries, options);
+        var result = await _agent.ExecuteSearchesAsync(queries, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SuccessfulResults.Should().HaveCount(1);
@@ -150,7 +150,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("query2", result2);
 
         // Act
-        var result = await _agent.ExecuteSearchesAsync(queries);
+        var result = await _agent.ExecuteSearchesAsync(queries, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.UniqueSourcesCollected.Should().Be(3); // 중복 제거됨
@@ -173,10 +173,10 @@ public class SearchCoordinatorAgentTests
         var progress = new Progress<SearchBatchProgress>(p => progressReports.Add(p));
 
         // Act
-        await _agent.ExecuteSearchesAsync(queries, progress: progress);
+        await _agent.ExecuteSearchesAsync(queries, progress: progress, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert (약간의 지연 후 확인)
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         progressReports.Should().NotBeEmpty();
         progressReports.Last().CompletedQueries.Should().Be(2);
     }
@@ -203,7 +203,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("new query", CreateSearchResult("new query", 2));
 
         // Act
-        var result = await _agent.ExecuteFromStateAsync(state, plan);
+        var result = await _agent.ExecuteFromStateAsync(state, plan, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.TotalQueriesExecuted.Should().Be(1);
@@ -230,7 +230,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("test query", CreateSearchResult("test query", 2));
 
         // Act
-        await _agent.ExecuteFromStateAsync(state, plan);
+        await _agent.ExecuteFromStateAsync(state, plan, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         state.ExecutedQueries.Should().HaveCount(1);
@@ -277,7 +277,7 @@ public class SearchCoordinatorAgentTests
         };
 
         // Act
-        var result = await _agent.ExecuteSearchesAsync(queries, options);
+        var result = await _agent.ExecuteSearchesAsync(queries, options, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SuccessfulResults.Should().HaveCount(1);
@@ -296,7 +296,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("follow up query", CreateSearchResult("follow up query", 2));
 
         // Act
-        var result = await _agent.ExecuteFollowUpSearchesAsync(state, followUpQueries);
+        var result = await _agent.ExecuteFollowUpSearchesAsync(state, followUpQueries, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SuccessfulResults.Should().HaveCount(1);
@@ -315,7 +315,7 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResultForType("news query", SearchType.News, CreateSearchResult("news query", 1));
 
         // Act
-        var result = await _agent.ExecuteSearchesAsync(queries);
+        var result = await _agent.ExecuteSearchesAsync(queries, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.SuccessfulResults.Should().HaveCount(1);

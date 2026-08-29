@@ -109,7 +109,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Diamond goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Diamond goal", context, TestContext.Current.CancellationToken));
 
         // Assert — all 4 steps started and completed
         events.OfType<StepStartedEvent>().Should().HaveCount(4);
@@ -150,7 +150,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Diamond goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Diamond goal", context, TestContext.Current.CancellationToken));
 
         // Assert — step3 skipped because step1 failed
         step3.Status.Should().Be(StepStatus.Skipped);
@@ -198,7 +198,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator(options);
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert — 1 replan, then plan2 completed
         events.OfType<PlanReplanEvent>().Should().HaveCount(1);
@@ -234,7 +234,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert — all 3 steps attempted, plan completes
         events.OfType<StepStartedEvent>().Should().HaveCount(3);
@@ -277,7 +277,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert
         events.OfType<PlanReplanEvent>().Should().HaveCount(1);
@@ -311,7 +311,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert — all 50 progress events forwarded
         events.OfType<StepProgressEvent>().Should().HaveCount(50);
@@ -346,7 +346,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert — 2 completed, 1 failed, 1 skipped
         var completed = (PlanCompletedEvent)events.Last();
@@ -383,7 +383,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert — strict ordering
         events[0].Should().BeOfType<PlanCreatedEvent>();
@@ -428,7 +428,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert — PlanReplanEvent carries the new plan
         var replan = events.OfType<PlanReplanEvent>().Single();
@@ -461,7 +461,7 @@ public class OrchestratorAdvancedSimulationTests
         var orchestrator = CreateOrchestrator();
 
         // Act
-        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context));
+        var events = await CollectEventsAsync(orchestrator.ExecuteAsync("Goal", context, TestContext.Current.CancellationToken));
 
         // Assert
         step0.Status.Should().Be(StepStatus.Completed);

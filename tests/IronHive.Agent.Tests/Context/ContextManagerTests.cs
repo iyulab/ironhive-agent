@@ -79,7 +79,7 @@ public class ContextManagerTests
             new(ChatRole.Assistant, "Hi!")
         };
 
-        var result = await manager.CompactIfNeededAsync(history);
+        var result = await manager.CompactIfNeededAsync(history, TestContext.Current.CancellationToken);
 
         Assert.Equal(history.Count, result.CompactedHistory.Count);
         Assert.Equal(0, result.MessagesCompacted);
@@ -92,7 +92,7 @@ public class ContextManagerTests
         var history = CreateLargeHistory(20);
         var originalTokens = manager.TokenCounter.CountTokens(history);
 
-        var result = await manager.CompactAsync(history, originalTokens / 4);
+        var result = await manager.CompactAsync(history, originalTokens / 4, TestContext.Current.CancellationToken);
 
         Assert.True(result.CompactedTokens < originalTokens);
     }

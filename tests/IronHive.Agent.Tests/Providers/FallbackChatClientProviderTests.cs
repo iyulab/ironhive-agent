@@ -77,7 +77,7 @@ public class FallbackChatClientProviderTests : IDisposable
     public async Task ProviderName_AfterInit_ReturnsActiveProviderName()
     {
         _sut = new FallbackChatClientProvider(_provider1);
-        await _sut.GetChatClientAsync();
+        await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("provider1", _sut.ProviderName);
     }
@@ -118,7 +118,7 @@ public class FallbackChatClientProviderTests : IDisposable
     {
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var client = await _sut.GetChatClientAsync();
+        var client = await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Same(_mockClient1, client);
         Assert.Same(_provider1, _sut.ActiveProvider);
@@ -130,7 +130,7 @@ public class FallbackChatClientProviderTests : IDisposable
         _provider1.IsAvailable.Returns(false);
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var client = await _sut.GetChatClientAsync();
+        var client = await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Same(_mockClient2, client);
         Assert.Same(_provider2, _sut.ActiveProvider);
@@ -142,7 +142,7 @@ public class FallbackChatClientProviderTests : IDisposable
         _provider1.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns(false);
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var client = await _sut.GetChatClientAsync();
+        var client = await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Same(_mockClient2, client);
     }
@@ -155,7 +155,7 @@ public class FallbackChatClientProviderTests : IDisposable
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.GetChatClientAsync());
+            () => _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -163,8 +163,8 @@ public class FallbackChatClientProviderTests : IDisposable
     {
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        await _sut.GetChatClientAsync();
-        await _sut.GetChatClientAsync("model-2");
+        await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await _sut.GetChatClientAsync("model-2", TestContext.Current.CancellationToken);
 
         // First call initializes, second call reuses
         await _provider1.Received(2).GetChatClientAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
@@ -176,7 +176,7 @@ public class FallbackChatClientProviderTests : IDisposable
     {
         _sut = new FallbackChatClientProvider(_provider1);
 
-        await _sut.GetChatClientAsync("custom-model");
+        await _sut.GetChatClientAsync("custom-model", TestContext.Current.CancellationToken);
 
         await _provider1.Received(1).GetChatClientAsync("custom-model", Arg.Any<CancellationToken>());
     }
@@ -190,7 +190,7 @@ public class FallbackChatClientProviderTests : IDisposable
     {
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var result = await _sut.CheckHealthAsync();
+        var result = await _sut.CheckHealthAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result);
         Assert.Same(_provider1, _sut.ActiveProvider);
@@ -202,7 +202,7 @@ public class FallbackChatClientProviderTests : IDisposable
         _provider1.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns(false);
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var result = await _sut.CheckHealthAsync();
+        var result = await _sut.CheckHealthAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result);
         Assert.Same(_provider2, _sut.ActiveProvider);
@@ -215,7 +215,7 @@ public class FallbackChatClientProviderTests : IDisposable
         _provider2.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns(false);
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var result = await _sut.CheckHealthAsync();
+        var result = await _sut.CheckHealthAsync(TestContext.Current.CancellationToken);
 
         Assert.False(result);
     }
@@ -226,7 +226,7 @@ public class FallbackChatClientProviderTests : IDisposable
         _provider1.IsAvailable.Returns(false);
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        await _sut.CheckHealthAsync();
+        await _sut.CheckHealthAsync(TestContext.Current.CancellationToken);
 
         await _provider1.DidNotReceive().CheckHealthAsync(Arg.Any<CancellationToken>());
         await _provider2.Received(1).CheckHealthAsync(Arg.Any<CancellationToken>());
@@ -241,7 +241,7 @@ public class FallbackChatClientProviderTests : IDisposable
     {
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
 
-        var result = await _sut.SwitchToNextProviderAsync();
+        var result = await _sut.SwitchToNextProviderAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result);
         Assert.Same(_provider1, _sut.ActiveProvider);
@@ -251,9 +251,9 @@ public class FallbackChatClientProviderTests : IDisposable
     public async Task SwitchToNextProviderAsync_ActiveIsFirst_SwitchesToSecond()
     {
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
-        await _sut.GetChatClientAsync(); // activates provider1
+        await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken); // activates provider1
 
-        var result = await _sut.SwitchToNextProviderAsync();
+        var result = await _sut.SwitchToNextProviderAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result);
         Assert.Same(_provider2, _sut.ActiveProvider);
@@ -263,10 +263,10 @@ public class FallbackChatClientProviderTests : IDisposable
     public async Task SwitchToNextProviderAsync_ActiveIsLast_ReturnsFalse()
     {
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
-        await _sut.GetChatClientAsync(); // activates provider1
-        await _sut.SwitchToNextProviderAsync(); // activates provider2
+        await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken); // activates provider1
+        await _sut.SwitchToNextProviderAsync(TestContext.Current.CancellationToken); // activates provider2
 
-        var result = await _sut.SwitchToNextProviderAsync();
+        var result = await _sut.SwitchToNextProviderAsync(TestContext.Current.CancellationToken);
 
         Assert.False(result);
     }
@@ -276,9 +276,9 @@ public class FallbackChatClientProviderTests : IDisposable
     {
         _provider2.IsAvailable.Returns(false);
         _sut = new FallbackChatClientProvider(_provider1, _provider2);
-        await _sut.GetChatClientAsync(); // activates provider1
+        await _sut.GetChatClientAsync(cancellationToken: TestContext.Current.CancellationToken); // activates provider1
 
-        var result = await _sut.SwitchToNextProviderAsync();
+        var result = await _sut.SwitchToNextProviderAsync(TestContext.Current.CancellationToken);
 
         Assert.False(result);
     }

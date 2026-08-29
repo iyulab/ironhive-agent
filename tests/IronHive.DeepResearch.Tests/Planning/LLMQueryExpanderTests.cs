@@ -38,7 +38,7 @@ public class LLMQueryExpanderTests
         });
 
         // Act
-        var result = await _expander.DecomposeQueryAsync(query);
+        var result = await _expander.DecomposeQueryAsync(query, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(2);
@@ -55,7 +55,7 @@ public class LLMQueryExpanderTests
         _mockService.SetStructuredResponse<object>(null);
 
         // Act
-        var result = await _expander.DecomposeQueryAsync(query);
+        var result = await _expander.DecomposeQueryAsync(query, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(1);
@@ -71,7 +71,7 @@ public class LLMQueryExpanderTests
         _mockService.SetException(new InvalidOperationException("LLM 오류"));
 
         // Act
-        var result = await _expander.DecomposeQueryAsync(query);
+        var result = await _expander.DecomposeQueryAsync(query, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(1);
@@ -103,7 +103,7 @@ public class LLMQueryExpanderTests
         });
 
         // Act
-        var result = await _expander.DiscoverPerspectivesAsync(query);
+        var result = await _expander.DiscoverPerspectivesAsync(query, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(2);
@@ -120,7 +120,7 @@ public class LLMQueryExpanderTests
         _mockService.SetStructuredResponse<object>(null);
 
         // Act
-        var result = await _expander.DiscoverPerspectivesAsync(query);
+        var result = await _expander.DiscoverPerspectivesAsync(query, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(1);
@@ -167,8 +167,7 @@ public class LLMQueryExpanderTests
         });
 
         // Act
-        var result = await _expander.ExpandQueriesAsync(
-            originalQuery, subQuestions, perspectives);
+        var result = await _expander.ExpandQueriesAsync(originalQuery, subQuestions, perspectives, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(2);
@@ -192,8 +191,7 @@ public class LLMQueryExpanderTests
         _mockService.SetStructuredResponse<object>(null);
 
         // Act
-        var result = await _expander.ExpandQueriesAsync(
-            originalQuery, subQuestions, perspectives);
+        var result = await _expander.ExpandQueriesAsync(originalQuery, subQuestions, perspectives, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCountGreaterThan(0);
@@ -219,8 +217,7 @@ public class LLMQueryExpanderTests
         });
 
         // Act
-        var result = await _expander.ExpandQueriesAsync(
-            originalQuery, subQuestions, perspectives);
+        var result = await _expander.ExpandQueriesAsync(originalQuery, subQuestions, perspectives, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result[0].Priority.Should().Be(1);
@@ -247,7 +244,7 @@ public class LLMQueryExpanderTests
         });
 
         // Act
-        var result = await _expander.DecomposeQueryAsync(query, options);
+        var result = await _expander.DecomposeQueryAsync(query, options, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(2);
@@ -271,7 +268,7 @@ public class LLMQueryExpanderTests
         });
 
         // Act
-        var result = await _expander.DiscoverPerspectivesAsync(query, options);
+        var result = await _expander.DiscoverPerspectivesAsync(query, options, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().HaveCount(2);

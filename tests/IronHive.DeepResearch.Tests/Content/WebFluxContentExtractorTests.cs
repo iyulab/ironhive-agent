@@ -43,7 +43,7 @@ public class WebFluxContentExtractorTests
         var extractor = CreateExtractor(httpClient);
 
         // Act
-        var result = await extractor.ExtractAsync("https://example.com/page");
+        var result = await extractor.ExtractAsync("https://example.com/page", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -60,7 +60,7 @@ public class WebFluxContentExtractorTests
         var extractor = CreateExtractor(httpClient);
 
         // Act
-        var result = await extractor.ExtractAsync("not-a-valid-url");
+        var result = await extractor.ExtractAsync("not-a-valid-url", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -78,7 +78,7 @@ public class WebFluxContentExtractorTests
         var extractor = CreateExtractor(httpClient);
 
         // Act
-        var result = await extractor.ExtractAsync("https://example.com/notfound");
+        var result = await extractor.ExtractAsync("https://example.com/notfound", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -99,7 +99,7 @@ public class WebFluxContentExtractorTests
         var extractor = CreateExtractor(httpClient);
 
         // Act
-        var result = await extractor.ExtractAsync("https://example.com/api");
+        var result = await extractor.ExtractAsync("https://example.com/api", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -136,7 +136,7 @@ public class WebFluxContentExtractorTests
         };
 
         // Act
-        var result = await extractor.ExtractAsync("https://example.com/page", options);
+        var result = await extractor.ExtractAsync("https://example.com/page", options, TestContext.Current.CancellationToken);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -166,7 +166,7 @@ public class WebFluxContentExtractorTests
         };
 
         // Act
-        var results = await extractor.ExtractBatchAsync(urls);
+        var results = await extractor.ExtractBatchAsync(urls, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(3);
@@ -204,7 +204,7 @@ public class WebFluxContentExtractorTests
         };
 
         // Act
-        var results = await extractor.ExtractBatchAsync(urls);
+        var results = await extractor.ExtractBatchAsync(urls, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(3);
@@ -231,7 +231,7 @@ public class WebFluxContentExtractorTests
         };
 
         // Act
-        var result = await extractor.ExtractAsync("https://example.com/slow", options);
+        var result = await extractor.ExtractAsync("https://example.com/slow", options, TestContext.Current.CancellationToken);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -254,7 +254,7 @@ public class WebFluxContentExtractorTests
         var before = DateTimeOffset.UtcNow;
 
         // Act
-        var result = await extractor.ExtractAsync("https://example.com/page");
+        var result = await extractor.ExtractAsync("https://example.com/page", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.ExtractedAt.Should().BeOnOrAfter(before);
