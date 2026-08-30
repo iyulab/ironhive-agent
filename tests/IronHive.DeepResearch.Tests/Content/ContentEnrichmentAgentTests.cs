@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AwesomeAssertions;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Content;
@@ -237,26 +238,34 @@ public class ContentEnrichmentAgentTests
         _mockExtractor.SetupExtraction("https://example.com/2",
             CreateExtractedContent("https://example.com/2", "Content 2"));
 
-        var progressReports = new List<ContentEnrichmentProgress>();
+        var progressReports = new ConcurrentQueue<ContentEnrichmentProgress>();
+        var seenCounts = new HashSet<int>();
         var progressGate = new SemaphoreSlim(0);
         var progress = new Progress<ContentEnrichmentProgress>(p =>
         {
-            progressReports.Add(p);
-            if (p.CompletedUrls == 2)
+            progressReports.Enqueue(p);
+            lock (seenCounts)
             {
-                progressGate.Release();
+                if (seenCounts.Add(p.CompletedUrls) && seenCounts.Count == searchResults.Count)
+                {
+                    progressGate.Release();
+                }
             }
         });
 
         // Act
         await _agent.EnrichSearchResultsAsync(searchResults, progress: progress, cancellationToken: TestContext.Current.CancellationToken);
 
-        // Assert — wait for the Progress<T> SynchronizationContext dispatch to flush.
-        // Task.Delay alone is flaky on CI runners; SemaphoreSlim with timeout is robust.
+        // Assert — Progress<T> without a captured SynchronizationContext dispatches each Report()
+        // call independently through the ThreadPool: per its own docs, neither delivery order nor
+        // relative completion time is guaranteed across concurrently-raised reports, and handlers
+        // may even run concurrently with themselves (https://learn.microsoft.com/dotnet/api/system.progress-1).
+        // Waiting only for the final expected value's callback (as this test used to) does not
+        // guarantee earlier reports have also been delivered by then — wait until every distinct
+        // CompletedUrls value has actually been observed before asserting on the collection.
         var signaled = await progressGate.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-        signaled.Should().BeTrue("progress callback for CompletedUrls=2 should fire within 5s");
-        progressReports.Should().NotBeEmpty();
-        progressReports.Last().CompletedUrls.Should().Be(2);
+        signaled.Should().BeTrue("progress reports for CompletedUrls=1..2 should all fire within 5s");
+        progressReports.Select(p => p.CompletedUrls).Should().BeEquivalentTo([1, 2]);
     }
 
     [Fact]

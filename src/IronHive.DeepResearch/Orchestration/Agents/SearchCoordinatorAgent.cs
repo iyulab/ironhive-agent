@@ -125,23 +125,35 @@ public partial class SearchCoordinatorAgent
         var successfulResults = new List<SearchResult>();
         var failedSearches = new List<FailedSearch>();
         var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var progressGate = new object();
 
         // 병렬 실행 제어
         using var semaphore = new SemaphoreSlim(options.MaxParallelSearches);
         var completedCount = 0;
         var inProgressCount = 0;
+        var progressReporter = new OrderedProgressReporter<SearchBatchProgress>(progress);
 
-        void ReportProgress()
+        // 카운터 증감과 그 시점의 상태 스냅샷·큐 적재를 하나의 락으로 직렬화해, 병렬로
+        // 시작·완료되는 쿼리들의 진행률 콜백이 항상 호출된 순서대로 전달되도록 보장한다
+        // (OrderedProgressReporter는 적재 순서 보존만 책임진다). successfulResults/
+        // failedSearches/seenUrls 변경도 같은 락으로 묶어 진행률 스냅샷과 일관되게 유지한다.
+        void ReportProgress(int inProgressDelta, int completedDelta)
         {
-            progress?.Report(new SearchBatchProgress
+            lock (progressGate)
             {
-                TotalQueries = queries.Count,
-                CompletedQueries = completedCount,
-                SuccessfulQueries = successfulResults.Count,
-                FailedQueries = failedSearches.Count,
-                InProgressQueries = inProgressCount,
-                CollectedSources = successfulResults.Sum(r => r.Sources.Count)
-            });
+                inProgressCount += inProgressDelta;
+                completedCount += completedDelta;
+
+                progressReporter.Report(new SearchBatchProgress
+                {
+                    TotalQueries = queries.Count,
+                    CompletedQueries = completedCount,
+                    SuccessfulQueries = successfulResults.Count,
+                    FailedQueries = failedSearches.Count,
+                    InProgressQueries = inProgressCount,
+                    CollectedSources = successfulResults.Sum(r => r.Sources.Count)
+                });
+            }
         }
 
         // 우선순위별로 정렬하여 실행
@@ -150,8 +162,7 @@ public partial class SearchCoordinatorAgent
         var tasks = sortedQueries.Select(async query =>
         {
             await semaphore.WaitAsync(cancellationToken);
-            Interlocked.Increment(ref inProgressCount);
-            ReportProgress();
+            ReportProgress(inProgressDelta: 1, completedDelta: 0);
 
             try
             {
@@ -160,7 +171,7 @@ public partial class SearchCoordinatorAgent
 
                 if (result.Success)
                 {
-                    lock (successfulResults)
+                    lock (progressGate)
                     {
                         // 중복 URL 제거
                         if (options.DeduplicateUrls)
@@ -187,7 +198,7 @@ public partial class SearchCoordinatorAgent
                 }
                 else
                 {
-                    lock (failedSearches)
+                    lock (progressGate)
                     {
                         failedSearches.Add(result.Failure!);
                     }
@@ -195,14 +206,13 @@ public partial class SearchCoordinatorAgent
             }
             finally
             {
-                Interlocked.Decrement(ref inProgressCount);
-                Interlocked.Increment(ref completedCount);
                 semaphore.Release();
-                ReportProgress();
+                ReportProgress(inProgressDelta: -1, completedDelta: 1);
             }
         });
 
         await Task.WhenAll(tasks);
+        await progressReporter.CompleteAsync();
 
         var completedAt = DateTimeOffset.UtcNow;
 

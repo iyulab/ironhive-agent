@@ -54,17 +54,24 @@ public partial class ContentEnrichmentAgent
 
         using var semaphore = new SemaphoreSlim(options.MaxParallelExtractions);
         var completedCount = 0;
+        var progressReporter = new OrderedProgressReporter<ContentEnrichmentProgress>(progress);
 
         void ReportProgress()
         {
-            progress?.Report(new ContentEnrichmentProgress
+            // completedCount의 증가와 그 시점의 상태 스냅샷·큐 적재를 하나의 락으로 직렬화해,
+            // 병렬로 완료되는 작업들의 진행률 콜백이 항상 CompletedUrls 오름차순으로 전달되도록
+            // 보장한다(OrderedProgressReporter는 적재 순서 보존만 책임진다).
+            lock (documents)
             {
-                TotalUrls = sourcesToProcess.Count,
-                CompletedUrls = completedCount,
-                SuccessfulUrls = documents.Count,
-                FailedUrls = failedExtractions.Count,
-                ChunksCreated = totalChunks
-            });
+                progressReporter.Report(new ContentEnrichmentProgress
+                {
+                    TotalUrls = sourcesToProcess.Count,
+                    CompletedUrls = ++completedCount,
+                    SuccessfulUrls = documents.Count,
+                    FailedUrls = failedExtractions.Count,
+                    ChunksCreated = totalChunks
+                });
+            }
         }
 
         var tasks = sourcesToProcess.Select(async source =>
@@ -89,13 +96,13 @@ public partial class ContentEnrichmentAgent
             }
             finally
             {
-                Interlocked.Increment(ref completedCount);
                 semaphore.Release();
                 ReportProgress();
             }
         });
 
         await Task.WhenAll(tasks);
+        await progressReporter.CompleteAsync();
 
         var completedAt = DateTimeOffset.UtcNow;
 

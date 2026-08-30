@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AwesomeAssertions;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Models.Planning;
@@ -169,16 +170,30 @@ public class SearchCoordinatorAgentTests
         _mockProvider.SetupSearchResult("query1", CreateSearchResult("query1", 1));
         _mockProvider.SetupSearchResult("query2", CreateSearchResult("query2", 1));
 
-        var progressReports = new List<SearchBatchProgress>();
-        var progress = new Progress<SearchBatchProgress>(p => progressReports.Add(p));
+        var progressReports = new ConcurrentQueue<SearchBatchProgress>();
+        var progressGate = new SemaphoreSlim(0);
+        var progress = new Progress<SearchBatchProgress>(p =>
+        {
+            progressReports.Enqueue(p);
+            if (p.CompletedQueries == 2)
+            {
+                progressGate.Release();
+            }
+        });
 
         // Act
         await _agent.ExecuteSearchesAsync(queries, progress: progress, cancellationToken: TestContext.Current.CancellationToken);
 
-        // Assert (약간의 지연 후 확인)
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        progressReports.Should().NotBeEmpty();
-        progressReports.Last().CompletedQueries.Should().Be(2);
+        // Assert — wait for the Progress<T> SynchronizationContext dispatch to flush.
+        // Task.Delay alone is flaky on CI runners; SemaphoreSlim with timeout is robust.
+        var signaled = await progressGate.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        signaled.Should().BeTrue("progress callback for CompletedQueries=2 should fire within 5s");
+        // Progress<T> without a captured SynchronizationContext dispatches through the
+        // ThreadPool, which per its own docs does not guarantee delivery order (and permits
+        // concurrent invocation) across reports raised from parallel work — hence ConcurrentQueue
+        // above and an order-independent assertion here rather than progressReports.Last().
+        // https://learn.microsoft.com/dotnet/api/system.progress-1
+        progressReports.Should().Contain(p => p.CompletedQueries == 2);
     }
 
     [Fact]

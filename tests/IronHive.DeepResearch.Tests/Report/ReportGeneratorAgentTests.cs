@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AwesomeAssertions;
 using IronHive.DeepResearch.Abstractions;
 using IronHive.DeepResearch.Models.Analysis;
@@ -153,15 +154,39 @@ public class ReportGeneratorAgentTests
         var state = CreateTestState();
         SetupDefaultMocks();
 
-        var progressReports = new List<ReportGenerationProgress>();
-        var progress = new Progress<ReportGenerationProgress>(p => progressReports.Add(p));
+        var progressReports = new ConcurrentQueue<ReportGenerationProgress>();
+        var requiredPhases = new[]
+        {
+            ReportGenerationPhase.GeneratingOutline,
+            ReportGenerationPhase.GeneratingSections,
+            ReportGenerationPhase.Completed
+        };
+        var seenPhases = new HashSet<ReportGenerationPhase>();
+        var progressGate = new SemaphoreSlim(0);
+        var progress = new Progress<ReportGenerationProgress>(p =>
+        {
+            progressReports.Enqueue(p);
+            lock (seenPhases)
+            {
+                if (seenPhases.Add(p.Phase) && requiredPhases.All(seenPhases.Contains))
+                {
+                    progressGate.Release();
+                }
+            }
+        });
 
         // Act
         await _agent.GenerateReportAsync(state, progress: progress, cancellationToken: TestContext.Current.CancellationToken);
 
-        // Assert
-        await Task.Delay(100, TestContext.Current.CancellationToken);
-        progressReports.Should().NotBeEmpty();
+        // Assert — Progress<T> without a captured SynchronizationContext dispatches each Report()
+        // call independently through the ThreadPool: per its own docs, neither delivery order nor
+        // relative completion time is guaranteed across reports, even ones raised sequentially by
+        // the producer (https://learn.microsoft.com/dotnet/api/system.progress-1). Gating only on
+        // the terminal phase (as this test used to, with a fixed Task.Delay before that) does not
+        // guarantee the earlier phases have also been delivered by assertion time — wait until
+        // every required phase has actually been observed.
+        var signaled = await progressGate.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        signaled.Should().BeTrue("all required progress phases should be reported within 5s");
         progressReports.Should().Contain(p => p.Phase == ReportGenerationPhase.GeneratingOutline);
         progressReports.Should().Contain(p => p.Phase == ReportGenerationPhase.GeneratingSections);
         progressReports.Should().Contain(p => p.Phase == ReportGenerationPhase.Completed);
