@@ -1,4 +1,5 @@
 using System.Text.Json;
+using IronHive.Agent.Exceptions;
 using IronHive.Agent.Loop;
 using IronHive.Agent.Tracking;
 using IronHive.Agent.Context;
@@ -641,5 +642,133 @@ public class AgentLoopTests
         // Assert
         Assert.Equal("ok", response.Content);
         Assert.Null(mockClient.ReceivedOptions[0]!.AdditionalProperties);
+    }
+
+    // Regression coverage for docket iyulab/ironhive-agent#153: AgentServicesOptions.UsageLimits
+    // used to register a fully working UsageLimiter in DI that AgentLoop's request path never
+    // consulted, so a configured session limit silently enforced nothing.
+
+    [Fact]
+    public async Task RunAsync_WithUsageLimiterAlreadyOverLimit_ThrowsWithoutCallingModel()
+    {
+        // Arrange
+        var mockClient = new MockChatClient().EnqueueResponse("should never be returned");
+        var config = new UsageLimitsConfig { MaxSessionTokens = 10, StopOnLimit = true };
+        var limiter = new UsageLimiter(config);
+        limiter.RecordTokenUsage(10, 0m); // already at the limit before the first turn
+
+        var agentLoop = new AgentLoop(mockClient, usageLimiter: limiter);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UsageLimitExceededException>(
+            () => agentLoop.RunAsync("prompt", TestContext.Current.CancellationToken));
+        Assert.Empty(mockClient.ReceivedMessages);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithUsageLimiterConfiguredButNotStopOnLimit_DoesNotThrow()
+    {
+        // Arrange
+        var mockClient = new MockChatClient().EnqueueResponse("ok");
+        var config = new UsageLimitsConfig { MaxSessionTokens = 10, StopOnLimit = false };
+        var limiter = new UsageLimiter(config);
+        limiter.RecordTokenUsage(1000, 0m); // way over, but StopOnLimit is off
+
+        var agentLoop = new AgentLoop(mockClient, usageLimiter: limiter);
+
+        // Act
+        var response = await agentLoop.RunAsync("prompt", TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("ok", response.Content);
+        Assert.Single(mockClient.ReceivedMessages);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithUsageLimiterConfigured_FeedsTurnUsageIntoLimiter()
+    {
+        // Arrange
+        var mockClient = new MockChatClient()
+            .EnqueueResponse("first", new UsageDetails { InputTokenCount = 6, OutputTokenCount = 4 });
+        // Limit (8) sits between the first turn's own usage (10) and zero, so the first turn is
+        // itself allowed to run (nothing recorded yet when its pre-flight check happens) but pushes
+        // the session over the limit -- verifying RecordUsageLimit actually persists what it's fed.
+        var config = new UsageLimitsConfig { MaxSessionTokens = 8, StopOnLimit = true };
+        var limiter = new UsageLimiter(config);
+        var agentLoop = new AgentLoop(mockClient, usageLimiter: limiter);
+
+        // Act — first turn is allowed (limiter starts at 0) and records 10 tokens, now over the
+        // 8-token limit.
+        await agentLoop.RunAsync("first prompt", TestContext.Current.CancellationToken);
+        Assert.Equal(10, limiter.GetCurrentUsage().Tokens);
+
+        // Assert — the second call's pre-flight check now sees the cumulative total from the first
+        // turn and stops before the model is invoked a second time.
+        await Assert.ThrowsAsync<UsageLimitExceededException>(
+            () => agentLoop.RunAsync("second prompt", TestContext.Current.CancellationToken));
+        Assert.Single(mockClient.ReceivedMessages); // second call never reached the model
+    }
+
+    [Fact]
+    public async Task RunAsync_WithoutUsageLimiterConfigured_NeverThrowsRegardlessOfUsage()
+    {
+        // Arrange — default AgentLoop(mockClient) ctor, no limiter passed (existing call sites)
+        var mockClient = new MockChatClient()
+            .EnqueueResponse("ok", new UsageDetails { InputTokenCount = 100_000, OutputTokenCount = 100_000 });
+        var agentLoop = new AgentLoop(mockClient);
+
+        // Act
+        var response = await agentLoop.RunAsync("prompt", TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("ok", response.Content);
+    }
+
+    [Fact]
+    public async Task RunStreamingAsync_WithUsageLimiterAlreadyOverLimit_ThrowsWithoutCallingModel()
+    {
+        // Arrange
+        var mockClient = new MockChatClient().EnqueueResponse("should never be returned");
+        var config = new UsageLimitsConfig { MaxSessionTokens = 10, StopOnLimit = true };
+        var limiter = new UsageLimiter(config);
+        limiter.RecordTokenUsage(10, 0m);
+
+        var agentLoop = new AgentLoop(mockClient, usageLimiter: limiter);
+
+        // Act & Assert
+        async Task Act()
+        {
+            await foreach (var _ in agentLoop.RunStreamingAsync("prompt", TestContext.Current.CancellationToken))
+            {
+            }
+        }
+        await Assert.ThrowsAsync<UsageLimitExceededException>(Act);
+        Assert.Empty(mockClient.ReceivedMessages);
+    }
+
+    [Fact]
+    public async Task RunStreamingAsync_WithUsageContentInStream_RecordsUsageIntoLimiterAndYieldsFinalChunk()
+    {
+        // Arrange
+        var mockClient = new MockChatClient()
+            .EnqueueResponse("streamed", new UsageDetails { InputTokenCount = 6, OutputTokenCount = 4 });
+        var config = new UsageLimitsConfig { MaxSessionTokens = 1000, StopOnLimit = true };
+        var limiter = new UsageLimiter(config);
+        var agentLoop = new AgentLoop(mockClient, usageLimiter: limiter);
+
+        // Act
+        AgentResponseChunk? usageChunk = null;
+        await foreach (var chunk in agentLoop.RunStreamingAsync("prompt", TestContext.Current.CancellationToken))
+        {
+            if (chunk.Usage is not null)
+            {
+                usageChunk = chunk;
+            }
+        }
+
+        // Assert
+        Assert.NotNull(usageChunk);
+        Assert.Equal(10, usageChunk!.Usage!.TotalTokens);
+        Assert.Equal(10, limiter.GetCurrentUsage().Tokens);
     }
 }

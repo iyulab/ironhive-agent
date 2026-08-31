@@ -2,8 +2,10 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using IronHive.Agent.Context;
 using IronHive.Agent.ErrorRecovery;
+using IronHive.Agent.Exceptions;
 using IronHive.Agent.Tracking;
 using Microsoft.Extensions.AI;
+using TokenMeter;
 
 namespace IronHive.Agent.Loop;
 
@@ -16,6 +18,7 @@ public class AgentLoop : IAgentLoop
     private readonly IChatClient _chatClient;
     private readonly AgentOptions _options;
     private readonly IUsageTracker? _usageTracker;
+    private readonly IUsageLimiter? _usageLimiter;
     private readonly ContextManager? _contextManager;
     private readonly IErrorRecoveryService? _errorRecovery;
     private readonly IToolRetriever? _toolRetriever;
@@ -27,11 +30,13 @@ public class AgentLoop : IAgentLoop
         IUsageTracker? usageTracker = null,
         ContextManager? contextManager = null,
         IErrorRecoveryService? errorRecovery = null,
-        IToolRetriever? toolRetriever = null)
+        IToolRetriever? toolRetriever = null,
+        IUsageLimiter? usageLimiter = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _options = options ?? new AgentOptions();
         _usageTracker = usageTracker;
+        _usageLimiter = usageLimiter;
         _contextManager = contextManager;
         _errorRecovery = errorRecovery;
         _toolRetriever = toolRetriever;
@@ -64,6 +69,8 @@ public class AgentLoop : IAgentLoop
 
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
+
+        ThrowIfUsageLimitExceeded();
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         ChatResponse response;
@@ -109,6 +116,7 @@ public class AgentLoop : IAgentLoop
         if (usage is not null)
         {
             _usageTracker?.Record(usage);
+            RecordUsageLimit(usage);
         }
 
         return new AgentResponse
@@ -140,9 +148,12 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
+        ThrowIfUsageLimitExceeded();
+
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
+        UsageDetails? usageDetails = null;
 
         IAsyncEnumerable<ChatResponseUpdate> stream;
         try
@@ -183,6 +194,12 @@ public class AgentLoop : IAgentLoop
                     };
                 }
             }
+
+            var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
+            if (usageContent is not null)
+            {
+                usageDetails = usageContent.Details;
+            }
         }
 
         // Add complete assistant response to history for multi-turn conversations
@@ -195,6 +212,14 @@ public class AgentLoop : IAgentLoop
             }
         }
         _history.Add(assistantMessage);
+
+        var streamedUsage = MapUsage(usageDetails);
+        if (streamedUsage is not null)
+        {
+            _usageTracker?.Record(streamedUsage);
+            RecordUsageLimit(streamedUsage);
+            yield return new AgentResponseChunk { Usage = streamedUsage };
+        }
     }
 
     /// <summary>
@@ -278,6 +303,40 @@ public class AgentLoop : IAgentLoop
             InputTokens = usage.InputTokenCount ?? 0,
             OutputTokens = usage.OutputTokenCount ?? 0
         };
+    }
+
+    /// <summary>
+    /// Checks the configured <see cref="IUsageLimiter"/> (if any) and throws
+    /// <see cref="UsageLimitExceededException"/> before the next model call when the session's
+    /// token/cost limit has already been reached and <see cref="UsageLimitsConfig.StopOnLimit"/>
+    /// is set. No-ops when no limiter is configured.
+    /// </summary>
+    private void ThrowIfUsageLimitExceeded()
+    {
+        var result = _usageLimiter?.CheckLimits();
+        if (result is { ShouldStop: true })
+        {
+            throw new UsageLimitExceededException(result);
+        }
+    }
+
+    /// <summary>
+    /// Feeds this turn's token usage into the configured <see cref="IUsageLimiter"/> (if any),
+    /// using the same <see cref="TokenMeter.ModelCatalog"/> pricing lookup <see cref="IUsageTracker"/>
+    /// uses for session-total cost, so the next turn's <see cref="ThrowIfUsageLimitExceeded"/> check
+    /// sees an up-to-date cumulative total. No-ops when no limiter is configured.
+    /// </summary>
+    private void RecordUsageLimit(TokenUsage usage)
+    {
+        if (_usageLimiter is null)
+        {
+            return;
+        }
+
+        var pricing = !string.IsNullOrEmpty(_options.ModelId) ? ModelCatalog.FindModel(_options.ModelId) : null;
+        var cost = pricing?.CalculateCost((int)usage.InputTokens, (int)usage.OutputTokens) ?? 0m;
+
+        _usageLimiter.RecordTokenUsage((int)usage.TotalTokens, cost);
     }
 
     /// <summary>

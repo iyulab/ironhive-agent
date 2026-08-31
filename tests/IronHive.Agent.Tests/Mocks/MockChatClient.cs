@@ -187,6 +187,15 @@ public class MockChatClient : IChatClient
                 }
             }
         }
+
+        if (response.Usage is not null)
+        {
+            yield return new ChatResponseUpdate
+            {
+                Role = ChatRole.Assistant,
+                Contents = [new UsageContent(response.Usage)]
+            };
+        }
     }
 
     public object? GetService(Type serviceType, object? serviceKey = null)

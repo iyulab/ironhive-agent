@@ -37,6 +37,10 @@ public static class AgentServiceCollectionExtensions
         {
             services.AddSingleton(options.UsageLimits);
             services.AddSingleton<UsageLimiter>();
+            // Also exposed as IUsageLimiter so a consumer's AgentLoop factory can resolve it
+            // without depending on the concrete type -- AgentLoop's own constructor takes the
+            // interface and enforces the configured limit around each model call.
+            services.AddSingleton<IUsageLimiter>(sp => sp.GetRequiredService<UsageLimiter>());
         }
 
         // Register mode management
