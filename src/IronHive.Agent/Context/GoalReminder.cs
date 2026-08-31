@@ -90,6 +90,11 @@ public class GoalReminder
     /// <summary>
     /// Creates a goal reminder message.
     /// </summary>
+    /// <remarks>
+    /// Uses <see cref="ChatRole.User"/>, not <see cref="ChatRole.System"/> — this message is
+    /// appended mid-conversation, and many chat templates reject a system-role message that
+    /// isn't the first message in the array.
+    /// </remarks>
     public ChatMessage CreateReminderMessage()
     {
         if (string.IsNullOrWhiteSpace(_currentGoal))
@@ -98,7 +103,7 @@ public class GoalReminder
         }
 
         var reminderText = _options.ReminderTemplate.Replace("{goal}", _currentGoal);
-        return new ChatMessage(ChatRole.System, reminderText);
+        return new ChatMessage(ChatRole.User, reminderText);
     }
 
     /// <summary>

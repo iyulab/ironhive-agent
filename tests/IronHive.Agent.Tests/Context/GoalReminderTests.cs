@@ -90,7 +90,7 @@ public class GoalReminderTests
 
         var message = reminder.CreateReminderMessage();
 
-        Assert.Equal(ChatRole.System, message.Role);
+        Assert.Equal(ChatRole.User, message.Role);
         Assert.Contains("Implement feature X", message.Text);
         Assert.Contains("[REMINDER]", message.Text);
     }
@@ -142,6 +142,24 @@ public class GoalReminderTests
 
         Assert.Equal(history.Count + 1, result.Count);
         Assert.Contains("[REMINDER]", result[^1].Text);
+    }
+
+    [Fact]
+    public void InjectReminderIfNeeded_NeverAddsASecondSystemMessage()
+    {
+        // Regression for docket iyulab/ironhive-agent#154: a chat template that requires
+        // exactly one system message, and that it be first, must still see exactly that
+        // shape after a reminder is injected mid-conversation.
+        var options = new GoalReminderOptions { MinMessagesBeforeReminder = 4 };
+        var reminder = new GoalReminder(options);
+        reminder.CurrentGoal = "Test goal";
+        var history = CreateHistory(5);
+
+        var result = reminder.InjectReminderIfNeeded(history);
+
+        Assert.Single(result, m => m.Role == ChatRole.System);
+        Assert.Equal(ChatRole.System, result[0].Role);
+        Assert.Equal(ChatRole.User, result[^1].Role);
     }
 
     [Fact]
