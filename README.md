@@ -9,7 +9,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Built-in Tools**: Read, Write, Shell, Glob, Grep, Todo
-- **Sub-Agent System**: Explore/General sub-agent spawning with depth and concurrency limits
+- **Sub-Agent System**: Explore/General sub-agent spawning with depth and concurrency limits. `SubAgentType`/`ISubAgentService` are convenience wrappers over Ironbees' `IAgentOrchestrator.ProcessAsync(input, agentName, ct)` for exactly these two pre-baked profiles — a consumer that needs a subagent scoped to a custom tool list can define a named agent directly in Ironbees (`AgentConfig.Tools`) and call `IAgentOrchestrator.ProcessAsync` with that agent's name, without going through `SubAgentType` at all
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`
 - **Checkpoint Service**: `ICheckpointService` abstraction for pre-destructive-operation state snapshots and rollback
