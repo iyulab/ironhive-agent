@@ -30,56 +30,77 @@ public static class ToolCallResultFactory
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        var resultsByCallId = response.Messages
-            .SelectMany(m => m.Contents.OfType<FunctionResultContent>())
-            .ToDictionary(r => r.CallId, r => r);
+        return Extract(
+            response.Messages.SelectMany(m => m.Contents.OfType<FunctionCallContent>()),
+            response.Messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()));
+    }
+
+    /// <summary>
+    /// Extracts one <see cref="ToolCallResult"/> per call, correlating each against
+    /// <paramref name="functionResults"/> by <see cref="FunctionCallContent.CallId"/>.
+    /// </summary>
+    /// <remarks>
+    /// The streaming path never has a <see cref="ChatResponse"/> to hand — it sees the same two
+    /// content types arrive as separate updates. It correlates them by this overload rather than by a
+    /// second copy of the rule, so a streamed turn and a non-streamed turn cannot report the same
+    /// call differently.
+    /// </remarks>
+    public static List<ToolCallResult> Extract(
+        IEnumerable<FunctionCallContent> functionCalls,
+        IEnumerable<FunctionResultContent> functionResults)
+    {
+        ArgumentNullException.ThrowIfNull(functionCalls);
+        ArgumentNullException.ThrowIfNull(functionResults);
+
+        var resultsByCallId = new Dictionary<string, FunctionResultContent>();
+        foreach (var functionResult in functionResults)
+        {
+            resultsByCallId[functionResult.CallId] = functionResult;
+        }
 
         var results = new List<ToolCallResult>();
 
-        foreach (var message in response.Messages)
+        foreach (var call in functionCalls)
         {
-            foreach (var call in message.Contents.OfType<FunctionCallContent>())
+            var arguments = call.Arguments is not null
+                ? JsonSerializer.Serialize(call.Arguments)
+                : "{}";
+
+            if (call.Exception is not null)
             {
-                var arguments = call.Arguments is not null
-                    ? JsonSerializer.Serialize(call.Arguments)
-                    : "{}";
-
-                if (call.Exception is not null)
-                {
-                    // The provider produced a call Microsoft.Extensions.AI could not parse
-                    // (e.g. malformed arguments) -- it never reaches an invoker.
-                    results.Add(new ToolCallResult
-                    {
-                        ToolName = call.Name,
-                        Arguments = arguments,
-                        Result = call.Exception.Message,
-                        Success = false
-                    });
-                    continue;
-                }
-
-                if (resultsByCallId.TryGetValue(call.CallId, out var functionResult))
-                {
-                    results.Add(new ToolCallResult
-                    {
-                        ToolName = call.Name,
-                        Arguments = arguments,
-                        Result = functionResult.Result?.ToString() ?? string.Empty,
-                        Success = functionResult.Exception is null
-                    });
-                    continue;
-                }
-
-                // No function-invocation middleware resolved this call within this response --
-                // the outcome is unknown, not successful.
+                // The provider produced a call Microsoft.Extensions.AI could not parse
+                // (e.g. malformed arguments) -- it never reaches an invoker.
                 results.Add(new ToolCallResult
                 {
                     ToolName = call.Name,
                     Arguments = arguments,
-                    Result = string.Empty,
-                    Success = null
+                    Result = call.Exception.Message,
+                    Success = false
                 });
+                continue;
             }
+
+            if (resultsByCallId.TryGetValue(call.CallId, out var functionResult))
+            {
+                results.Add(new ToolCallResult
+                {
+                    ToolName = call.Name,
+                    Arguments = arguments,
+                    Result = functionResult.Result?.ToString() ?? string.Empty,
+                    Success = functionResult.Exception is null
+                });
+                continue;
+            }
+
+            // No function-invocation middleware resolved this call within this response --
+            // the outcome is unknown, not successful.
+            results.Add(new ToolCallResult
+            {
+                ToolName = call.Name,
+                Arguments = arguments,
+                Result = string.Empty,
+                Success = null
+            });
         }
 
         return results;

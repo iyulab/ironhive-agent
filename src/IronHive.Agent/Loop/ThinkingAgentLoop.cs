@@ -19,6 +19,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     private readonly IUsageTracker? _usageTracker;
     private readonly ContextManager? _contextManager;
     private readonly IToolRetriever? _toolRetriever;
+    private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly List<ChatMessage> _history = [];
 
     public ThinkingAgentLoop(
@@ -28,7 +29,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         ThinkingChatClientOptions? thinkingOptions = null,
         IUsageTracker? usageTracker = null,
         ContextManager? contextManager = null,
-        IToolRetriever? toolRetriever = null)
+        IToolRetriever? toolRetriever = null,
+        IEnumerable<ITurnObserver>? turnObservers = null)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(turnManager);
@@ -42,6 +44,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         _usageTracker = usageTracker;
         _contextManager = contextManager;
         _toolRetriever = toolRetriever;
+        _turnObservers = turnObservers?.ToArray() ?? [];
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))
@@ -88,13 +91,26 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             _usageTracker?.Record(usage);
         }
 
+        var content = response.Text ?? string.Empty;
+        var addendum = await TurnObserverNotifier.NotifyAsync(
+            _turnObservers,
+            new TurnRecord
+            {
+                Content = content,
+                ToolCalls = toolCalls,
+                Usage = usage,
+                ThinkingContent = thinkingContent
+            },
+            cancellationToken);
+
         return new AgentResponse
         {
-            Content = response.Text ?? string.Empty,
+            Content = addendum is null ? content : content + TurnObserverNotifier.AddendumSeparator + addendum,
             HasTextOutput = !string.IsNullOrEmpty(response.Text),
             ToolCalls = toolCalls,
             Usage = usage,
-            ThinkingContent = thinkingContent
+            ThinkingContent = thinkingContent,
+            Addendum = addendum
         };
     }
 
@@ -121,6 +137,9 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
+        var toolResults = new List<FunctionResultContent>();
+        var thinkingBuilder = new StringBuilder();
+        UsageDetails? usageDetails = null;
 
         // Track live reasoning streamed this turn so the turn-end metadata thinking is not emitted
         // a second time (prefer-live; see ComputeMetadataThinkingTail).
@@ -137,6 +156,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             {
                 liveReasoning.Append(liveDelta);
                 sawLiveReasoning = true;
+                thinkingBuilder.Append(liveDelta);
                 yield return new AgentResponseChunk
                 {
                     ThinkingDelta = liveDelta
@@ -155,6 +175,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                     : metadataThinking;
                 if (!string.IsNullOrEmpty(thinkingDelta))
                 {
+                    thinkingBuilder.Append(thinkingDelta);
                     yield return new AgentResponseChunk
                     {
                         ThinkingDelta = thinkingDelta
@@ -182,6 +203,14 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                     };
                 }
             }
+
+            toolResults.AddRange(update.Contents.OfType<FunctionResultContent>());
+
+            var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
+            if (usageContent is not null)
+            {
+                usageDetails = usageContent.Details;
+            }
         }
 
         // Add complete assistant response to history for multi-turn conversations
@@ -194,6 +223,33 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             }
         }
         _history.Add(assistantMessage);
+
+        // This path reported no usage at all until now -- RunAsync recorded it, the streaming twin
+        // silently did not, so a session that streamed had no token accounting.
+        var streamedUsage = MapUsage(usageDetails);
+        if (streamedUsage is not null)
+        {
+            _usageTracker?.Record(streamedUsage);
+        }
+
+        var thinking = thinkingBuilder.Length > 0
+            ? new ThinkingContent { Content = thinkingBuilder.ToString() }
+            : null;
+
+        var turn = new TurnRecord
+        {
+            Content = responseBuilder.ToString(),
+            ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
+            Usage = streamedUsage,
+            ThinkingContent = thinking
+        };
+
+        yield return new AgentResponseChunk
+        {
+            Turn = turn,
+            Usage = streamedUsage,
+            TextDelta = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
+        };
     }
 
     /// <summary>

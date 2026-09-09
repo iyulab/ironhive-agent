@@ -341,6 +341,71 @@ services.Configure<PermissionConfig>(config =>
 });
 ```
 
+## Post-Turn Seam
+
+The loop knows what a turn actually did — which tools it called, with what arguments, and what came
+back — because it assembles exactly that to build the turn's history message. `ITurnObserver` hands
+that record over instead of dropping it, so a consumer can check the model's closing narration against
+it rather than rebuilding the correlation outside the loop.
+
+```csharp
+public sealed class ClaimChecker : ITurnObserver
+{
+    public ValueTask<string?> OnTurnCompletedAsync(TurnRecord turn, CancellationToken ct)
+    {
+        var claimedItSent = turn.Content.Contains("message sent", StringComparison.OrdinalIgnoreCase);
+        var actuallySent = turn.ToolCalls.Any(c => c.ToolName == "send_message");
+
+        return ValueTask.FromResult<string?>(
+            claimedItSent && !actuallySent ? "_(no message was sent this turn)_" : null);
+    }
+}
+
+var loop = new AgentLoop(chatClient, options, turnObservers: [new ClaimChecker()]);
+```
+
+**Observe and append, never edit.** The observer runs once the turn is complete, which on
+`RunStreamingAsync` means every text delta has already been yielded and rendered — there is nothing
+left to amend. What an observer returns is appended *after* the turn's output, identically on both
+entry points, so a check does not silently stop firing when a consumer switches to streaming:
+
+- `RunAsync` — appended to the end of `AgentResponse.Content`, and also exposed on its own as
+  `AgentResponse.Addendum` so it can be told apart from the model's own words.
+- `RunStreamingAsync` — carried as the `TextDelta` of the final chunk.
+
+An addendum reaches the consumer, **not the conversation**: it is never written into history, because
+the model did not say it and feeding a fabricated assistant utterance back into the next turn's
+context would be worse than the claim it corrects.
+
+`ThinkingAgentLoop` implements the same seam — it is a peer implementation of `IAgentLoop`, not a
+wrapper around `AgentLoop`.
+
+### Reading the record without an observer
+
+`RunStreamingAsync` always ends with one final chunk carrying `AgentResponseChunk.Turn`, whether or
+not any observer is registered:
+
+```csharp
+await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))
+{
+    if (chunk.Turn is { } turn)
+    {
+        logger.LogInformation("turn used {Count} tools", turn.ToolCalls.Count);
+    }
+}
+```
+
+`RunAsync` already returned `AgentResponse.ToolCalls`; the streaming path used to yield tool calls one
+delta at a time and nothing consolidated.
+
+### `ToolCallResult.Success` is `bool?` on purpose
+
+The loop **extracts** the calls the model requested — it does not invoke them. Unless the
+`IChatClient` handed to the loop was built with `UseFunctionInvocation()`, there is no
+`FunctionResultContent` to correlate against and the honest answer to "did it succeed" is unknown, so
+`Success` is `null` rather than a guess. A call's presence and arguments are always populated; if your
+check needs the outcome too, confirm your client wraps function invocation.
+
 ## Requirements
 
 - .NET 10.0+

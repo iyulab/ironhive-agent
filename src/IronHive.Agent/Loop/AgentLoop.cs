@@ -22,6 +22,7 @@ public class AgentLoop : IAgentLoop
     private readonly ContextManager? _contextManager;
     private readonly IErrorRecoveryService? _errorRecovery;
     private readonly IToolRetriever? _toolRetriever;
+    private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly List<ChatMessage> _history = [];
 
     public AgentLoop(
@@ -31,7 +32,8 @@ public class AgentLoop : IAgentLoop
         ContextManager? contextManager = null,
         IErrorRecoveryService? errorRecovery = null,
         IToolRetriever? toolRetriever = null,
-        IUsageLimiter? usageLimiter = null)
+        IUsageLimiter? usageLimiter = null,
+        IEnumerable<ITurnObserver>? turnObservers = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _options = options ?? new AgentOptions();
@@ -40,6 +42,7 @@ public class AgentLoop : IAgentLoop
         _contextManager = contextManager;
         _errorRecovery = errorRecovery;
         _toolRetriever = toolRetriever;
+        _turnObservers = turnObservers?.ToArray() ?? [];
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))
@@ -119,12 +122,21 @@ public class AgentLoop : IAgentLoop
             RecordUsageLimit(usage);
         }
 
+        var content = response.Text ?? string.Empty;
+        var addendum = await TurnObserverNotifier.NotifyAsync(
+            _turnObservers,
+            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage },
+            cancellationToken);
+
         return new AgentResponse
         {
-            Content = response.Text ?? string.Empty,
+            // The addendum rides at the end of Content so a consumer that only renders Content still
+            // shows it, and stays separately readable so it can be told apart from the model's words.
+            Content = addendum is null ? content : content + TurnObserverNotifier.AddendumSeparator + addendum,
             HasTextOutput = !string.IsNullOrEmpty(response.Text),
             ToolCalls = toolCalls,
-            Usage = usage
+            Usage = usage,
+            Addendum = addendum
         };
     }
 
@@ -153,6 +165,10 @@ public class AgentLoop : IAgentLoop
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
+        // Function-invocation middleware, when present, streams the outcome of each call back as a
+        // FunctionResultContent update. Collecting them is what lets the turn record report an
+        // honest Success instead of an unknown one.
+        var toolResults = new List<FunctionResultContent>();
         UsageDetails? usageDetails = null;
 
         IAsyncEnumerable<ChatResponseUpdate> stream;
@@ -195,6 +211,8 @@ public class AgentLoop : IAgentLoop
                 }
             }
 
+            toolResults.AddRange(update.Contents.OfType<FunctionResultContent>());
+
             var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
             if (usageContent is not null)
             {
@@ -218,8 +236,26 @@ public class AgentLoop : IAgentLoop
         {
             _usageTracker?.Record(streamedUsage);
             RecordUsageLimit(streamedUsage);
-            yield return new AgentResponseChunk { Usage = streamedUsage };
         }
+
+        // One final chunk always closes the stream, carrying the turn's consolidated record. Before
+        // it existed this path yielded tool calls one delta at a time and nothing that said what the
+        // turn as a whole did -- so every consumer rebuilt that correlation outside the loop.
+        var turn = new TurnRecord
+        {
+            Content = responseBuilder.ToString(),
+            ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
+            Usage = streamedUsage
+        };
+
+        yield return new AgentResponseChunk
+        {
+            Turn = turn,
+            Usage = streamedUsage,
+            // Appended, never edited in: the deltas above are already rendered by the time a turn is
+            // complete, so amending what the model said is not a capability this seam can honestly offer.
+            TextDelta = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
+        };
     }
 
     /// <summary>

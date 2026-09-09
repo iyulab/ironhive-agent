@@ -185,6 +185,16 @@ public class MockChatClient : IChatClient
                         Contents = [functionCall]
                     };
                 }
+                else if (content is FunctionResultContent functionResult)
+                {
+                    // Function-invocation middleware streams the outcome of each call back the same
+                    // way it appends it to a non-streamed response.
+                    yield return new ChatResponseUpdate
+                    {
+                        Role = ChatRole.Tool,
+                        Contents = [functionResult]
+                    };
+                }
             }
         }
 

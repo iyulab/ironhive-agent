@@ -127,6 +127,17 @@ public record AgentResponse
     /// Thinking/reasoning content extracted from the response (if available).
     /// </summary>
     public ThinkingContent? ThinkingContent { get; init; }
+
+    /// <summary>
+    /// Text an <see cref="ITurnObserver"/> asked to append after this turn's output, or <c>null</c>
+    /// when no observer appended anything.
+    /// </summary>
+    /// <remarks>
+    /// It is already included at the end of <see cref="Content"/>, so a consumer that only renders
+    /// Content still shows it. This property is what lets a consumer tell the appended text apart
+    /// from what the model itself wrote; the addendum is never written into conversation history.
+    /// </remarks>
+    public string? Addendum { get; init; }
 }
 
 /// <summary>
@@ -170,6 +181,19 @@ public record AgentResponseChunk
     /// Final token usage (only set on last chunk).
     /// </summary>
     public TokenUsage? Usage { get; init; }
+
+    /// <summary>
+    /// The completed turn's record — the text it produced and the tools that produced it. Set only on
+    /// the final chunk, which the loop always emits once the stream ends.
+    /// </summary>
+    /// <remarks>
+    /// The non-streaming path always returned <see cref="AgentResponse.ToolCalls"/>; the streaming
+    /// path used to yield tool calls one delta at a time and never a consolidated record, so every
+    /// consumer that wanted "what did this turn actually do" rebuilt the correlation itself. If an
+    /// <see cref="ITurnObserver"/> appended text, that text rides on this same final chunk as
+    /// <see cref="TextDelta"/>, while <see cref="TurnRecord.Content"/> stays the model's own text.
+    /// </remarks>
+    public TurnRecord? Turn { get; init; }
 }
 
 /// <summary>
