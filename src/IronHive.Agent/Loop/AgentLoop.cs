@@ -169,6 +169,7 @@ public class AgentLoop : IAgentLoop
         // FunctionResultContent update. Collecting them is what lets the turn record report an
         // honest Success instead of an unknown one.
         var toolResults = new List<FunctionResultContent>();
+        var historyBuilder = new StreamingTurnHistoryBuilder();
         UsageDetails? usageDetails = null;
 
         IAsyncEnumerable<ChatResponseUpdate> stream;
@@ -192,6 +193,7 @@ public class AgentLoop : IAgentLoop
             if (!string.IsNullOrEmpty(update.Text))
             {
                 responseBuilder.Append(update.Text);
+                historyBuilder.AppendText(update.Text);
                 yield return new AgentResponseChunk
                 {
                     TextDelta = update.Text
@@ -204,6 +206,7 @@ public class AgentLoop : IAgentLoop
                 foreach (var functionCall in update.Contents.OfType<FunctionCallContent>())
                 {
                     toolCalls.Add(functionCall);
+                    historyBuilder.AppendCall(functionCall);
                     yield return new AgentResponseChunk
                     {
                         ToolCallDelta = ToolCallChunkFactory.FromFunctionCall(functionCall)
@@ -211,7 +214,9 @@ public class AgentLoop : IAgentLoop
                 }
             }
 
-            toolResults.AddRange(update.Contents.OfType<FunctionResultContent>());
+            var updateResults = update.Contents.OfType<FunctionResultContent>().ToArray();
+            toolResults.AddRange(updateResults);
+            historyBuilder.AppendResults(updateResults);
 
             var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
             if (usageContent is not null)
@@ -220,16 +225,9 @@ public class AgentLoop : IAgentLoop
             }
         }
 
-        // Add complete assistant response to history for multi-turn conversations
-        var assistantMessage = new ChatMessage(ChatRole.Assistant, responseBuilder.ToString());
-        if (toolCalls.Count > 0)
-        {
-            foreach (var toolCall in toolCalls)
-            {
-                assistantMessage.Contents.Add(toolCall);
-            }
-        }
-        _history.Add(assistantMessage);
+        // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
+        // non-streaming path leaves behind -- tool results included, and in the order they arrived.
+        _history.AddRange(historyBuilder.Build());
 
         var streamedUsage = MapUsage(usageDetails);
         if (streamedUsage is not null)

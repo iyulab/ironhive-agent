@@ -138,6 +138,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var responseBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
         var toolResults = new List<FunctionResultContent>();
+        var historyBuilder = new StreamingTurnHistoryBuilder();
         var thinkingBuilder = new StringBuilder();
         UsageDetails? usageDetails = null;
 
@@ -186,6 +187,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             if (!string.IsNullOrEmpty(update.Text))
             {
                 responseBuilder.Append(update.Text);
+                historyBuilder.AppendText(update.Text);
                 yield return new AgentResponseChunk
                 {
                     TextDelta = update.Text
@@ -197,6 +199,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                 foreach (var functionCall in update.Contents.OfType<FunctionCallContent>())
                 {
                     toolCalls.Add(functionCall);
+                    historyBuilder.AppendCall(functionCall);
                     yield return new AgentResponseChunk
                     {
                         ToolCallDelta = ToolCallChunkFactory.FromFunctionCall(functionCall)
@@ -204,7 +207,9 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                 }
             }
 
-            toolResults.AddRange(update.Contents.OfType<FunctionResultContent>());
+            var updateResults = update.Contents.OfType<FunctionResultContent>().ToArray();
+            toolResults.AddRange(updateResults);
+            historyBuilder.AppendResults(updateResults);
 
             var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
             if (usageContent is not null)
@@ -213,16 +218,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             }
         }
 
-        // Add complete assistant response to history for multi-turn conversations
-        var assistantMessage = new ChatMessage(ChatRole.Assistant, responseBuilder.ToString());
-        if (toolCalls.Count > 0)
-        {
-            foreach (var toolCall in toolCalls)
-            {
-                assistantMessage.Contents.Add(toolCall);
-            }
-        }
-        _history.Add(assistantMessage);
+        // Same rebuild as AgentLoop -- the peer implementation lost tool results in exactly the same way.
+        _history.AddRange(historyBuilder.Build());
 
         // This path reported no usage at all until now -- RunAsync recorded it, the streaming twin
         // silently did not, so a session that streamed had no token accounting.
