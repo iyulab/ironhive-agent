@@ -49,7 +49,7 @@ jobs:
       # to the job's 20-minute timeout-cancel into a 5-minute dump naming the hung test (same
       # job-timeout shape observed directly on ironhive/ironhive's nuget-publish.yml, run
       # 33171897265, 2026-08-28).
-      run: dotnet test IronHive.Agent.slnx --configuration Release --no-build --verbosity normal --hangdump --hangdump-timeout 5m
+      run: dotnet test --solution IronHive.Agent.slnx --configuration Release --no-build --verbosity normal --hangdump --hangdump-timeout 5m
 
     - name: Extract version from Directory.Build.props
       id: extract_version
