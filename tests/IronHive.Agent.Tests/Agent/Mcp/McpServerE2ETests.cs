@@ -5,10 +5,22 @@ using Xunit;
 namespace IronHive.Agent.Tests.Agent.Mcp;
 
 /// <summary>
-/// End-to-end tests for MCP server integration.
-/// These tests require Node.js and npm to be installed.
-/// Tests are conditionally executed based on environment.
+/// End-to-end tests for MCP server integration, driving a real MCP server over a real stdio transport.
 /// </summary>
+/// <remarks>
+/// <para>
+/// These need <c>npx</c>, and the first run downloads the demo server, so they are not part of the
+/// per-push suite. They are opted into with <c>IRONHIVE_MCP_E2E_ENABLED=true</c> and run on a schedule.
+/// </para>
+/// <para>
+/// The gate used to be that variable alone, set nowhere - not in a workflow, not in a document, not in a
+/// developer's shell. All fourteen tests therefore skipped on every machine and in every CI run since they
+/// were written, and a skipped test reports as a pass. When they were finally run, thirteen passed and one
+/// had been wrong for an unknown length of time: the demo server had renamed a tool, and the assertion
+/// against the old name had no way to say so. A test that cannot run is not a weaker test than one that
+/// does; it is not a test.
+/// </para>
+/// </remarks>
 [Trait("Category", "E2E")]
 [Trait("Category", "MCP")]
 [SuppressMessage("IDisposableAnalyzers.Correctness", "CA1001:Types that own disposable fields should be disposable",
@@ -18,6 +30,9 @@ public class McpServerE2ETests : IAsyncLifetime
     private McpPluginManager? _manager;
     private bool _canRunTests;
     private const string EverythingServerName = "everything";
+    private const string EchoToolName = "echo";
+    private const string SumToolName = "get-sum";
+    private const string EnabledVariable = "IRONHIVE_MCP_E2E_ENABLED";
 
     public async ValueTask InitializeAsync()
     {
@@ -81,14 +96,16 @@ public class McpServerE2ETests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CallAddTool_ReturnsCorrectSum()
+    public async Task CallSumTool_ReturnsCorrectSum()
     {
         SkipIfNotAvailable();
 
         var config = CreateEverythingServerConfig();
         await _manager!.ConnectAsync(EverythingServerName, config, TestContext.Current.CancellationToken);
 
-        var result = await _manager.CallToolAsync(EverythingServerName, "add", new Dictionary<string, object?>
+        // The demo server renamed this tool from "add" to "get-sum" at some point. Nothing here noticed,
+        // because until the gate below was fixed this class never ran anywhere - see the class remarks.
+        var result = await _manager.CallToolAsync(EverythingServerName, SumToolName, new Dictionary<string, object?>
             {
                 ["a"] = 5,
                 ["b"] = 3
@@ -97,6 +114,25 @@ public class McpServerE2ETests : IAsyncLifetime
         Assert.False(result.IsError, $"Tool call failed: {result.Content}");
         // The result should contain 8 (5 + 3)
         Assert.Contains("8", result.Content);
+    }
+
+    [Fact]
+    public async Task TheToolsThisSuiteCallsAreStillPublishedByTheServer()
+    {
+        // The two tools above are named by string against a third-party demo server that is free to rename
+        // them, and did. A call against a renamed tool fails with "not found", which reads as a defect in
+        // the client rather than as drift in the fixture - so ask the server directly and fail with the
+        // list it actually publishes.
+        SkipIfNotAvailable();
+
+        var config = CreateEverythingServerConfig();
+        await _manager!.ConnectAsync(EverythingServerName, config, TestContext.Current.CancellationToken);
+
+        var tools = await _manager.GetToolsAsync(EverythingServerName, TestContext.Current.CancellationToken);
+        var names = tools.Select(t => t.Name).ToList();
+
+        Assert.True(names.Contains(EchoToolName) && names.Contains(SumToolName),
+            $"This suite calls '{EchoToolName}' and '{SumToolName}'. The server now publishes: {string.Join(", ", names)}.");
     }
 
     [Fact]
@@ -289,7 +325,12 @@ public class McpServerE2ETests : IAsyncLifetime
 
     private void SkipIfNotAvailable()
     {
-        Assert.SkipWhen(!_canRunTests, "Node.js is not available");
+        // Naming the reason and the remedy. "Node.js is not available" was neither: Node.js was available
+        // on every machine that skipped, and the message gave nobody a way to find out what was actually
+        // withheld.
+        Assert.SkipWhen(!_canRunTests,
+            $"Set {EnabledVariable}=true to run these against a real MCP server over stdio (needs npx; " +
+            "the first run downloads the demo server). The scheduled mcp-e2e workflow sets it.");
     }
 
     private static McpPluginConfig CreateEverythingServerConfig()
@@ -326,11 +367,11 @@ public class McpServerE2ETests : IAsyncLifetime
                 return false;
             }
 
-            // Check if MCP server-everything package can be resolved
-            // This will download on first run, which may take time
-            // For CI, pre-install or skip if not available
-            var mcpServerCheck = Environment.GetEnvironmentVariable("IRONHIVE_MCP_E2E_ENABLED");
-            return mcpServerCheck?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+            // Opt-in, because the first run downloads the demo server over the network and that does not
+            // belong on every push. The variable is set by the scheduled workflow that owns these tests;
+            // locally, set it yourself - the skip message says so rather than leaving it to be discovered.
+            var enabled = Environment.GetEnvironmentVariable(EnabledVariable);
+            return enabled?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
         }
         catch
         {

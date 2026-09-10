@@ -1,0 +1,88 @@
+# Drives a real MCP server over a real stdio transport.
+#
+# Not part of the per-push suite: the first run downloads the demo server over the network, which is a cost
+# and a flake source that every push should not pay. But the alternative it replaces was worse - the tests
+# were gated behind an environment variable set nowhere at all, so all fourteen skipped on every machine and
+# in every CI run since they were written. When they were finally run, one had been failing for an unknown
+# length of time against a tool the demo server had renamed. A test nothing runs is not a weak test.
+#
+# The channel is workflow failure: GitHub mails on a failed scheduled run and says nothing on a passing one.
+
+name: MCP E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:40 UTC daily, offset from the CI and publish workflows so a failure mail is unambiguous.
+    - cron: '40 4 * * *'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/IronHive.Agent/Mcp/**/*.cs'
+      - 'tests/IronHive.Agent.Tests/Agent/Mcp/**/*.cs'
+      - '.github/workflows/mcp-e2e.yml'
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp-e2e:
+    name: MCP end-to-end over stdio
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # The tests shell out to npx, so Node has to be a declared dependency rather than whatever the
+      # runner image happens to ship.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Restore
+        run: dotnet restore IronHive.Agent.slnx
+
+      - name: Build
+        run: dotnet build IronHive.Agent.slnx --configuration Release --no-restore
+
+      # A skipped test passes, so a run that skipped all of them is green - which is exactly the state this
+      # workflow exists to end. The summary is parsed and a run that ran nothing, or skipped anything, fails.
+      - name: Run MCP end-to-end tests
+        env:
+          IRONHIVE_MCP_E2E_ENABLED: 'true'
+        run: |
+          set -o pipefail
+          dotnet test \
+            --project tests/IronHive.Agent.Tests/IronHive.Agent.Tests.csproj \
+            --configuration Release --no-build \
+            --filter-class "*McpServerE2ETests*" \
+            --hangdump --hangdump-timeout 10m | tee test-output.txt
+          status=$?
+
+          succeeded=$(grep -oP '^\s*succeeded:\s*\K\d+' test-output.txt | tail -1 || true)
+          skipped=$(grep -oP '^\s*skipped:\s*\K\d+' test-output.txt | tail -1 || true)
+          echo "succeeded=${succeeded:-unknown} skipped=${skipped:-unknown}"
+
+          if [ "${succeeded:-0}" -eq 0 ]; then
+            echo "::error::No MCP end-to-end test ran. The opt-in gate is the thing to check first - these"
+            echo "::error::tests skipped silently on every machine for their whole existence once already."
+            exit 1
+          fi
+          if [ "${skipped:-0}" -ne 0 ]; then
+            echo "::error::${skipped} MCP end-to-end test(s) skipped. This workflow supplies the opt-in, so"
+            echo "::error::a skip here means the gate no longer reads it."
+            exit 1
+          fi
+          exit $status
