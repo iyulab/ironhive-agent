@@ -68,14 +68,23 @@ jobs:
             --project tests/IronHive.Agent.Tests/IronHive.Agent.Tests.csproj \
             --configuration Release --no-build \
             --filter-class "*McpServerE2ETests*" \
-            --hangdump --hangdump-timeout 10m | tee test-output.txt
+            --hangdump --hangdump-timeout 10m --no-ansi | tee test-output.txt
           status=$?
 
           succeeded=$(grep -oP '^\s*succeeded:\s*\K\d+' test-output.txt | tail -1 || true)
           skipped=$(grep -oP '^\s*skipped:\s*\K\d+' test-output.txt | tail -1 || true)
           echo "succeeded=${succeeded:-unknown} skipped=${skipped:-unknown}"
 
-          if [ "${succeeded:-0}" -eq 0 ]; then
+          if [ -z "$succeeded" ]; then
+            # Not the same finding as "zero tests ran", and mistaking one for the other is how a
+            # parsing bug arrives disguised as a vanished suite. MTP colours its summary and colours
+            # only the non-zero numbers, so a parser reading the human-facing output can come back
+            # empty on a run that passed - which is why --no-ansi is on the command above.
+            echo "::error::Could not read a pass count out of the test output. Do not read this as a"
+            echo "::error::vanished suite: check MTP's summary format against the parser above first."
+            exit 1
+          fi
+          if [ "$succeeded" -eq 0 ]; then
             echo "::error::No MCP end-to-end test ran. The opt-in gate is the thing to check first - these"
             echo "::error::tests skipped silently on every machine for their whole existence once already."
             exit 1
