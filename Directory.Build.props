@@ -5,12 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- Ignore NU1902 (known moderate vulnerability in transitive OpenTelemetry deps — no fix available yet) -->
-    <!-- NU1903 is deliberately NOT suppressed: the former SQLitePCLRaw.lib.e_sqlite3 2.1.11
-         (CVE-2025-6965) transitive floor cleared once upstream shipped 2.1.12 (2026-07-09) and
-         IronHive.Core 0.14.0 started pinning it directly. A vulnerable transitive must fail the
-         build, not be hidden. -->
-    <NoWarn>$(NoWarn);NU1902</NoWarn>
+    <!-- Neither NU1902 nor NU1903 is suppressed. Both were introduced for named advisories that
+         have since cleared (moderate: transitive OpenTelemetry / MessagePack+Scriban; high: the
+         SQLitePCLRaw.lib.e_sqlite3 2.1.11 floor, CVE-2025-6965). A suppression written for one
+         package outlives that package's fix and then silently swallows the next advisory in the
+         same class, which is how the NU1903 suppression in this ecosystem came back three
+         separate times. Verified 2026-09-11: a forced restore with the moderate suppression
+         lifted reports no NU190x at all in either repository. -->
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
   </PropertyGroup>
