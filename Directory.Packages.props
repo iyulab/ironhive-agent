@@ -4,10 +4,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.24.1" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.25.0" />
     <!-- Ironbees (multi-agent orchestration) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.13.6" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.13.6" />
+    <PackageVersion Include="Ironbees.Core" Version="0.14.1" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.14.1" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.4" />
     <!-- Microsoft.Extensions.AI -->
@@ -27,18 +27,18 @@
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.21.1" />
+    <PackageVersion Include="IndexThinking" Version="0.21.2" />
     <!-- Security pin: override transitive Microsoft.Bcl.Memory 9.0.4 (NU1903 / GHSA-73j8-2gch-69rq,
          CVE-2026-26127 Base64Url OOB-read DoS). Patched in 10.0.4+; pin 10.0.8 so consumers with
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.8" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.17.4" />
-    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.17.4" />
+    <PackageVersion Include="MemoryIndexer" Version="0.17.5" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.17.5" />
     <!-- FluxGuard (opt-in MCP tool-call guardrail — see IronHive.Agent.Mcp.McpPluginManager) -->
     <PackageVersion Include="FluxGuard.Remote" Version="0.14.1" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.7.0" />
+    <PackageVersion Include="WebFlux" Version="0.7.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
