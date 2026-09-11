@@ -72,9 +72,13 @@ jobs:
 
         NEEDS_PUBLISH=false
         for PACKAGE in "${PACKAGES[@]}"; do
-          EXISTS=$(dotnet nuget search "$PACKAGE" --exact-match --take 1 --source https://api.nuget.org/v3/index.json | grep -c "$PACKAGE | $VERSION" || true)
-          if [ "$EXISTS" -eq "0" ]; then
-            echo "$PACKAGE version $VERSION not found - needs publishing"
+          # Ask the flat container for the exact nupkg: 200 means this version is already published.
+          # (`dotnet nuget search` is not a command in the current SDK; its failure was swallowed by
+          # `|| true` and read as "not found", so this check reported every version as unpublished.)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/${PACKAGE,,}/${VERSION}/${PACKAGE,,}.${VERSION}.nupkg")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "$PACKAGE version $VERSION not found (HTTP $HTTP_STATUS) - needs publishing"
             NEEDS_PUBLISH=true
           else
             echo "$PACKAGE version $VERSION already exists"
