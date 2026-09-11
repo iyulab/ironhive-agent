@@ -62,7 +62,13 @@ internal sealed class StreamingTurnHistoryBuilder
 
     private void FlushAssistant()
     {
-        var message = new ChatMessage(ChatRole.Assistant, _text.ToString());
+        // A message that only calls tools carries no text part: that is what the non-streaming path
+        // leaves, and on the wire an empty text part becomes `"content": ""` beside `tool_calls`
+        // where the other path omits content. A message with neither text nor calls keeps its empty
+        // text, which is the shape a turn that produced nothing has always left.
+        var message = _text.Length == 0 && _pendingCalls.Count > 0
+            ? new ChatMessage(ChatRole.Assistant, [])
+            : new ChatMessage(ChatRole.Assistant, _text.ToString());
         foreach (var call in _pendingCalls)
         {
             message.Contents.Add(call);

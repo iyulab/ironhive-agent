@@ -77,15 +77,46 @@ public class StreamingHistoryFidelityTests
         await DrainAsync(streamingLoop, "read it");
         await directLoop.RunAsync("read it", TestContext.Current.CancellationToken);
 
-        var streamedRoles = (await streamingLoop.GetHistoryAsync(TestContext.Current.CancellationToken))
-            .Select(m => m.Role.Value).ToList();
-        var directRoles = (await directLoop.GetHistoryAsync(TestContext.Current.CancellationToken))
-            .Select(m => m.Role.Value).ToList();
+        // Compared message by message, content by content. Comparing roles alone passed while the
+        // streamed twin put an empty text part beside its tool calls, which the non-streamed twin does
+        // not: on the wire that is `"content": ""` next to `tool_calls` where the other path omits
+        // content, and how a chat template renders that is up to the template.
+        var streamedShape = Fingerprint(await streamingLoop.GetHistoryAsync(TestContext.Current.CancellationToken));
+        var directShape = Fingerprint(await directLoop.GetHistoryAsync(TestContext.Current.CancellationToken));
 
-        streamedRoles.Should().Equal(directRoles,
+        streamedShape.Should().Equal(directShape,
             "the two entry points must leave the next turn the same conversation -- a consumer " +
             "switching to streaming should not silently change what the model is sent next");
     }
+
+    [Fact]
+    public async Task AStreamedTextOnlyTurn_KeepsHistoryInTheSameShapeAsTheNonStreamedTwin()
+    {
+        var streamed = new MockChatClient().EnqueueResponse("done");
+        var direct = new MockChatClient().EnqueueResponse("done");
+
+        IAgentLoop streamingLoop = new AgentLoop(streamed);
+        IAgentLoop directLoop = new AgentLoop(direct);
+
+        await DrainAsync(streamingLoop, "say done");
+        await directLoop.RunAsync("say done", TestContext.Current.CancellationToken);
+
+        Fingerprint(await streamingLoop.GetHistoryAsync(TestContext.Current.CancellationToken))
+            .Should().Equal(Fingerprint(await directLoop.GetHistoryAsync(TestContext.Current.CancellationToken)));
+    }
+
+    /// <summary>
+    /// One line per message: its role, then each content part in order. Call ids are left out -- the
+    /// two mocks mint their own -- but an empty text part is kept, because it is exactly what differs.
+    /// </summary>
+    private static List<string> Fingerprint(IReadOnlyList<ChatMessage> history) =>
+        history.Select(m => $"{m.Role.Value}: " + string.Join(", ", m.Contents.Select(c => c switch
+        {
+            TextContent t => $"text({t.Text})",
+            FunctionCallContent f => $"call({f.Name})",
+            FunctionResultContent => "result",
+            _ => c.GetType().Name
+        }))).ToList();
 
     [Fact]
     public async Task ThinkingAgentLoop_StreamedToolTurn_AlsoKeepsTheToolResult()
