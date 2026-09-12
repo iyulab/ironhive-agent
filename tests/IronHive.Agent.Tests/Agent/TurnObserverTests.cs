@@ -161,11 +161,15 @@ public class TurnObserverTests
 
         var chunks = await CollectAsync(loop);
 
-        chunks[^1].TextDelta.Should().Be("(no tool was called)",
+        chunks[^1].Addendum.Should().Be("(no tool was called)",
             "a consumer relaying a stream cannot inject a correction into it -- the loop can, which " +
             "is the half of the amend ask that survives streaming");
+        chunks[^1].TextDelta.Should().BeNull(
+            "the note is not the model's text: a consumer that only concatenates text deltas must not " +
+            "have it folded in, and a wire mapper must be able to name it as its own event");
         chunks[^1].Turn!.Content.Should().Be("Task registered.",
             "the record keeps the model's own words; the addendum is not folded into it");
+        chunks[..^1].Should().OnlyContain(c => c.Addendum == null, "only the final chunk carries the note");
     }
 
     [Fact]

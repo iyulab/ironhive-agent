@@ -252,7 +252,8 @@ public class AgentLoop : IAgentLoop
             Usage = streamedUsage,
             // Appended, never edited in: the deltas above are already rendered by the time a turn is
             // complete, so amending what the model said is not a capability this seam can honestly offer.
-            TextDelta = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
+            // Carried as its own field, not as a text delta, so consumers can tell it from the model's words.
+            Addendum = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
         };
     }
 

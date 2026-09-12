@@ -245,7 +245,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         {
             Turn = turn,
             Usage = streamedUsage,
-            TextDelta = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
+            Addendum = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
         };
     }
 

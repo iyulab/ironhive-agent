@@ -191,9 +191,23 @@ public record AgentResponseChunk
     /// path used to yield tool calls one delta at a time and never a consolidated record, so every
     /// consumer that wanted "what did this turn actually do" rebuilt the correlation itself. If an
     /// <see cref="ITurnObserver"/> appended text, that text rides on this same final chunk as
-    /// <see cref="TextDelta"/>, while <see cref="TurnRecord.Content"/> stays the model's own text.
+    /// <see cref="Addendum"/>, while <see cref="TurnRecord.Content"/> stays the model's own text.
     /// </remarks>
     public TurnRecord? Turn { get; init; }
+
+    /// <summary>
+    /// Text an <see cref="ITurnObserver"/> asked to append after this turn's output. Set only on the
+    /// final chunk (the one carrying <see cref="Turn"/>), and only when an observer appended
+    /// something; <c>null</c> on every other chunk.
+    /// </summary>
+    /// <remarks>
+    /// It is the streaming counterpart of <see cref="AgentResponse.Addendum"/>. It is deliberately
+    /// not delivered as a <see cref="TextDelta"/>: a consumer that renders, aggregates or persists the
+    /// model's text must be able to tell an observer's note apart from what the model wrote without
+    /// re-deriving it from the concatenated string. Like the non-streaming addendum it is never
+    /// written into conversation history.
+    /// </remarks>
+    public string? Addendum { get; init; }
 }
 
 /// <summary>

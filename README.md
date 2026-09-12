@@ -371,7 +371,10 @@ entry points, so a check does not silently stop firing when a consumer switches 
 
 - `RunAsync` — appended to the end of `AgentResponse.Content`, and also exposed on its own as
   `AgentResponse.Addendum` so it can be told apart from the model's own words.
-- `RunStreamingAsync` — carried as the `TextDelta` of the final chunk.
+- `RunStreamingAsync` — carried as `AgentResponseChunk.Addendum` on the final chunk (the one that
+  also carries `Turn`), never as a `TextDelta`, so a consumer that concatenates text deltas gets the
+  model's words only and can render the note separately. (Before 0.11.0 it rode as the final chunk's
+  `TextDelta`; a consumer that only summed text deltas saw it folded in.)
 
 An addendum reaches the consumer, **not the conversation**: it is never written into history, because
 the model did not say it and feeding a fabricated assistant utterance back into the next turn's
