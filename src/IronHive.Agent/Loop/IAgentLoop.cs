@@ -216,6 +216,12 @@ public record AgentResponseChunk
 public record ToolCallResult
 {
     /// <summary>
+    /// The provider's id for this call — the same value a streaming <see cref="ToolCallChunk.Id"/>
+    /// carried, so a consumer can pair the call it saw start with the outcome reported here.
+    /// </summary>
+    public string? CallId { get; init; }
+
+    /// <summary>
     /// Name of the tool that was called.
     /// </summary>
     public required string ToolName { get; init; }
@@ -238,7 +244,9 @@ public record ToolCallResult
     /// invoke the tool itself. This is <c>null</c> unless the underlying <c>IChatClient</c> was
     /// wrapped with Microsoft.Extensions.AI's function-invocation middleware
     /// (<c>UseFunctionInvocation()</c>), in which case it reflects whether that middleware's
-    /// invocation actually succeeded.
+    /// invocation actually succeeded. A call the permission gate refused
+    /// (<see cref="Mode.ToolCallRefusal"/>) is <c>false</c>: it produced a result the model can read,
+    /// but the tool did not run.
     /// </remarks>
     public bool? Success { get; init; }
 }

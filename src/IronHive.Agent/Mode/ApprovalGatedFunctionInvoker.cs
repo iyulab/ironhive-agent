@@ -21,8 +21,9 @@ namespace IronHive.Agent.Mode;
 /// </code>
 /// <para>
 /// For each call the gate runs <see cref="IModeToolFilter.AssessRisk"/>: <c>Allow</c> invokes the
-/// tool; <c>Deny</c> returns the reason as the tool's result (never an exception — the model reads it
-/// and changes course); <c>Ask</c> consults <see cref="IHumanApprovalService"/> and invokes only on
+/// tool; <c>Deny</c> returns a <see cref="ToolCallRefusal"/> as the tool's result (never an exception —
+/// the model reads its message and changes course, while a loop reports the call with
+/// <c>Success = false</c>); <c>Ask</c> consults <see cref="IHumanApprovalService"/> and invokes only on
 /// approval, applying <see cref="ApprovalResult.ModifiedArguments"/> when the approver edited them.
 /// An <c>Ask</c> verdict with no approval service is refused, not passed: a gate that lets "ask"
 /// through when nobody can be asked is the silent no-op this exists to remove — register a service,

@@ -41,7 +41,7 @@ internal sealed partial class ApprovalGate
 
             case PermissionAction.Deny:
                 LogDenied(_logger, toolName, risk.Reason ?? "not allowed");
-                return GateDecision.Refuse($"Permission denied: {risk.Reason ?? "Tool execution not allowed"}");
+                return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Denied, risk.Reason ?? "Tool execution not allowed"));
 
             case PermissionAction.Ask:
                 if (_approval is null)
@@ -49,8 +49,7 @@ internal sealed partial class ApprovalGate
                     // An Ask verdict with nobody to ask is a refusal, not a pass: letting the call through
                     // here is exactly the silent no-op the gate exists to remove.
                     LogNoApprovalService(_logger, toolName, risk.Reason ?? "approval required");
-                    return GateDecision.Refuse(
-                        $"Approval required but no approval service is configured: {risk.Reason ?? toolName}");
+                    return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.ApprovalUnavailable, risk.Reason ?? toolName));
                 }
 
                 var result = await _approval.RequestApprovalAsync(new ApprovalRequest
@@ -64,13 +63,13 @@ internal sealed partial class ApprovalGate
                 if (!result.Approved)
                 {
                     LogRejected(_logger, toolName, result.RejectionReason ?? "declined");
-                    return GateDecision.Refuse($"Approval rejected: {result.RejectionReason ?? "the operator declined"}");
+                    return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Rejected, result.RejectionReason ?? "the operator declined"));
                 }
 
                 return GateDecision.Proceed(result.ModifiedArguments);
 
             default:
-                return GateDecision.Refuse($"Permission denied: unknown verdict {risk.Verdict} for tool {toolName}");
+                return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Denied, $"unknown verdict {risk.Verdict} for tool {toolName}"));
         }
     }
 
@@ -88,8 +87,8 @@ internal sealed partial class ApprovalGate
 /// Outcome of <see cref="ApprovalGate.DecideAsync"/>: either run (optionally with arguments the
 /// approver edited) or return <see cref="Refusal"/> to the model as the tool's result.
 /// </summary>
-internal readonly record struct GateDecision(bool ShouldProceed, string? Refusal, IDictionary<string, object?>? ModifiedArguments)
+internal readonly record struct GateDecision(bool ShouldProceed, ToolCallRefusal? Refusal, IDictionary<string, object?>? ModifiedArguments)
 {
     public static GateDecision Proceed(IDictionary<string, object?>? modifiedArguments) => new(true, null, modifiedArguments);
-    public static GateDecision Refuse(string refusal) => new(false, refusal, null);
+    public static GateDecision Refuse(ToolCallRefusal refusal) => new(false, refusal, null);
 }

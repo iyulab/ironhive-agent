@@ -81,6 +81,7 @@ public class ApprovalGatedFunctionInvokerTests
         Assert.Equal(1, probe.Invocations);
         Assert.True(response.ToolCalls[0].Success);
         Assert.Equal("wrote notes/a.txt", response.ToolCalls[0].Result);
+        Assert.False(string.IsNullOrEmpty(response.ToolCalls[0].CallId));
     }
 
     [Fact]
@@ -93,6 +94,7 @@ public class ApprovalGatedFunctionInvokerTests
         var response = await loop.RunAsync("write", TestContext.Current.CancellationToken);
 
         Assert.Equal(0, probe.Invocations);
+        Assert.False(response.ToolCalls[0].Success);
         Assert.Contains("Permission denied", response.ToolCalls[0].Result);
         Assert.Contains("Protected directory", response.ToolCalls[0].Result);
         await approval.DidNotReceive().RequestApprovalAsync(Arg.Any<ApprovalRequest>(), Arg.Any<CancellationToken>());
@@ -127,6 +129,7 @@ public class ApprovalGatedFunctionInvokerTests
         var response = await loop.RunAsync("write", TestContext.Current.CancellationToken);
 
         Assert.Equal(0, probe.Invocations);
+        Assert.False(response.ToolCalls[0].Success);
         Assert.Contains("Approval rejected", response.ToolCalls[0].Result);
         Assert.Contains("not today", response.ToolCalls[0].Result);
     }
@@ -139,6 +142,7 @@ public class ApprovalGatedFunctionInvokerTests
         var response = await loop.RunAsync("write", TestContext.Current.CancellationToken);
 
         Assert.Equal(0, probe.Invocations);
+        Assert.False(response.ToolCalls[0].Success);
         Assert.Contains("no approval service is configured", response.ToolCalls[0].Result);
     }
 

@@ -262,7 +262,7 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                 var decision = await _gate.DecideAsync(functionCall.Name, arguments, cancellationToken);
                 if (!decision.ShouldProceed)
                 {
-                    toolResults.Add(new FunctionResultContent(functionCall.CallId, decision.Refusal));
+                    toolResults.Add(new FunctionResultContent(functionCall.CallId, decision.Refusal!.Message));
                     continue;
                 }
 
