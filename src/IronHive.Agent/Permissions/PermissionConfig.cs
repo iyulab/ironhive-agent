@@ -36,6 +36,15 @@ public class PermissionConfig
     public List<PermissionRule> McpTools { get; set; } = [];
 
     /// <summary>
+    /// Rules for tools that have no dedicated category above — anything that is not a file read,
+    /// a file edit, a shell command, an external directory or an MCP tool. Patterns match the
+    /// tool's function name (e.g. <c>"WebSearch"</c>, <c>"my_plugin_*"</c>). A tool matched by no
+    /// rule falls to <see cref="DefaultAction"/>, so with the default <c>Ask</c> an unknown tool is
+    /// asked about rather than run.
+    /// </summary>
+    public List<PermissionRule> Tools { get; set; } = [];
+
+    /// <summary>
     /// Default action when no rule matches.
     /// </summary>
     public PermissionAction DefaultAction { get; set; } = PermissionAction.Ask;
@@ -77,6 +86,7 @@ public class PermissionConfig
             new() { Pattern = "*_get", Action = PermissionAction.Allow, Priority = 0 },
             new() { Pattern = "*_list", Action = PermissionAction.Allow, Priority = 0 },
         ],
+        Tools = ReadOnlyToolRules(),
         DefaultAction = PermissionAction.Ask
     };
 
@@ -98,6 +108,19 @@ public class PermissionConfig
             new() { Pattern = "git diff*", Action = PermissionAction.Allow, Priority = 0 },
             new() { Pattern = "git log*", Action = PermissionAction.Allow, Priority = 0 }
         ],
+        Tools = ReadOnlyToolRules(),
         DefaultAction = PermissionAction.Ask
     };
+
+    // The built-in tools that only look (directory listing, glob, grep) — the same set
+    // ModeToolFilter admits in Planning mode. Both spellings the built-ins have shipped under.
+    private static List<PermissionRule> ReadOnlyToolRules() =>
+    [
+        new() { Pattern = "ListDirectory", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
+        new() { Pattern = "list_directory", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
+        new() { Pattern = "GlobFiles", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
+        new() { Pattern = "glob*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
+        new() { Pattern = "GrepFiles", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
+        new() { Pattern = "grep*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" }
+    ];
 }

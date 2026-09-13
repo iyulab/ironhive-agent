@@ -52,6 +52,12 @@ public class PermissionEvaluator : IPermissionEvaluator
     }
 
     /// <inheritdoc />
+    public PermissionResult EvaluateTool(string toolName)
+    {
+        return EvaluateRules(_config.Tools, toolName);
+    }
+
+    /// <inheritdoc />
     public PermissionResult Evaluate(string permissionType, string target)
     {
         return permissionType.ToLowerInvariant() switch
@@ -61,6 +67,7 @@ public class PermissionEvaluator : IPermissionEvaluator
             "bash" or "shell" => EvaluateBash(target),
             "external_directory" or "directory" => EvaluateExternalDirectory(target),
             "mcp" or "mcp_tool" => EvaluateMcpTool(target),
+            "tool" or "function" => EvaluateTool(target),
             _ => new PermissionResult { Action = _config.DefaultAction, Reason = "Unknown permission type" }
         };
     }

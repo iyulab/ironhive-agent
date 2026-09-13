@@ -1,5 +1,6 @@
 using Ironbees.Core;
 using IronHive.Agent.Ironbees;
+using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
 using IronHive.Agent.Tests.Mocks;
 using Microsoft.Extensions.AI;
@@ -149,8 +150,9 @@ public class ChatClientFrameworkAdapterTests
 
         var testTool = AIFunctionFactory.Create(() => "should not execute", "DangerousTool", "Dangerous");
 
+        // A tool with no dedicated category is judged by name through EvaluateTool (PermissionConfig.Tools).
         var mockPermission = Substitute.For<IPermissionEvaluator>();
-        mockPermission.Evaluate("tool", "DangerousTool")
+        mockPermission.EvaluateTool("DangerousTool")
             .Returns(PermissionResult.Deny("Not allowed"));
 
         var adapter = new ChatClientFrameworkAdapter(
@@ -165,7 +167,71 @@ public class ChatClientFrameworkAdapterTests
 
         // Assert
         Assert.Equal("Handled denial", response);
-        mockPermission.Received(1).Evaluate("tool", "DangerousTool");
+        mockPermission.Received(1).EvaluateTool("DangerousTool");
+        var toolResult = mockClient.ReceivedMessages[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single();
+        Assert.Contains("Permission denied: Not allowed", toolResult.Result!.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_WithPermissionAsk_ConsultsTheApprovalService()
+    {
+        // Arrange — default config: "*.json" edits are Ask
+        var mockClient = new MockChatClient()
+            .EnqueueToolCallResponse("WriteFile", """{"path":"app.json","content":"{}"}""")
+            .EnqueueResponse("Wrote it");
+
+        var executed = false;
+        var testTool = AIFunctionFactory.Create((string path, string content) => { executed = true; return "ok"; }, "WriteFile", "Writes");
+
+        var approval = Substitute.For<IHumanApprovalService>();
+        approval.RequestApprovalAsync(Arg.Any<ApprovalRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ApprovalResult.Approve());
+
+        var adapter = new ChatClientFrameworkAdapter(
+            _ => mockClient,
+            toolsFactory: () => [testTool],
+            permissionEvaluator: new PermissionEvaluator(PermissionConfig.CreateDefault()),
+            approvalService: approval);
+
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
+
+        // Act
+        var response = await adapter.RunAsync(agent, "Write the config", TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("Wrote it", response);
+        Assert.True(executed);
+        await approval.Received(1).RequestApprovalAsync(
+            Arg.Is<ApprovalRequest>(r => r.ToolName == "WriteFile" && r.RiskAssessment.RequiresApproval),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_WithPermissionAsk_AndNoApprovalService_RefusesTheCall()
+    {
+        // Arrange — an Ask verdict with nobody to ask used to fall through and run the tool.
+        var mockClient = new MockChatClient()
+            .EnqueueToolCallResponse("WriteFile", """{"path":"app.json","content":"{}"}""")
+            .EnqueueResponse("Could not write");
+
+        var executed = false;
+        var testTool = AIFunctionFactory.Create((string path, string content) => { executed = true; return "ok"; }, "WriteFile", "Writes");
+
+        var adapter = new ChatClientFrameworkAdapter(
+            _ => mockClient,
+            toolsFactory: () => [testTool],
+            permissionEvaluator: new PermissionEvaluator(PermissionConfig.CreateDefault()));
+
+        var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
+
+        // Act
+        var response = await adapter.RunAsync(agent, "Write the config", TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("Could not write", response);
+        Assert.False(executed);
+        var toolResult = mockClient.ReceivedMessages[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single();
+        Assert.Contains("no approval service is configured", toolResult.Result!.ToString());
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Ironbees.Core;
 using Ironbees.Core.Conversation;
 using Ironbees.Core.Embeddings;
 using IronHive.Agent.Mcp;
+using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
 using IronHive.Agent.Tools;
 using Microsoft.Extensions.AI;
@@ -87,7 +88,9 @@ public static class IronbeesServiceCollectionExtensions
                 clientFactory,
                 toolsFactory,
                 permissionEvaluator,
-                options.MaxToolTurns);
+                options.MaxToolTurns,
+                sp.GetService<IModeToolFilter>(),
+                sp.GetService<IHumanApprovalService>());
         });
 
         // Register orchestrator

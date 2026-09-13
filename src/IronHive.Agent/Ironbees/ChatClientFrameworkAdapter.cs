@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Ironbees.Core;
+using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
 using Microsoft.Extensions.AI;
 
@@ -13,7 +14,7 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
 {
     private readonly Func<ModelConfig, IChatClient> _clientFactory;
     private readonly Func<IList<AITool>>? _toolsFactory;
-    private readonly IPermissionEvaluator? _permissionEvaluator;
+    private readonly ApprovalGate? _gate;
     private readonly int _maxToolTurns;
 
     /// <summary>
@@ -21,18 +22,30 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     /// </summary>
     /// <param name="clientFactory">Factory function to create IChatClient from ModelConfig.</param>
     /// <param name="toolsFactory">Dynamic tool provider (called each invocation to support hot reload).</param>
-    /// <param name="permissionEvaluator">Permission evaluator for tool execution.</param>
+    /// <param name="permissionEvaluator">
+    /// Permission evaluator for tool execution. Used to build a <see cref="ModeToolFilter"/> when
+    /// <paramref name="modeToolFilter"/> is not given; with neither, tool calls are not gated at all.
+    /// </param>
     /// <param name="maxToolTurns">Maximum tool execution turns to prevent infinite loops.</param>
+    /// <param name="modeToolFilter">Produces the verdict for each tool call; takes precedence over the evaluator.</param>
+    /// <param name="approvalService">
+    /// Asked when a verdict is <c>Ask</c>. Without one, an <c>Ask</c> verdict is refused with a reason —
+    /// the same rule <see cref="ApprovalGatedFunctionInvoker"/> applies.
+    /// </param>
     public ChatClientFrameworkAdapter(
         Func<ModelConfig, IChatClient> clientFactory,
         Func<IList<AITool>>? toolsFactory = null,
         IPermissionEvaluator? permissionEvaluator = null,
-        int maxToolTurns = 20)
+        int maxToolTurns = 20,
+        IModeToolFilter? modeToolFilter = null,
+        IHumanApprovalService? approvalService = null)
     {
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _toolsFactory = toolsFactory;
-        _permissionEvaluator = permissionEvaluator;
         _maxToolTurns = maxToolTurns;
+
+        var filter = modeToolFilter ?? (permissionEvaluator is null ? null : new ModeToolFilter(permissionEvaluator));
+        _gate = filter is null ? null : new ApprovalGate(filter, approvalService);
     }
 
     /// <summary>
@@ -240,16 +253,26 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
 
         foreach (var functionCall in toolCalls)
         {
-            // Permission check
-            if (_permissionEvaluator is not null)
+            IDictionary<string, object?>? arguments = functionCall.Arguments;
+
+            // Permission check: the same gate ApprovalGatedFunctionInvoker uses, so Allow / Deny / Ask
+            // mean the same thing on this path as on a function-invoking client.
+            if (_gate is not null)
             {
-                var permResult = _permissionEvaluator.Evaluate("tool", functionCall.Name);
-                if (permResult.Action == PermissionAction.Deny)
+                var decision = await _gate.DecideAsync(functionCall.Name, arguments, cancellationToken);
+                if (!decision.ShouldProceed)
                 {
-                    toolResults.Add(new FunctionResultContent(
-                        functionCall.CallId,
-                        $"Permission denied: {permResult.Reason ?? "Tool execution not allowed"}"));
+                    toolResults.Add(new FunctionResultContent(functionCall.CallId, decision.Refusal));
                     continue;
+                }
+
+                if (decision.ModifiedArguments is not null)
+                {
+                    arguments = new Dictionary<string, object?>(arguments ?? new Dictionary<string, object?>());
+                    foreach (var (key, value) in decision.ModifiedArguments)
+                    {
+                        arguments[key] = value;
+                    }
                 }
             }
 
@@ -259,8 +282,8 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
             {
                 try
                 {
-                    var args = functionCall.Arguments is not null
-                        ? new AIFunctionArguments(functionCall.Arguments)
+                    var args = arguments is not null
+                        ? new AIFunctionArguments(arguments)
                         : null;
                     var result = await function.InvokeAsync(args, cancellationToken);
                     var resultText = result?.ToString() ?? "null";

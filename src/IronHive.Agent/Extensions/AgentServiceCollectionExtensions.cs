@@ -45,15 +45,11 @@ public static class AgentServiceCollectionExtensions
 
         // Register mode management
         services.AddSingleton<IModeManager, ModeManager>();
-        services.AddSingleton<IModeToolFilter>(sp =>
-        {
-            var permissionConfig = sp.GetService<PermissionConfig>();
-            if (permissionConfig is not null)
-            {
-                return new ModeToolFilter(permissionConfig);
-            }
-            return new ModeToolFilter();
-        });
+        // The filter judges on the same evaluator the rest of the container uses — a consumer that
+        // registered its own IPermissionEvaluator must not find the filter quietly judging on a
+        // different one. TryAdd keeps a consumer's own registration.
+        services.TryAddSingleton<IModeToolFilter>(sp =>
+            new ModeToolFilter(sp.GetRequiredService<IPermissionEvaluator>()));
         services.AddSingleton<IAvailableToolsContext, AvailableToolsContext>();
 
         // Register context management
@@ -73,8 +69,9 @@ public static class AgentServiceCollectionExtensions
         });
         services.AddSingleton<ContextManager>();
 
-        // Register permission evaluation
-        services.AddSingleton<IPermissionEvaluator, PermissionEvaluator>();
+        // Register permission evaluation (on the consumer's PermissionConfig when one is registered)
+        services.TryAddSingleton<IPermissionEvaluator>(sp =>
+            new PermissionEvaluator(sp.GetService<PermissionConfig>()));
 
         // Register error recovery
         if (options.ErrorRecovery is not null)

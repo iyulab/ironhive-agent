@@ -28,10 +28,11 @@ public interface IModeToolFilter
     /// Checks if a tool operation is considered risky and requires HITL approval.
     /// </summary>
     /// <remarks>
-    /// Not yet consulted by IronHive.Agent itself — nothing in the library calls this before a tool runs,
-    /// so an <c>Ask</c> verdict from the <c>IPermissionEvaluator</c> has no effect on invocation. A consumer
-    /// with a human-in-the-loop gate calls it from its own <c>FunctionInvoker</c> and passes the result to
-    /// <see cref="IHumanApprovalService"/>. See the remarks on that interface.
+    /// This is the verdict <see cref="ApprovalGatedFunctionInvoker"/> (and the Ironbees adapter) acts on
+    /// before a tool runs: <see cref="RiskAssessment.Verdict"/> <c>Allow</c> invokes, <c>Deny</c> returns
+    /// the reason to the model, <c>Ask</c> consults <see cref="IHumanApprovalService"/>. File, shell and
+    /// MCP tools are judged on their arguments; any other tool by name against
+    /// <see cref="Permissions.PermissionConfig.Tools"/>, falling to the config's default action.
     /// </remarks>
     /// <param name="toolName">Name of the tool</param>
     /// <param name="arguments">Tool arguments</param>
@@ -48,6 +49,18 @@ public record RiskAssessment
     /// Whether the operation is considered risky.
     /// </summary>
     public bool IsRisky { get; init; }
+
+    /// <summary>
+    /// What the permission rules decided: <see cref="PermissionAction.Allow"/> runs the tool,
+    /// <see cref="PermissionAction.Deny"/> refuses it, <see cref="PermissionAction.Ask"/> defers to a
+    /// human. Explicit, so a gate never has to infer "deny" from a missing approval prompt.
+    /// </summary>
+    public PermissionAction Verdict { get; init; }
+
+    /// <summary>
+    /// True when the verdict is <see cref="PermissionAction.Ask"/>.
+    /// </summary>
+    public bool RequiresApproval => Verdict == PermissionAction.Ask;
 
     /// <summary>
     /// Risk level (Low, Medium, High, Critical).
@@ -67,13 +80,14 @@ public record RiskAssessment
     /// <summary>
     /// Creates a non-risky assessment.
     /// </summary>
-    public static RiskAssessment Safe => new() { IsRisky = false, Level = RiskLevel.Low };
+    public static RiskAssessment Safe => new() { IsRisky = false, Level = RiskLevel.Low, Verdict = PermissionAction.Allow };
 
     /// <summary>
-    /// Creates a risky assessment.
+    /// Creates a risky assessment. The verdict defaults to <see cref="PermissionAction.Ask"/>; pass
+    /// <see cref="PermissionAction.Deny"/> for an operation that must not run even with a human present.
     /// </summary>
-    public static RiskAssessment Risky(RiskLevel level, string reason, string? approvalPrompt = null) =>
-        new() { IsRisky = true, Level = level, Reason = reason, ApprovalPrompt = approvalPrompt };
+    public static RiskAssessment Risky(RiskLevel level, string reason, string? approvalPrompt = null, PermissionAction verdict = PermissionAction.Ask) =>
+        new() { IsRisky = true, Level = level, Reason = reason, ApprovalPrompt = approvalPrompt, Verdict = verdict };
 }
 
 /// <summary>
@@ -177,8 +191,17 @@ public class ModeToolFilter : IModeToolFilter
             "delete_file" => AssessDeleteRisk(arguments),
             "shell" or "execute_command" => AssessShellRisk(arguments),
             _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) => AssessMcpToolRisk(toolName),
-            _ => RiskAssessment.Safe
+            _ => AssessToolRisk(toolName)
         };
+    }
+
+    // A tool with no dedicated category is judged by name against PermissionConfig.Tools. Anything
+    // unmatched there falls to the config's default action — so "ask about tools I don't know" is
+    // what the default Ask actually means, instead of every unlisted tool being silently safe.
+    private RiskAssessment AssessToolRisk(string toolName)
+    {
+        var result = _permissionEvaluator.EvaluateTool(toolName);
+        return ToRiskAssessment(result, $"Tool: {toolName}");
     }
 
     // Maps PascalCase tool names to snake_case for consistent risk assessment
@@ -248,7 +271,8 @@ public class ModeToolFilter : IModeToolFilter
         var command = GetStringArgument(arguments, "command");
         if (string.IsNullOrEmpty(command))
         {
-            return RiskAssessment.Risky(RiskLevel.High, "Shell command with no command specified");
+            // Nothing to evaluate and nothing that could run: refuse outright rather than ask.
+            return RiskAssessment.Risky(RiskLevel.High, "Shell command with no command specified", verdict: PermissionAction.Deny);
         }
 
         var result = _permissionEvaluator.EvaluateBash(command);
@@ -260,7 +284,8 @@ public class ModeToolFilter : IModeToolFilter
             PermissionAction.Deny => RiskAssessment.Risky(
                 RiskLevel.Critical,
                 result.Reason ?? $"Denied command: {TruncateCommand(command)}",
-                null), // No approval prompt for denied commands
+                null, // No approval prompt for denied commands
+                PermissionAction.Deny),
             PermissionAction.Ask => RiskAssessment.Risky(
                 DetermineShellRiskLevel(command),
                 result.Reason ?? $"Shell command: {TruncateCommand(command)}",
@@ -286,7 +311,8 @@ public class ModeToolFilter : IModeToolFilter
             PermissionAction.Deny => RiskAssessment.Risky(
                 overrideLevel ?? RiskLevel.Critical,
                 result.Reason ?? $"Denied: {context}",
-                null),
+                null,
+                PermissionAction.Deny),
             PermissionAction.Ask => RiskAssessment.Risky(
                 overrideLevel ?? RiskLevel.Medium,
                 result.Reason ?? context,

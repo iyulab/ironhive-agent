@@ -105,6 +105,56 @@ public class ModeToolFilterTests
         Assert.Equal(RiskLevel.Low, result.Level);
     }
 
+    [Theory]
+    [InlineData("shell", "rm -rf /", PermissionAction.Deny)]      // denied outright by the default rules
+    [InlineData("shell", "git status", PermissionAction.Allow)]
+    [InlineData("shell", "make", PermissionAction.Ask)]           // no rule: default action
+    [InlineData("write_file", "app.json", PermissionAction.Ask)]
+    [InlineData("write_file", "src/a.cs", PermissionAction.Allow)]
+    public void AssessRisk_CarriesTheVerdictExplicitly(string tool, string argument, PermissionAction expected)
+    {
+        var key = tool == "shell" ? "command" : "path";
+        var risk = _filter.AssessRisk(tool, new Dictionary<string, object?> { [key] = argument });
+
+        Assert.Equal(expected, risk.Verdict);
+        Assert.Equal(expected == PermissionAction.Ask, risk.RequiresApproval);
+        Assert.Equal(expected != PermissionAction.Allow, risk.IsRisky);
+    }
+
+    [Fact]
+    public void AssessRisk_ShellWithNoCommand_IsDeniedNotAsked()
+    {
+        var risk = _filter.AssessRisk("shell", new Dictionary<string, object?>());
+
+        Assert.Equal(PermissionAction.Deny, risk.Verdict);
+    }
+
+    [Theory]
+    [InlineData("ListDirectory", PermissionAction.Allow)]   // read-only built-ins are allowed by the default Tools rules
+    [InlineData("GlobFiles", PermissionAction.Allow)]
+    [InlineData("grep_files", PermissionAction.Allow)]
+    [InlineData("WebSearch", PermissionAction.Ask)]         // anything else: the default action
+    [InlineData("send_email", PermissionAction.Ask)]
+    public void AssessRisk_UnknownToolName_IsJudgedByTheToolsRules(string tool, PermissionAction expected)
+    {
+        var risk = _filter.AssessRisk(tool, null);
+
+        Assert.Equal(expected, risk.Verdict);
+    }
+
+    [Fact]
+    public void AssessRisk_UnknownToolName_HonoursAConsumerToolsRule()
+    {
+        var config = PermissionConfig.CreateDefault();
+        config.Tools.Add(new PermissionRule { Pattern = "send_*", Action = PermissionAction.Deny, Priority = 50, Reason = "Outbound blocked" });
+        var filter = new ModeToolFilter(config);
+
+        var risk = filter.AssessRisk("send_email", null);
+
+        Assert.Equal(PermissionAction.Deny, risk.Verdict);
+        Assert.Equal("Outbound blocked", risk.Reason);
+    }
+
     [Fact]
     public void RiskAssessment_Safe_CreatesNonRiskyAssessment()
     {

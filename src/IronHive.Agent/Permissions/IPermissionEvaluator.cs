@@ -80,9 +80,18 @@ public interface IPermissionEvaluator
     PermissionResult EvaluateMcpTool(string toolName);
 
     /// <summary>
+    /// Evaluates permission for a tool that has no dedicated category — matched by function name
+    /// against <see cref="PermissionConfig.Tools"/>; an unmatched name falls to
+    /// <see cref="PermissionConfig.DefaultAction"/>.
+    /// </summary>
+    /// <param name="toolName">The tool's function name.</param>
+    /// <returns>Permission result.</returns>
+    PermissionResult EvaluateTool(string toolName);
+
+    /// <summary>
     /// Evaluates permission for a generic tool operation.
     /// </summary>
-    /// <param name="permissionType">Type of permission (read, edit, bash, etc.).</param>
+    /// <param name="permissionType">Type of permission (read, edit, bash, mcp, tool, etc.).</param>
     /// <param name="target">The target to evaluate (file path, command, etc.).</param>
     /// <returns>Permission result.</returns>
     PermissionResult Evaluate(string permissionType, string target);

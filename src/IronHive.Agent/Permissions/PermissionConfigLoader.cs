@@ -191,6 +191,7 @@ public static class PermissionConfigLoader
                     "bash" => config.Bash,
                     "external_directory" => config.ExternalDirectory,
                     "mcp_tools" => config.McpTools,
+                    "tools" => config.Tools,
                     _ => null
                 };
                 continue;

@@ -325,7 +325,11 @@ scoredBudget = max(floor, MaxTools - pinnedCount)
 
 **McpTools** — Allow tools matching `*_help`, `*_get`, `*_list`
 
-**DefaultAction** — `Ask` for anything unmatched
+**Tools** — every other tool, matched by function name: Allow the read-only built-ins
+(`ListDirectory`, `GlobFiles`, `GrepFiles` and their snake_case spellings)
+
+**DefaultAction** — `Ask` for anything unmatched — including a tool no rule names, so an unknown
+tool is asked about rather than run
 
 Override any category in your config:
 
@@ -340,6 +344,41 @@ services.Configure<PermissionConfig>(config =>
     });
 });
 ```
+
+## Human Approval Gate
+
+The permission rules decide `Allow` / `Deny` / `Ask`; `IHumanApprovalService` answers the `Ask`.
+What connects them to an actual tool call is `ApprovalGatedFunctionInvoker` — an `IAgentLoop` never
+invokes tools itself, the `UseFunctionInvocation()` middleware on its chat client does, so the gate is
+installed there:
+
+```csharp
+var modeToolFilter = new ModeToolFilter(permissionConfig);   // or resolve IModeToolFilter from DI
+var chatClient = inner.AsBuilder()
+    .UseFunctionInvocation(configure: c =>
+        c.FunctionInvoker = ApprovalGatedFunctionInvoker.Create(modeToolFilter, approvalService))
+    .Build();
+
+var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
+```
+
+For each call the gate runs `IModeToolFilter.AssessRisk` and acts on `RiskAssessment.Verdict`:
+
+| Verdict | What happens |
+|---|---|
+| `Allow` | the tool runs |
+| `Deny` | the tool does not run; the model receives `Permission denied: <reason>` as the result |
+| `Ask` | `IHumanApprovalService.RequestApprovalAsync` is called; approval runs the tool (with `ModifiedArguments` applied if the approver edited them), rejection returns `Approval rejected: <reason>` |
+
+A refusal is always a tool *result*, never an exception, so the model can read it and change course.
+An `Ask` verdict with **no approval service registered is refused**, not passed through — a gate that
+lets "ask" through when nobody can be asked is a silent no-op. Either register an
+`IHumanApprovalService` or set the rule (or `DefaultAction`) to `Allow`. Remembering an
+`ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time.
+
+Pass another invoker as `inner` to compose (for example one that turns marshalling errors into
+recovery directives). The Ironbees adapter (`ChatClientFrameworkAdapter`) applies the same gate on its
+own tool loop when it is given a filter or evaluator, so a verdict means the same thing on both paths.
 
 ## Post-Turn Seam
 

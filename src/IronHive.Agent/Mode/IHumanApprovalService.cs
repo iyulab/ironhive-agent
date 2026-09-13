@@ -4,15 +4,14 @@ namespace IronHive.Agent.Mode;
 /// Service for requesting human approval for risky operations.
 /// </summary>
 /// <remarks>
-/// <b>Not yet consulted by IronHive.Agent itself.</b> The library declares this abstraction and
-/// <see cref="IModeToolFilter.AssessRisk"/> produces the <see cref="RiskAssessment"/> an
-/// <see cref="ApprovalRequest"/> carries, but no loop or function-invocation path calls
-/// <see cref="RequestApprovalAsync"/>: an <c>IAgentLoop</c> never invokes tools (the consumer's
-/// <c>UseFunctionInvocation()</c> middleware does), and the only evaluator-aware invoker,
-/// <c>ChatClientFrameworkAdapter</c>, honours <c>Deny</c> only — an <c>Ask</c> verdict lets the call
-/// through. Until the library ships an approval-gated invoker, a consumer that needs a human gate must
-/// place it in its own <c>FunctionInvoker</c> and call this service from there. Registering an
-/// implementation alone changes nothing.
+/// Consulted by <see cref="ApprovalGatedFunctionInvoker"/> — installed as the <c>FunctionInvoker</c> of
+/// Microsoft.Extensions.AI's <c>UseFunctionInvocation()</c> middleware — and by the Ironbees adapter,
+/// whenever <see cref="IModeToolFilter.AssessRisk"/> returns an <c>Ask</c> verdict for a call. An
+/// <c>IAgentLoop</c> itself never invokes tools, so registering an implementation is not enough on its
+/// own: the consumer's chat client must carry the gated invoker. Remembering an
+/// <see cref="ApprovalResult.AlwaysApprove"/> answer is the implementation's job — the gate asks every
+/// time and does not keep its own list, since only the service knows what "this type of operation"
+/// means for its users.
 /// </remarks>
 public interface IHumanApprovalService
 {

@@ -480,6 +480,9 @@ public class PermissionConfigLoaderTests : IDisposable
               mcp_tools:
                 - pattern: "memory_*"
                   action: allow
+              tools:
+                - pattern: "WebSearch"
+                  action: allow
               default_action: deny
             """;
         var filePath = Path.Combine(_tempDir, "all-sections.yaml");
@@ -494,6 +497,8 @@ public class PermissionConfigLoaderTests : IDisposable
         Assert.Single(config.Bash);
         Assert.Single(config.ExternalDirectory);
         Assert.Single(config.McpTools);
+        Assert.Single(config.Tools);
+        Assert.Equal("WebSearch", config.Tools[0].Pattern);
         Assert.Equal(PermissionAction.Deny, config.DefaultAction);
     }
 
