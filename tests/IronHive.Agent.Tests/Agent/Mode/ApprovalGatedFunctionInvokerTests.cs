@@ -135,6 +135,30 @@ public class ApprovalGatedFunctionInvokerTests
     }
 
     [Fact]
+    public async Task Refusal_ReachesTheModel_InBothTransportForms()
+    {
+        // The refusal is a typed result on the FunctionResultContent the model receives next turn.
+        // Two transports carry it: a bridge that calls ToString() on a non-string result, and the
+        // M.E.AI provider clients, which serialize it with AIJsonUtilities. Both must show the text.
+        var config = ConfigWith(c => c.Edit.Add(new PermissionRule { Pattern = "**/secrets/**", Action = PermissionAction.Deny, Priority = 100, Reason = "Protected directory" }));
+        var (loop, _, mock) = Build(config, approval: null, "WriteFile", """{"path":"vault/secrets/k.txt","content":"x"}""");
+
+        await loop.RunAsync("write", TestContext.Current.CancellationToken);
+
+        var functionResult = mock.ReceivedMessages[1]
+            .SelectMany(m => m.Contents)
+            .OfType<FunctionResultContent>()
+            .Single();
+        var refusal = Assert.IsType<ToolCallRefusal>(functionResult.Result);
+        Assert.Equal(ToolCallRefusalKind.Denied, refusal.Kind);
+
+        Assert.Equal("Permission denied: Protected directory", functionResult.Result.ToString());
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(functionResult.Result, AIJsonUtilities.DefaultOptions);
+        Assert.Contains("Permission denied: Protected directory", serialized);
+    }
+
+    [Fact]
     public async Task AskVerdict_WithNoApprovalService_IsRefused_NotPassedThrough()
     {
         var (loop, probe, _) = Build(PermissionConfig.CreateDefault(), approval: null, "WriteFile", """{"path":"app.json","content":"{}"}""");
