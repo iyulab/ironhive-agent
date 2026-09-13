@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.26.1" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.26.2" />
     <!-- Ironbees (multi-agent orchestration) -->
     <PackageVersion Include="Ironbees.Core" Version="0.14.4" />
     <PackageVersion Include="Ironbees.Autonomous" Version="0.14.4" />
