@@ -3,6 +3,17 @@ namespace IronHive.Agent.Mode;
 /// <summary>
 /// Service for requesting human approval for risky operations.
 /// </summary>
+/// <remarks>
+/// <b>Not yet consulted by IronHive.Agent itself.</b> The library declares this abstraction and
+/// <see cref="IModeToolFilter.AssessRisk"/> produces the <see cref="RiskAssessment"/> an
+/// <see cref="ApprovalRequest"/> carries, but no loop or function-invocation path calls
+/// <see cref="RequestApprovalAsync"/>: an <c>IAgentLoop</c> never invokes tools (the consumer's
+/// <c>UseFunctionInvocation()</c> middleware does), and the only evaluator-aware invoker,
+/// <c>ChatClientFrameworkAdapter</c>, honours <c>Deny</c> only — an <c>Ask</c> verdict lets the call
+/// through. Until the library ships an approval-gated invoker, a consumer that needs a human gate must
+/// place it in its own <c>FunctionInvoker</c> and call this service from there. Registering an
+/// implementation alone changes nothing.
+/// </remarks>
 public interface IHumanApprovalService
 {
     /// <summary>

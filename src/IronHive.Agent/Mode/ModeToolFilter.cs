@@ -27,6 +27,12 @@ public interface IModeToolFilter
     /// <summary>
     /// Checks if a tool operation is considered risky and requires HITL approval.
     /// </summary>
+    /// <remarks>
+    /// Not yet consulted by IronHive.Agent itself — nothing in the library calls this before a tool runs,
+    /// so an <c>Ask</c> verdict from the <c>IPermissionEvaluator</c> has no effect on invocation. A consumer
+    /// with a human-in-the-loop gate calls it from its own <c>FunctionInvoker</c> and passes the result to
+    /// <see cref="IHumanApprovalService"/>. See the remarks on that interface.
+    /// </remarks>
     /// <param name="toolName">Name of the tool</param>
     /// <param name="arguments">Tool arguments</param>
     /// <returns>Risk assessment result</returns>
