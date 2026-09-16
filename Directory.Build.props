@@ -27,7 +27,15 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.12.7</Version>
+    <Version>0.12.8</Version>
+  </PropertyGroup>
+
+  <!-- Ship the XML documentation with the package (2026-09-17, umbrella check-xml-doc-file): without this the nupkg
+       held only the dll and none of the /// docs reached a consumer. CS1591 is muted as elsewhere in the ecosystem;
+       the doc file is the goal, not a warning per member. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('\src\')) OR $(MSBuildProjectDirectory.Contains('/src/'))">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <!-- Local NuGet package source for development -->

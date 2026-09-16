@@ -17,7 +17,7 @@ namespace IronHive.Agent.Loop;
 /// Microsoft.Extensions.AI's function-invocation middleware (<c>UseFunctionInvocation()</c>): in
 /// that case the middleware appends a matching <see cref="FunctionResultContent"/> to the same
 /// response before returning it. This factory correlates the two by
-/// <see cref="FunctionCallContent.CallId"/>; when no matching result exists, the outcome is
+/// <c>CallId</c>; when no matching result exists, the outcome is
 /// genuinely unknown and <see cref="ToolCallResult.Success"/> is <c>null</c> rather than a
 /// hardcoded guess.
 /// </remarks>
@@ -38,7 +38,7 @@ public static class ToolCallResultFactory
 
     /// <summary>
     /// Extracts one <see cref="ToolCallResult"/> per call, correlating each against
-    /// <paramref name="functionResults"/> by <see cref="FunctionCallContent.CallId"/>.
+    /// <paramref name="functionResults"/> by <c>CallId</c>.
     /// </summary>
     /// <remarks>
     /// The streaming path never has a <see cref="ChatResponse"/> to hand — it sees the same two
