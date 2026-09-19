@@ -328,6 +328,61 @@ public class ResearchOrchestratorTests
         result.Metadata.TotalQueriesExecuted.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ReportsTheTokenUsageOfTheRunsModelCalls_AndNoCostFigure()
+    {
+        // The run's token usage used to be a field nothing wrote, so every result said 0 tokens and $0. The built-in
+        // adapters now record each call into the run; the cost stays null because the run cannot price its calls.
+        var adapter = new IronHive.DeepResearch.Adapters.ChatClientTextGenerationAdapter(new UsageReportingChatClient(30, 12));
+        var analysis = new ModelCallingAnalysisAgent(adapter);
+        analysis.SetupAnalysisResult(CreateAnalysisResult(needsMore: false, score: 0.9m));
+        _mockQueryPlanner.SetupPlan(CreateTestPlanResult());
+        _mockSearchCoordinator.SetupSearchResult(CreateTestSearchResult());
+        _mockContentEnrichment.SetupEnrichmentResult(CreateTestEnrichmentResult());
+        _mockReportGenerator.SetupReportResult(CreateTestReportResult());
+        var orchestrator = new ResearchOrchestrator(
+            _mockQueryPlanner, _mockSearchCoordinator, _mockContentEnrichment, analysis, _mockReportGenerator,
+            _options, NullLogger<ResearchOrchestrator>.Instance);
+
+        var result = await orchestrator.ExecuteAsync(CreateTestRequest(), TestContext.Current.CancellationToken);
+
+        result.Metadata.TokenUsage.InputTokens.Should().Be(30);
+        result.Metadata.TokenUsage.OutputTokens.Should().Be(12);
+        result.Metadata.EstimatedCost.Should().BeNull();
+    }
+
+    /// <summary>An analysis step that makes one real model call through the built-in adapter, as the real one does.</summary>
+    private sealed class ModelCallingAnalysisAgent(ITextGenerationService text) : MockAnalysisAgentForOrchestrator
+    {
+        public override async Task<AnalysisResult> AnalyzeAsync(
+            ResearchState state, AnalysisOptions? options = null, IProgress<AnalysisProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            await text.GenerateAsync("analyse the sources", cancellationToken: cancellationToken);
+            return await base.AnalyzeAsync(state, options, progress, cancellationToken);
+        }
+    }
+
+    private sealed class UsageReportingChatClient(int input, int output) : Microsoft.Extensions.AI.IChatClient
+    {
+        public Task<Microsoft.Extensions.AI.ChatResponse> GetResponseAsync(
+            IEnumerable<Microsoft.Extensions.AI.ChatMessage> messages, Microsoft.Extensions.AI.ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new Microsoft.Extensions.AI.ChatResponse(
+                new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, "ok"))
+            {
+                Usage = new Microsoft.Extensions.AI.UsageDetails { InputTokenCount = input, OutputTokenCount = output },
+            });
+
+        public IAsyncEnumerable<Microsoft.Extensions.AI.ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<Microsoft.Extensions.AI.ChatMessage> messages, Microsoft.Extensions.AI.ChatOptions? options = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose() { }
+    }
+
     private void SetupDefaultMocks(bool needsMoreResearch)
     {
         _mockQueryPlanner.SetupPlan(CreateTestPlanResult());

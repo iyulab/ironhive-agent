@@ -110,7 +110,6 @@ public partial class AutonomousResearchRunner
                 TotalSourcesAnalyzed = 0,
                 Duration = TimeSpan.Zero,
                 TokenUsage = new TokenUsage(),
-                EstimatedCost = 0m,
                 FinalSufficiencyScore = new SufficiencyScore()
             },
             Errors = [],

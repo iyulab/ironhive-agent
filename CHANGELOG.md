@@ -8,6 +8,10 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Fixed
 
+- **DeepResearch results report the tokens the run used.** `ResearchMetadata.TokenUsage` came from a field nothing
+  wrote, so every result said 0 tokens. The built-in text-generation adapters now record each call into the run.
+  `ResearchMetadata.EstimatedCost` is now `decimal?` and null — the run cannot price calls whose model it does not
+  know, and a 0 read as «free».
 - **`ThinkingAgentLoop` now enforces a configured usage limit and retries a transient failure once**, the
   same way `AgentLoop` always did. It had no way to receive either, so a session limit was silently ignored
   on the thinking path. The constructor takes two new optional parameters, `errorRecovery` and
@@ -44,6 +48,10 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Removed
 
+- **Breaking: DeepResearch options nothing read** — `DeepResearchOptions.UseSmallModelForAnalysis`,
+  `AnalysisModelId`, `SynthesisModelId`, `DefaultMaxBudget` and `ResearchRequest.MaxBudget`. Every research step ran
+  on the one registered text-generation service whatever these said, and no budget was ever checked. Migration: delete
+  the assignments; choose the model where you register the text-generation service.
 - **Breaking: `ISubAgentService`, `SubAgentService`, `SubAgentTool`, `SubAgentType`, `SubAgentConfig`,
   `SubAgentContext`, `SubAgentResult` and `BuiltInTools.GetAll(workingDirectory, ISubAgentService)`.** The service
   set limits it never passed to the run, reported zero turns, could not be cancelled, and offered only two fixed

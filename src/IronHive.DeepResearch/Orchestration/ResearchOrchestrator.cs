@@ -58,6 +58,7 @@ public partial class ResearchOrchestrator
         CancellationToken cancellationToken = default)
     {
         LogResearchStarting(_logger, state.Request.Query, state.Request.Depth);
+        using var usageScope = ResearchUsageScope.Enter(state.Usage);
 
         // 시작 시 취소 상태 확인
         if (cancellationToken.IsCancellationRequested)
@@ -143,6 +144,7 @@ public partial class ResearchOrchestrator
         // try 블록 내에서 yield를 사용할 수 없으므로 결과를 수집
         try
         {
+            using var usageScope = ResearchUsageScope.Enter(state.Usage);
             while (state.CurrentIteration < maxIterations && !cancellationToken.IsCancellationRequested)
             {
                 state.CurrentIteration++;
@@ -493,7 +495,6 @@ public partial class ResearchOrchestrator
                 TotalSourcesAnalyzed = state.CollectedSources.Count,
                 Duration = DateTimeOffset.UtcNow - state.StartedAt,
                 TokenUsage = state.AccumulatedTokenUsage,
-                EstimatedCost = state.AccumulatedCost,
                 FinalSufficiencyScore = state.LastSufficiencyScore ?? new SufficiencyScore()
             },
             Errors = state.Errors,
@@ -525,7 +526,6 @@ public partial class ResearchOrchestrator
                 TotalSourcesAnalyzed = state.CollectedSources.Count,
                 Duration = DateTimeOffset.UtcNow - state.StartedAt,
                 TokenUsage = state.AccumulatedTokenUsage,
-                EstimatedCost = state.AccumulatedCost,
                 FinalSufficiencyScore = state.LastSufficiencyScore ?? new SufficiencyScore()
             },
             Errors = state.Errors,

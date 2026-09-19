@@ -1,3 +1,4 @@
+using IronHive.DeepResearch.Orchestration.State;
 using System.Text.Json;
 using IronHive.DeepResearch.Abstractions;
 using Microsoft.Extensions.AI;
@@ -57,6 +58,7 @@ public class ChatClientTextGenerationAdapter : ITextGenerationService
             _usageCallback?.OnTokensUsed(
                 (int)(usage.InputTokenCount ?? 0),
                 (int)(usage.OutputTokenCount ?? 0));
+            ResearchUsageScope.Record((int)(usage.InputTokenCount ?? 0), (int)(usage.OutputTokenCount ?? 0));
         }
 
         var text = response.Text ?? string.Empty;

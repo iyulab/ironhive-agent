@@ -34,8 +34,12 @@ public class ResearchState
     public List<ReportSection> GeneratedSections { get; } = [];
 
     // 비용 추적
-    public TokenUsage AccumulatedTokenUsage { get; set; } = new();
-    public decimal AccumulatedCost { get; set; } = 0;
+    internal ResearchUsageTotals Usage { get; } = new();
+
+    /// <summary>
+    /// Tokens used by the run's model calls so far, as reported by the built-in text-generation adapters.
+    /// </summary>
+    public TokenUsage AccumulatedTokenUsage => Usage.ToTokenUsage();
 
     // 에러 추적
     public List<ResearchError> Errors { get; } = [];

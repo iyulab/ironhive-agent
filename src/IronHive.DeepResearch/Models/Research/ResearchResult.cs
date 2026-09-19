@@ -77,7 +77,11 @@ public record ResearchMetadata
     public required int TotalSourcesAnalyzed { get; init; }
     public required TimeSpan Duration { get; init; }
     public required TokenUsage TokenUsage { get; init; }
-    public required decimal EstimatedCost { get; init; }
+    /// <summary>
+    /// Cost of the run in USD. Null: the run does not know which model priced its calls (a single text-generation
+    /// service serves every step), so it reports no figure rather than a zero that reads as «free».
+    /// </summary>
+    public decimal? EstimatedCost { get; init; }
     public required SufficiencyScore FinalSufficiencyScore { get; init; }
 }
 

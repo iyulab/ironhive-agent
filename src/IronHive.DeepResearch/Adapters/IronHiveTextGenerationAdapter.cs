@@ -1,3 +1,4 @@
+using IronHive.DeepResearch.Orchestration.State;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using IronHive.Abstractions.Messages;
@@ -46,6 +47,7 @@ public partial class IronHiveTextGenerationAdapter : ITextGenerationService
             _usageCallback?.OnTokensUsed(
                 response.TokenUsage.InputTokens,
                 response.TokenUsage.OutputTokens);
+            ResearchUsageScope.Record(response.TokenUsage.InputTokens, response.TokenUsage.OutputTokens);
         }
 
         var text = ExtractTextFromResponse(response);

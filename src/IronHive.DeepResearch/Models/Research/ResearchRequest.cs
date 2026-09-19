@@ -36,11 +36,6 @@ public record ResearchRequest
     public int MaxSourcesPerIteration { get; init; } = 10;
 
     /// <summary>
-    /// 비용 한도 (USD)
-    /// </summary>
-    public decimal? MaxBudget { get; init; }
-
-    /// <summary>
     /// 검색 프로바이더 우선순위
     /// </summary>
     public IReadOnlyList<string>? PreferredProviders { get; init; }

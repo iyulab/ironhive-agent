@@ -31,11 +31,6 @@ public class DeepResearchOptions
     public int DefaultMaxSourcesPerIteration { get; set; } = 10;
 
     /// <summary>
-    /// 기본 비용 한도 (USD)
-    /// </summary>
-    public decimal DefaultMaxBudget { get; set; } = 1.0m;
-
-    /// <summary>
     /// 충분성 임계값 (0-1, 기본 0.8)
     /// </summary>
     public decimal SufficiencyThreshold { get; set; } = 0.8m;
@@ -49,21 +44,6 @@ public class DeepResearchOptions
     /// 병렬 콘텐츠 추출 최대 수
     /// </summary>
     public int MaxParallelExtractions { get; set; } = 10;
-
-    /// <summary>
-    /// 분석용 경량 모델 사용 여부
-    /// </summary>
-    public bool UseSmallModelForAnalysis { get; set; } = true;
-
-    /// <summary>
-    /// 분석용 모델 ID
-    /// </summary>
-    public string? AnalysisModelId { get; set; }
-
-    /// <summary>
-    /// 합성용 모델 ID
-    /// </summary>
-    public string? SynthesisModelId { get; set; }
 
     /// <summary>
     /// 세션 만료 시간
