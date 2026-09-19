@@ -121,6 +121,9 @@ public class PermissionConfig
         new() { Pattern = "GlobFiles", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
         new() { Pattern = "glob*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
         new() { Pattern = "GrepFiles", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        new() { Pattern = "grep*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" }
+        new() { Pattern = "grep*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
+        // The advisor sends the conversation to a model and returns text — no side effects. (Delegation tools are
+        // not listed: what they can do depends on the delegated agent's own tools.)
+        new() { Pattern = "advisor", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only: consults a model" }
     ];
 }

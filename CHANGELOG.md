@@ -35,6 +35,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   out), to the advisor model — with no tools — and returns its review. The conversation comes from
   `FunctionInvokingChatClient.CurrentContext`, from the Ironbees adapter's own tool loop, or from
   `AdvisorOptions.Conversation`. `MaxCalls`, `UsageLimiter` and `UsageTracker` bound and account for consultations.
+  The default permission rules allow a tool named `advisor` (read-only); delegation tools are not allowed by default,
+  since what they can do depends on the delegated agent's tools.
 
 ### Removed
 
