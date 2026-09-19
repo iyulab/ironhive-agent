@@ -12,6 +12,10 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   same way `AgentLoop` always did. It had no way to receive either, so a session limit was silently ignored
   on the thinking path. The constructor takes two new optional parameters, `errorRecovery` and
   `usageLimiter`; both loops now share one implementation of these per-turn safeguards.
+- **A streamed turn reports the usage of every model call it made, not just the last.** Under function invocation a
+  turn makes several model calls, each reporting its usage; both loops kept only the last one, so a streamed turn
+  with a tool call under-reported (and under-counted against a usage limit). The usage is now summed, as
+  `ToChatResponse` does.
 - **`ChatClientFrameworkAdapter` honours an agent's `tools` list.** An Ironbees agent that named its tools got the
   whole tool pool on this adapter (only the older `capabilities` filter was applied). It now gets exactly the named
   tools, and a name the pool does not provide fails the run with that name instead of leaving the tool silently out.

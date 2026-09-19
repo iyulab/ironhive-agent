@@ -1,6 +1,7 @@
 using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Exceptions;
 using IronHive.Agent.Tracking;
+using Microsoft.Extensions.AI;
 using TokenMeter;
 
 namespace IronHive.Agent.Loop;
@@ -88,6 +89,23 @@ internal sealed class TurnGuards
 
             throw;
         }
+    }
+
+    /// <summary>
+    /// Adds a streamed update's usage to the turn's running total. A turn under function invocation makes several model
+    /// calls and each reports its own usage, so the turn's usage is their sum — the same rule
+    /// <see cref="ChatResponseExtensions.ToChatResponse(IEnumerable{ChatResponseUpdate})"/> applies. (It used to keep only
+    /// the last one, so a streamed turn with a tool call reported just its final round-trip.)
+    /// </summary>
+    public static UsageDetails? AccumulateUsage(UsageDetails? total, ChatResponseUpdate update)
+    {
+        foreach (var usage in update.Contents.OfType<UsageContent>())
+        {
+            total ??= new UsageDetails();
+            total.Add(usage.Details);
+        }
+
+        return total;
     }
 
     /// <summary>

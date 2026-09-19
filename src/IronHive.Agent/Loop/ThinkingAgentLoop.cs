@@ -235,11 +235,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             toolResults.AddRange(updateResults);
             historyBuilder.AppendResults(updateResults);
 
-            var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
-            if (usageContent is not null)
-            {
-                usageDetails = usageContent.Details;
-            }
+            usageDetails = TurnGuards.AccumulateUsage(usageDetails, update);
         }
 
         // Same rebuild as AgentLoop -- the peer implementation lost tool results in exactly the same way.

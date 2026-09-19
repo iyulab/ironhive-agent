@@ -132,6 +132,51 @@ public class TurnGuardsEquivalenceTests
         Assert.Equal(1, client.Calls);
     }
 
+    [Theory]
+    [MemberData(nameof(Loops))]
+    public async Task Streaming_UsageFromEveryModelCallInTheTurn_IsSummed(string kind)
+    {
+        // Under function invocation one turn makes several model calls, each reporting its own usage. The turn's usage
+        // is their sum; keeping only the last reported just the final round-trip.
+        var client = new FixedStreamClient(
+            new ChatResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = 100, OutputTokenCount = 5 })]),
+            new ChatResponseUpdate(ChatRole.Assistant, "answer"),
+            new ChatResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = 120, OutputTokenCount = 7 })]));
+        var loop = Build(kind, client);
+
+        AgentResponseChunk? last = null;
+        await foreach (var chunk in loop.RunStreamingAsync("prompt", TestContext.Current.CancellationToken))
+        {
+            last = chunk;
+        }
+
+        Assert.Equal(220, last!.Usage!.InputTokens);
+        Assert.Equal(12, last.Usage.OutputTokens);
+    }
+
+    /// <summary>Streams a fixed list of updates verbatim.</summary>
+    private sealed class FixedStreamClient(params ChatResponseUpdate[] updates) : IChatClient
+    {
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            foreach (var update in updates)
+            {
+                yield return update;
+                await Task.Yield();
+            }
+        }
+
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "answer")]));
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose() { }
+    }
+
     /// <summary>Fails the first buffered call with the given exception, then delegates.</summary>
     private sealed class FailFirstCallClient(IChatClient inner, Exception failure) : IChatClient
     {

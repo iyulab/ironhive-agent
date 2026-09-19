@@ -185,11 +185,7 @@ public class AgentLoop : IAgentLoop
             toolResults.AddRange(updateResults);
             historyBuilder.AppendResults(updateResults);
 
-            var usageContent = update.Contents.OfType<UsageContent>().LastOrDefault();
-            if (usageContent is not null)
-            {
-                usageDetails = usageContent.Details;
-            }
+            usageDetails = TurnGuards.AccumulateUsage(usageDetails, update);
         }
 
         // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
