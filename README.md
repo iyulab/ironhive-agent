@@ -13,8 +13,8 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`
 - **Checkpoint Service**: `ICheckpointService` abstraction for pre-destructive-operation state snapshots and rollback
-- **Usage Tracking**: Token/cost tracking and session limits
-- **Error Recovery**: Categorized error handling with recovery strategies
+- **Usage Tracking**: Token/cost tracking (`IUsageTracker`) and session limits (`IUsageLimiter`, registered by `AddIronHiveAgent` when `UsageLimits` is set). Pass the limiter to `AgentLoop` or `ThinkingAgentLoop` (`usageLimiter:`) and a turn past the limit is refused with `UsageLimitExceededException`
+- **Error Recovery**: Categorized error handling with recovery strategies (`IErrorRecoveryService`). Passed to either loop (`errorRecovery:`), a buffered turn that fails transiently is retried once
 - **Webhook System**: Event notifications with HMAC signing
 
 ## Installation

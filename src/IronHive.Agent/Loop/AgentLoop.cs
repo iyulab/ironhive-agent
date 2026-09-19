@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using IronHive.Agent.Context;
 using IronHive.Agent.ErrorRecovery;
-using IronHive.Agent.Exceptions;
 using IronHive.Agent.Tracking;
 using Microsoft.Extensions.AI;
 using TokenMeter;
@@ -18,9 +17,8 @@ public class AgentLoop : IAgentLoop
     private readonly IChatClient _chatClient;
     private readonly AgentOptions _options;
     private readonly IUsageTracker? _usageTracker;
-    private readonly IUsageLimiter? _usageLimiter;
     private readonly ContextManager? _contextManager;
-    private readonly IErrorRecoveryService? _errorRecovery;
+    private readonly TurnGuards _guards;
     private readonly IToolRetriever? _toolRetriever;
     private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly List<ChatMessage> _history = [];
@@ -38,9 +36,8 @@ public class AgentLoop : IAgentLoop
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _options = options ?? new AgentOptions();
         _usageTracker = usageTracker;
-        _usageLimiter = usageLimiter;
         _contextManager = contextManager;
-        _errorRecovery = errorRecovery;
+        _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
         _toolRetriever = toolRetriever;
         _turnObservers = turnObservers?.ToArray() ?? [];
 
@@ -73,41 +70,11 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
-        ThrowIfUsageLimitExceeded();
+        _guards.ThrowIfUsageLimitExceeded();
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
-        ChatResponse response;
-
-        try
-        {
-            response = await _chatClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            if (_errorRecovery is null)
-            {
-                throw;
-            }
-
-            _errorRecovery.RecordError(ex);
-            var analysis = _errorRecovery.AnalyzeException(ex);
-
-            // Auto-retry once for transient errors with a delay
-            if (analysis.RecommendedAction is RecoveryAction.WaitAndRetry or RecoveryAction.Retry
-                && analysis.RetryDelay is not null)
-            {
-                await Task.Delay(analysis.RetryDelay.Value, cancellationToken);
-                response = await _chatClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
-            }
-            else
-            {
-                throw;
-            }
-        }
+        var response = await _guards.CallWithRecoveryAsync(
+            ct => _chatClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken);
 
         // Add assistant response to history
         _history.AddRange(response.Messages);
@@ -119,7 +86,7 @@ public class AgentLoop : IAgentLoop
         if (usage is not null)
         {
             _usageTracker?.Record(usage);
-            RecordUsageLimit(usage);
+            _guards.RecordUsage(usage);
         }
 
         var content = response.Text ?? string.Empty;
@@ -160,7 +127,7 @@ public class AgentLoop : IAgentLoop
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
-        ThrowIfUsageLimitExceeded();
+        _guards.ThrowIfUsageLimitExceeded();
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
@@ -183,7 +150,7 @@ public class AgentLoop : IAgentLoop
         }
         catch (Exception ex)
         {
-            _errorRecovery?.RecordError(ex);
+            _guards.RecordStreamingError(ex);
             throw;
         }
 
@@ -233,7 +200,7 @@ public class AgentLoop : IAgentLoop
         if (streamedUsage is not null)
         {
             _usageTracker?.Record(streamedUsage);
-            RecordUsageLimit(streamedUsage);
+            _guards.RecordUsage(streamedUsage);
         }
 
         // One final chunk always closes the stream, carrying the turn's consolidated record. Before
@@ -338,40 +305,6 @@ public class AgentLoop : IAgentLoop
             InputTokens = usage.InputTokenCount ?? 0,
             OutputTokens = usage.OutputTokenCount ?? 0
         };
-    }
-
-    /// <summary>
-    /// Checks the configured <see cref="IUsageLimiter"/> (if any) and throws
-    /// <see cref="UsageLimitExceededException"/> before the next model call when the session's
-    /// token/cost limit has already been reached and <see cref="UsageLimitsConfig.StopOnLimit"/>
-    /// is set. No-ops when no limiter is configured.
-    /// </summary>
-    private void ThrowIfUsageLimitExceeded()
-    {
-        var result = _usageLimiter?.CheckLimits();
-        if (result is { ShouldStop: true })
-        {
-            throw new UsageLimitExceededException(result);
-        }
-    }
-
-    /// <summary>
-    /// Feeds this turn's token usage into the configured <see cref="IUsageLimiter"/> (if any),
-    /// using the same <see cref="TokenMeter.ModelCatalog"/> pricing lookup <see cref="IUsageTracker"/>
-    /// uses for session-total cost, so the next turn's <see cref="ThrowIfUsageLimitExceeded"/> check
-    /// sees an up-to-date cumulative total. No-ops when no limiter is configured.
-    /// </summary>
-    private void RecordUsageLimit(TokenUsage usage)
-    {
-        if (_usageLimiter is null)
-        {
-            return;
-        }
-
-        var pricing = !string.IsNullOrEmpty(_options.ModelId) ? ModelCatalog.FindModel(_options.ModelId) : null;
-        var cost = pricing?.CalculateCost((int)usage.InputTokens, (int)usage.OutputTokens) ?? 0m;
-
-        _usageLimiter.RecordTokenUsage((int)usage.TotalTokens, cost);
     }
 
     /// <summary>

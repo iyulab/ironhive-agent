@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using IronHive.Agent.Context;
+using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Tracking;
 using IndexThinking.Agents;
 using IndexThinking.Client;
@@ -20,8 +21,22 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     private readonly ContextManager? _contextManager;
     private readonly IToolRetriever? _toolRetriever;
     private readonly IReadOnlyList<ITurnObserver> _turnObservers;
+    private readonly TurnGuards _guards;
     private readonly List<ChatMessage> _history = [];
 
+    /// <param name="chatClient">The client the thinking layer wraps.</param>
+    /// <param name="turnManager">IndexThinking's turn manager (reasoning extraction, truncation continuation).</param>
+    /// <param name="options">Loop options — system prompt, tools, model id used for pricing.</param>
+    /// <param name="thinkingOptions">Options for the wrapping <see cref="ThinkingChatClient"/>.</param>
+    /// <param name="usageTracker">Session usage accounting.</param>
+    /// <param name="contextManager">History compaction and goal reminders.</param>
+    /// <param name="toolRetriever">Per-turn tool selection.</param>
+    /// <param name="turnObservers">Post-turn observers.</param>
+    /// <param name="errorRecovery">When set, a buffered turn that fails transiently is retried once — the same
+    /// safeguard <see cref="AgentLoop"/> applies.</param>
+    /// <param name="usageLimiter">When set, a turn is refused with <see cref="Exceptions.UsageLimitExceededException"/>
+    /// once the session limit is reached, and each turn's usage is fed into it — the same safeguard
+    /// <see cref="AgentLoop"/> applies.</param>
     public ThinkingAgentLoop(
         IChatClient chatClient,
         IThinkingTurnManager turnManager,
@@ -30,7 +45,9 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         IUsageTracker? usageTracker = null,
         ContextManager? contextManager = null,
         IToolRetriever? toolRetriever = null,
-        IEnumerable<ITurnObserver>? turnObservers = null)
+        IEnumerable<ITurnObserver>? turnObservers = null,
+        IErrorRecoveryService? errorRecovery = null,
+        IUsageLimiter? usageLimiter = null)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(turnManager);
@@ -45,6 +62,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         _contextManager = contextManager;
         _toolRetriever = toolRetriever;
         _turnObservers = turnObservers?.ToArray() ?? [];
+        _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))
@@ -75,8 +93,11 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
 
+        _guards.ThrowIfUsageLimitExceeded();
+
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
-        var response = await _thinkingClient.GetResponseAsync(historyToSend, chatOptions, cancellationToken);
+        var response = await _guards.CallWithRecoveryAsync(
+            ct => _thinkingClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken);
 
         // Add assistant response to history
         _history.AddRange(response.Messages);
@@ -89,6 +110,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         if (usage is not null)
         {
             _usageTracker?.Record(usage);
+            _guards.RecordUsage(usage);
         }
 
         var content = response.Text ?? string.Empty;
@@ -133,6 +155,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         // Prepare history (compact if needed, inject goal reminder)
         var historyToSend = await PrepareHistoryForSendingAsync(cancellationToken);
+
+        _guards.ThrowIfUsageLimitExceeded();
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
@@ -227,6 +251,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         if (streamedUsage is not null)
         {
             _usageTracker?.Record(streamedUsage);
+            _guards.RecordUsage(streamedUsage);
         }
 
         var thinking = thinkingBuilder.Length > 0
