@@ -24,6 +24,22 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   round-trips, and whether the run stopped at its tool-turn limit (`AgentRunResult.TurnLimitReached`; the stream ends
   with an unsuccessful `CompletionChunk` whose finish reason is `tool_turn_limit`).
 
+- **Delegation: an Ironbees named agent as a tool the model can call** (`IronHive.Agent.Delegation`).
+  `DelegationTools.Create(orchestrator, DelegatedAgent)` returns an `AIFunction` that runs the named agent on the
+  sub-task it is given, with a per-delegation model, reasoning level, output cap and tool-turn limit. `DelegationOptions`
+  bounds nesting depth (followed across agents), concurrency across a set of tools, and counts the delegated usage —
+  priced on the delegated model — against the parent's usage limit. A refused or failed delegation, and a run cut off
+  at its turn limit, come back as results the calling model can read.
+
+### Removed
+
+- **Breaking: `ISubAgentService`, `SubAgentService`, `SubAgentTool`, `SubAgentType`, `SubAgentConfig`,
+  `SubAgentContext`, `SubAgentResult` and `BuiltInTools.GetAll(workingDirectory, ISubAgentService)`.** The service
+  set limits it never passed to the run, reported zero turns, could not be cancelled, and offered only two fixed
+  profiles. Migration: define `explore`/`general` (or any) agents in Ironbees with the `tools` they may use, and
+  expose them with `DelegationTools.Create`; code that called `ExploreAsync`/`GeneralAsync` directly calls
+  `IAgentOrchestrator.ProcessStructuredAsync(task, new ProcessOptions { AgentName = "explore" })`.
+
 ### Changed
 
 - Re-pinned `Ironbees.Core` and `Ironbees.Autonomous` 0.14.12 -> 0.15.0.

@@ -105,9 +105,6 @@ public static class AgentServiceCollectionExtensions
         // Example: services.AddTransient<IPlanExecutor>(sp =>
         //     new DefaultPlanExecutor(sp.GetRequiredService<IChatClient>(), tools));
 
-        // Note: ISubAgentService requires IChatClient which is CLI-specific
-        // It should be registered at the CLI layer where IChatClient is available
-
         return services;
     }
 

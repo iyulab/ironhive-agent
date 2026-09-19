@@ -9,7 +9,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Built-in Tools**: Read, Write, Shell, Glob, Grep, Todo
-- **Sub-Agent System**: Explore/General sub-agent spawning with depth and concurrency limits. `SubAgentType`/`ISubAgentService` are convenience wrappers over Ironbees' `IAgentOrchestrator.ProcessAsync(input, agentName, ct)` for exactly these two pre-baked profiles — a consumer that needs a subagent scoped to a custom tool list can define a named agent directly in Ironbees (`AgentConfig.Tools`) and call `IAgentOrchestrator.ProcessAsync` with that agent's name, without going through `SubAgentType` at all
+- **Delegation (agent as a tool)**: `DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research", Model = ..., MaxToolTurns = ... })` turns an Ironbees named agent into an `AIFunction` the model calls to hand off a sub-task. Each call is an isolated run of that agent — its `agent.yaml` tools (an agent that lists `tools` gets exactly those), prompt and model, with per-delegation model, reasoning level, output cap and tool-turn limit. `DelegationOptions` bounds nesting depth (across agents), concurrency, and feeds the delegated usage into the parent's `IUsageLimiter`/`IUsageTracker`. A run that stops at its turn limit comes back marked partial. Not registered by `AddIronHiveAgent`: create the tools where the orchestrator is available and add them to the loop's `Tools`. To call a named agent from application code instead, use `IAgentOrchestrator.ProcessStructuredAsync(input, new ProcessOptions { AgentName = ... })`
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`
 - **Checkpoint Service**: `ICheckpointService` abstraction for pre-destructive-operation state snapshots and rollback
@@ -113,8 +113,8 @@ IronHive.Agent/
 ├── Context/        # Context management (compaction, token counting, goal reminders)
 ├── Mode/           # Plan/Work/HITL mode system
 ├── Mcp/            # MCP plugin management and tool discovery
-├── Tools/          # Built-in tools (BuiltInTools, TodoTool, SubAgentTool)
-├── SubAgent/       # Sub-agent spawning and management
+├── Tools/          # Built-in tools (BuiltInTools, TodoTool)
+├── Delegation/     # Agent-as-tool delegation (DelegationTools, DelegatedAgent, DelegationOptions)
 ├── Planning/       # Plan-and-execute orchestration (DefaultTaskPlanner, DefaultPlanExecutor, HeuristicPlanEvaluator, PlannerTriggerDetector)
 ├── Services/       # Cross-cutting services (ICheckpointService for pre-destructive-op snapshots)
 ├── Permissions/    # Permission evaluation and configuration
