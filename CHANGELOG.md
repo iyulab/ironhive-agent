@@ -48,6 +48,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Removed
 
+- **Breaking: `ChatClientOptions` and `HistoryCompactorOptions.TargetCompressionRatio`.** The record was referenced by
+  nothing; the compactor never read the ratio. An options roster test (`Iyu.Conventions.Testing`) now fails when a public
+  option nothing reads is added.
 - **Breaking: DeepResearch options nothing read** — `DeepResearchOptions.UseSmallModelForAnalysis`,
   `AnalysisModelId`, `SynthesisModelId`, `DefaultMaxBudget` and `ResearchRequest.MaxBudget`. Every research step ran
   on the one registered text-generation service whatever these said, and no budget was ever checked. Migration: delete

@@ -14,12 +14,6 @@ public class HistoryCompactorOptions
     public int PreserveTailTurns { get; init; } = 4;
 
     /// <summary>
-    /// Target compression ratio for the middle section.
-    /// Default is 0.5 (compress to 50% of original).
-    /// </summary>
-    public float TargetCompressionRatio { get; init; } = 0.5f;
-
-    /// <summary>
     /// Whether to use LLM for summarization (true) or simple truncation (false).
     /// </summary>
     public bool UseLlmSummarization { get; init; } = true;

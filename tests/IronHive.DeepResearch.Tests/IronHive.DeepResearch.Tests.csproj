@@ -31,4 +31,8 @@
     <PackageReference Include="NSubstitute" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Iyu.Conventions.Testing" />
+  </ItemGroup>
+
 </Project>

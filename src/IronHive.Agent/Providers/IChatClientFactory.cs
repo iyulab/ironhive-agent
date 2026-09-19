@@ -49,19 +49,3 @@ public interface IChatClientFactory
     /// <returns>List of available models from the specified provider.</returns>
     Task<IReadOnlyList<AvailableModelInfo>> GetAvailableModelsAsync(string providerName, CancellationToken cancellationToken = default);
 }
-
-/// <summary>
-/// Options for creating a chat client.
-/// </summary>
-public record ChatClientOptions
-{
-    /// <summary>
-    /// Provider name (e.g., "gpustack", "lmsupply"). If null, uses the default provider.
-    /// </summary>
-    public string? Provider { get; init; }
-
-    /// <summary>
-    /// Model to use. If null, uses the provider's default model.
-    /// </summary>
-    public string? Model { get; init; }
-}
