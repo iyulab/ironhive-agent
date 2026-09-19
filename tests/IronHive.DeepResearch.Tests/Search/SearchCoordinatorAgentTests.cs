@@ -99,8 +99,7 @@ public class SearchCoordinatorAgentTests
 
         var options = new SearchExecutionOptions
         {
-            MaxRetriesPerQuery = 0, // 재시도 없이 즉시 실패
-            ContinueOnError = true
+            MaxRetriesPerQuery = 0 // 재시도 없이 즉시 실패 — 실패한 쿼리는 기록되고 나머지는 계속된다(항상)
         };
 
         // Act

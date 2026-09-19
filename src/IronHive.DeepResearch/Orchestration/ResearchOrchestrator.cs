@@ -90,7 +90,7 @@ public partial class ResearchOrchestrator
                 var analysisResult = await ExecuteAnalysisPhaseAsync(state, cancellationToken);
 
                 // 5. 충분성 확인
-                if (!analysisResult.NeedsMoreResearch)
+                if (!ShouldContinueResearch(state, analysisResult))
                 {
                     LogSufficiencyAchieved(_logger, analysisResult.SufficiencyScore.OverallScore);
                     break;
@@ -163,9 +163,9 @@ public partial class ResearchOrchestrator
                 state.CurrentPhase = ResearchPhase.Searching;
                 progressList.Add(CreateProgress(state, ProgressType.SearchStarted, maxIterations));
 
-                var searchResult = await ExecuteSearchPhaseInternalAsync(state, cancellationToken);
+                var searchResults = await ExecuteSearchPhaseAsync(state, cancellationToken);
 
-                foreach (var result in searchResult.SuccessfulResults)
+                foreach (var result in searchResults)
                 {
                     progressList.Add(CreateProgress(state, ProgressType.SearchCompleted, maxIterations,
                         search: new SearchProgress
@@ -200,7 +200,7 @@ public partial class ResearchOrchestrator
                 progressList.Add(CreateProgress(state, ProgressType.IterationCompleted, maxIterations));
 
                 // 충분성 확인
-                if (!analysisResult.NeedsMoreResearch)
+                if (!ShouldContinueResearch(state, analysisResult))
                 {
                     break;
                 }
@@ -298,16 +298,23 @@ public partial class ResearchOrchestrator
         }
     }
 
-    private async Task ExecuteSearchPhaseAsync(ResearchState state, CancellationToken cancellationToken)
+    /// <summary>
+    /// 검색 단계 — 소스가 0 이면(봇 보호 · 일시 오류로 쿼리가 실패) <see cref="DeepResearchOptions.MaxSearchRetriesPerIteration"/>
+    /// 까지 재시도한다. 실패 쿼리는 <see cref="ResearchState.Errors"/> 에 기록한다. 일반 실행과 스트림 실행이 같은 이 경로를
+    /// 탄다(스트림 경로는 한때 재시도도 오류 기록도 없이 한 번만 검색했다). 반환값은 모든 시도의 성공 결과다.
+    /// </summary>
+    private async Task<IReadOnlyList<SearchResult>> ExecuteSearchPhaseAsync(ResearchState state, CancellationToken cancellationToken)
     {
         state.CurrentPhase = ResearchPhase.Searching;
 
         var retryCount = 0;
         var maxRetries = _options.MaxSearchRetriesPerIteration;
+        var successful = new List<SearchResult>();
 
         while (retryCount <= maxRetries && !cancellationToken.IsCancellationRequested)
         {
             var searchResult = await ExecuteSearchPhaseInternalAsync(state, cancellationToken);
+            successful.AddRange(searchResult.SuccessfulResults);
 
             // 에러 기록
             foreach (var failed in searchResult.FailedSearches)
@@ -346,7 +353,18 @@ public partial class ResearchOrchestrator
 
             await Task.Delay(_options.RetryDelayOnNoResults, cancellationToken);
         }
+
+        return successful;
     }
+
+    /// <summary>
+    /// 다음 반복으로 갈지. 기본은 분석의 <see cref="AnalysisResult.NeedsMoreResearch"/>(점수 미달 + 갭 존재)이고,
+    /// 수집 소스가 <see cref="DeepResearchOptions.MinSourcesBeforeReport"/> 에 못 미치면 점수가 충분해도 갭이 남아 있는 한 계속한다.
+    /// 후속 반복의 쿼리는 갭에서만 나오므로 갭이 없으면 더 모을 방법이 없다 — 그때는 멈춘다.
+    /// </summary>
+    private bool ShouldContinueResearch(ResearchState state, AnalysisResult analysis) =>
+        analysis.NeedsMoreResearch
+        || (analysis.Gaps.Count > 0 && state.CollectedSources.Count < _options.MinSourcesBeforeReport);
 
     private async Task<SearchExecutionResult> ExecuteSearchPhaseInternalAsync(
         ResearchState state, CancellationToken cancellationToken)
@@ -437,7 +455,6 @@ public partial class ResearchOrchestrator
 
         var reportOptions = new ReportGenerationOptions
         {
-            OutputFormat = state.Request.OutputFormat,
             Language = state.Request.Language
         };
 

@@ -148,10 +148,6 @@ public record ContentEnrichmentOptions
     /// </summary>
     public bool ExtractLinks { get; init; }
 
-    /// <summary>
-    /// 실패 시 계속 진행
-    /// </summary>
-    public bool ContinueOnError { get; init; } = true;
 }
 
 /// <summary>

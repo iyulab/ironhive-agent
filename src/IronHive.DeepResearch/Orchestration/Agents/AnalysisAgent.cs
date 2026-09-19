@@ -244,7 +244,8 @@ public partial class AnalysisAgent
             SourceDiversityScore = sourceDiversity,
             FreshnessScore = freshness,
             NewFindingsCount = newFindingsCount,
-            EvaluatedAt = DateTimeOffset.UtcNow
+            EvaluatedAt = DateTimeOffset.UtcNow,
+            Threshold = options.SufficiencyThreshold
         };
     }
 

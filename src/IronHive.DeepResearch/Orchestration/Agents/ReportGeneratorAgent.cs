@@ -542,7 +542,6 @@ public partial class ReportGeneratorAgent
     {
         return new ReportGenerationOptions
         {
-            OutputFormat = state.Request.OutputFormat,
             Language = state.Request.Language,
             MaxSections = 8,
             MaxTokensPerSection = 2000,

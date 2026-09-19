@@ -77,7 +77,13 @@ public record SufficiencyScore
     public DateTimeOffset EvaluatedAt { get; init; }
 
     /// <summary>
-    /// 충분 여부 (0.8 이상이면 충분)
+    /// 충분하다고 판정하는 종합 점수 하한 (0-1). 평가기가 <see cref="Options.DeepResearchOptions.SufficiencyThreshold"/>
+    /// (또는 <see cref="AnalysisOptions.SufficiencyThreshold"/>)로 채운다.
     /// </summary>
-    public bool IsSufficient => OverallScore >= 0.8m;
+    public decimal Threshold { get; init; } = 0.8m;
+
+    /// <summary>
+    /// 충분 여부 — <see cref="OverallScore"/> 가 <see cref="Threshold"/> 이상
+    /// </summary>
+    public bool IsSufficient => OverallScore >= Threshold;
 }

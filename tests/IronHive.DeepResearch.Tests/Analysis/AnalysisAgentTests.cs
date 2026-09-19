@@ -231,6 +231,38 @@ public class AnalysisAgentTests
     }
 
     [Fact]
+    public async Task AnalyzeAsync_JudgesSufficiency_AgainstTheConfiguredThreshold()
+    {
+        // The same low score that is "insufficient" at the default 0.8 is sufficient when the host lowers
+        // DeepResearchOptions.SufficiencyThreshold — the setting used to reach a field nothing read, while the
+        // judgement compared against a hardcoded 0.8.
+        var lenient = new AnalysisAgent(
+            _mockTextService,
+            new DeepResearchOptions { SufficiencyThreshold = 0.1m },
+            NullLogger<AnalysisAgent>.Instance);
+        var state = CreateTestState();
+        state.CollectedSources.Add(CreateTestSource("src1", "https://example.com/1"));
+
+        _mockTextService.SetupStructuredResponse<FindingExtractionResponse>(
+            new FindingExtractionResponse { Findings = [] });
+        _mockTextService.SetupStructuredResponse<GapAnalysisResponse>(
+            new GapAnalysisResponse
+            {
+                Gaps = [new IdentifiedGap { Description = "Critical gap", SuggestedQuery = "query", Priority = "high" }],
+                CoverageEstimate = 0.3m
+            });
+        _mockTextService.SetupStructuredResponse<SufficiencyEvaluationResponse>(
+            new SufficiencyEvaluationResponse { OverallScore = 0.4m, CoverageScore = 0.3m, QualityScore = 0.5m });
+
+        var result = await lenient.AnalyzeAsync(state, cancellationToken: TestContext.Current.CancellationToken);
+
+        result.SufficiencyScore.Threshold.Should().Be(0.1m);
+        result.SufficiencyScore.OverallScore.Should().BeLessThan(0.8m, "the score itself would fail the default threshold");
+        result.SufficiencyScore.IsSufficient.Should().BeTrue();
+        result.NeedsMoreResearch.Should().BeFalse("a gap alone does not continue research once the score clears the configured bar");
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_DoesNotNeedMoreResearch_WhenScoreIsHigh()
     {
         // Arrange

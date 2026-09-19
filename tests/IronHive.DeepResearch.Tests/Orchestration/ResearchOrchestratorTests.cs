@@ -383,6 +383,67 @@ public class ResearchOrchestratorTests
         public void Dispose() { }
     }
 
+    private ResearchOrchestrator OrchestratorWith(DeepResearchOptions options) => new(
+        _mockQueryPlanner, _mockSearchCoordinator, _mockContentEnrichment, _mockAnalysisAgent, _mockReportGenerator,
+        options, NullLogger<ResearchOrchestrator>.Instance);
+
+    [Theory]
+    [InlineData(false, 1, 1)] // default: a sufficient score ends the research
+    [InlineData(false, 3, 5)] // one source collected, three wanted, a gap to pursue: keep going to the depth's limit
+    [InlineData(true, 1, 1)]
+    [InlineData(true, 3, 5)]
+    public async Task Research_ContinuesWhileBelowMinSourcesBeforeReport_AndAGapRemains(bool stream, int minSources, int expectedIterations)
+    {
+        var orchestrator = OrchestratorWith(new DeepResearchOptions { MinSourcesBeforeReport = minSources });
+        _mockQueryPlanner.SetupPlan(CreateTestPlanResult());
+        _mockSearchCoordinator.SetupSearchResult(CreateTestSearchResult());
+        _mockContentEnrichment.SetupEnrichmentResult(CreateTestEnrichmentResult()); // the same single source every time
+        _mockReportGenerator.SetupReportResult(CreateTestReportResult());
+        // Sufficient score (0.9) with a gap still open — NeedsMoreResearch alone would stop here.
+        _mockAnalysisAgent.SetupInfiniteResults(CreateAnalysisResult(needsMore: true, score: 0.9m));
+        var request = CreateTestRequest() with { Depth = ResearchDepth.Standard, MaxIterations = 5 };
+
+        if (stream)
+        {
+            await foreach (var _ in orchestrator.ExecuteStreamAsync(request, TestContext.Current.CancellationToken)) { }
+        }
+        else
+        {
+            await orchestrator.ExecuteAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        _mockAnalysisAgent.AnalyzeCallCount.Should().Be(expectedIterations);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Research_RetriesASearchThatFoundNothing_OnBothPaths(bool stream)
+    {
+        // The streaming path used to search once, with no retry and no error recorded, while ExecuteAsync retried.
+        var orchestrator = OrchestratorWith(new DeepResearchOptions
+        {
+            MaxSearchRetriesPerIteration = 2,
+            RetryDelayOnNoResults = TimeSpan.Zero,
+        });
+        _mockQueryPlanner.SetupPlan(CreateTestPlanResult());
+        // no search result configured: every search returns zero sources
+        _mockContentEnrichment.SetupEnrichmentResult(CreateTestEnrichmentResult());
+        _mockAnalysisAgent.SetupAnalysisResult(CreateAnalysisResult(needsMore: false, score: 0.9m));
+        _mockReportGenerator.SetupReportResult(CreateTestReportResult());
+
+        if (stream)
+        {
+            await foreach (var _ in orchestrator.ExecuteStreamAsync(CreateTestRequest(), TestContext.Current.CancellationToken)) { }
+        }
+        else
+        {
+            await orchestrator.ExecuteAsync(CreateTestRequest(), TestContext.Current.CancellationToken);
+        }
+
+        _mockSearchCoordinator.ExecuteSearchesCount.Should().Be(3, "the first search plus two retries");
+    }
+
     private void SetupDefaultMocks(bool needsMoreResearch)
     {
         _mockQueryPlanner.SetupPlan(CreateTestPlanResult());
@@ -649,6 +710,8 @@ internal class MockSearchCoordinatorAgentForOrchestrator : SearchCoordinatorAgen
 
     public bool ExecuteSearchesCalled { get; private set; }
 
+    public int ExecuteSearchesCount { get; private set; }
+
     public MockSearchCoordinatorAgentForOrchestrator() : base(
         new SearchProviderFactory([], new DeepResearchOptions(), NullLogger<SearchProviderFactory>.Instance),
         new DeepResearchOptions(),
@@ -665,6 +728,7 @@ internal class MockSearchCoordinatorAgentForOrchestrator : SearchCoordinatorAgen
         CancellationToken cancellationToken = default)
     {
         ExecuteSearchesCalled = true;
+        ExecuteSearchesCount++;
 
         return Task.FromResult(_result ?? new SearchExecutionResult
         {

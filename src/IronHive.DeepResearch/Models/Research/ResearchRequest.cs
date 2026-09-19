@@ -16,11 +16,6 @@ public record ResearchRequest
     public ResearchDepth Depth { get; init; } = ResearchDepth.Standard;
 
     /// <summary>
-    /// 출력 형식
-    /// </summary>
-    public OutputFormat OutputFormat { get; init; } = OutputFormat.Markdown;
-
-    /// <summary>
     /// 출력 언어
     /// </summary>
     public string Language { get; init; } = "ko";
@@ -80,15 +75,4 @@ public enum ResearchDepth
     /// Comprehensive: 10-15분, 10회 이내 반복
     /// </summary>
     Comprehensive
-}
-
-/// <summary>
-/// 출력 형식
-/// </summary>
-public enum OutputFormat
-{
-    Markdown,
-    Html,
-    Pdf,
-    Json
 }

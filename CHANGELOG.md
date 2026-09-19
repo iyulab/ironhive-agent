@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.14.0] - 2026-09-19
+
+### Fixed
+
+- **DeepResearch judges sufficiency against `DeepResearchOptions.SufficiencyThreshold`.** The setting reached a field
+  nothing read, and the judgement compared against a hardcoded 0.8, so research stopped at 0.8 whatever the host set.
+  `SufficiencyScore` now carries the `Threshold` it was judged against.
+- **`DeepResearchOptions.MinSourcesBeforeReport` takes effect.** While fewer sources have been collected than it asks for,
+  research keeps iterating as long as the analysis still has a gap to search, even when the score is already
+  sufficient. With no gap left there is nothing more to search, so research stops.
+- **Streaming research (`ExecuteStreamAsync`) retries a search that found nothing and records failed queries**, the same
+  as `ExecuteAsync`. Before this it searched once and dropped the failures.
+
+### Removed
+
+- **Breaking: options that nothing read.** `DeepResearchOptions.CheckpointBasePath` (there is no persistent checkpoint store) and
+  `SessionExpiration` (there is no session store) are gone. `DefaultMaxIterations` and `DefaultMaxSourcesPerIteration` duplicated
+  `ResearchRequest.MaxIterations` / `MaxSourcesPerIteration`, which are what run. `AnalysisOptions.EnableFindingVerification` had no
+  verification step behind it. `ContentEnrichmentOptions.ContinueOnError` and `SearchExecutionOptions.ContinueOnError` described
+  what always happens: a failed source or query is recorded and the rest continue. `ResearchRequest.OutputFormat` /
+  `ReportGenerationOptions.OutputFormat` and the `OutputFormat` enum are gone too: reports are always Markdown, and no renderer
+  existed for Html, Pdf or Json. Migration: delete the assignments. None of them changed behaviour.
+
 ## [0.13.0] - 2026-09-19
 
 ### Fixed

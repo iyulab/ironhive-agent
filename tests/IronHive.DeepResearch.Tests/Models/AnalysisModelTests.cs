@@ -95,6 +95,17 @@ public class SufficiencyScoreTests
         score.IsSufficient.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(0.6, 0.59, false)]
+    [InlineData(0.6, 0.6, true)]
+    [InlineData(0.95, 0.9, false)]
+    public void IsSufficient_UsesTheScoresOwnThreshold(double threshold, double overall, bool expected)
+    {
+        var score = new SufficiencyScore { OverallScore = (decimal)overall, Threshold = (decimal)threshold };
+
+        score.IsSufficient.Should().Be(expected);
+    }
+
     [Fact]
     public void ShouldInitialize_WithAllScores()
     {

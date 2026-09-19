@@ -16,21 +16,6 @@ public class DeepResearchOptions
     public Dictionary<string, string> SearchApiKeys { get; set; } = new();
 
     /// <summary>
-    /// 체크포인트 저장 경로
-    /// </summary>
-    public string? CheckpointBasePath { get; set; }
-
-    /// <summary>
-    /// 기본 최대 반복 횟수
-    /// </summary>
-    public int DefaultMaxIterations { get; set; } = 5;
-
-    /// <summary>
-    /// 반복당 기본 최대 소스 수
-    /// </summary>
-    public int DefaultMaxSourcesPerIteration { get; set; } = 10;
-
-    /// <summary>
     /// 충분성 임계값 (0-1, 기본 0.8)
     /// </summary>
     public decimal SufficiencyThreshold { get; set; } = 0.8m;
@@ -44,11 +29,6 @@ public class DeepResearchOptions
     /// 병렬 콘텐츠 추출 최대 수
     /// </summary>
     public int MaxParallelExtractions { get; set; } = 10;
-
-    /// <summary>
-    /// 세션 만료 시간
-    /// </summary>
-    public TimeSpan SessionExpiration { get; set; } = TimeSpan.FromDays(7);
 
     /// <summary>
     /// HTTP 요청 타임아웃

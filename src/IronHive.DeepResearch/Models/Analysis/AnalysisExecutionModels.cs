@@ -67,11 +67,6 @@ public record AnalysisOptions
     public decimal SufficiencyThreshold { get; init; } = 0.8m;
 
     /// <summary>
-    /// Finding 검증 활성화
-    /// </summary>
-    public bool EnableFindingVerification { get; init; } = true;
-
-    /// <summary>
     /// 분석 언어
     /// </summary>
     public string Language { get; init; } = "ko";

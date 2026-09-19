@@ -185,11 +185,6 @@ public record SearchExecutionOptions
     public bool DeduplicateUrls { get; init; } = true;
 
     /// <summary>
-    /// 실패 시 계속 진행
-    /// </summary>
-    public bool ContinueOnError { get; init; } = true;
-
-    /// <summary>
     /// 선호 프로바이더 ID (null이면 자동 선택)
     /// </summary>
     public string? PreferredProviderId { get; init; }

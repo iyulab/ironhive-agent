@@ -49,10 +49,6 @@ public record ReportGenerationResult
 /// </summary>
 public record ReportGenerationOptions
 {
-    /// <summary>
-    /// 출력 형식
-    /// </summary>
-    public OutputFormat OutputFormat { get; init; } = OutputFormat.Markdown;
 
     /// <summary>
     /// 출력 언어
