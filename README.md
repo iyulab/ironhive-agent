@@ -10,6 +10,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Built-in Tools**: Read, Write, Shell, Glob, Grep, Todo
 - **Delegation (agent as a tool)**: `DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research", Model = ..., MaxToolTurns = ... })` turns an Ironbees named agent into an `AIFunction` the model calls to hand off a sub-task. Each call is an isolated run of that agent — its `agent.yaml` tools (an agent that lists `tools` gets exactly those), prompt and model, with per-delegation model, reasoning level, output cap and tool-turn limit. `DelegationOptions` bounds nesting depth (across agents), concurrency, and feeds the delegated usage into the parent's `IUsageLimiter`/`IUsageTracker`. A run that stops at its turn limit comes back marked partial. Not registered by `AddIronHiveAgent`: create the tools where the orchestrator is available and add them to the loop's `Tools`. To call a named agent from application code instead, use `IAgentOrchestrator.ProcessStructuredAsync(input, new ProcessOptions { AgentName = ... })`
+- **Advisor (consult a stronger model)**: `AdvisorTool.Create(strongerClient, new AdvisorOptions { ModelId = ..., MaxCalls = 5 })` gives the working model a no-argument tool that sends the conversation so far — its requests, tool calls and results — to a stronger model and returns that model's review. The working model decides when to consult (the default description says: before committing to an approach, when stuck, before declaring done), so the strong model is paid for only where judgment matters. Works under `FunctionInvokingChatClient` and inside Ironbees agents (`ChatClientFrameworkAdapter`); elsewhere pass `AdvisorOptions.Conversation`. The advisor is never given tools; `MaxCalls`, `UsageLimiter` and `UsageTracker` bound and account for it. Not registered by `AddIronHiveAgent`: add the tool to the loop's `Tools`
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`
 - **Checkpoint Service**: `ICheckpointService` abstraction for pre-destructive-operation state snapshots and rollback
@@ -114,7 +115,7 @@ IronHive.Agent/
 ├── Mode/           # Plan/Work/HITL mode system
 ├── Mcp/            # MCP plugin management and tool discovery
 ├── Tools/          # Built-in tools (BuiltInTools, TodoTool)
-├── Delegation/     # Agent-as-tool delegation (DelegationTools, DelegatedAgent, DelegationOptions)
+├── Delegation/     # Agent-as-tool delegation (DelegationTools) and the advisor tool (AdvisorTool)
 ├── Planning/       # Plan-and-execute orchestration (DefaultTaskPlanner, DefaultPlanExecutor, HeuristicPlanEvaluator, PlannerTriggerDetector)
 ├── Services/       # Cross-cutting services (ICheckpointService for pre-destructive-op snapshots)
 ├── Permissions/    # Permission evaluation and configuration

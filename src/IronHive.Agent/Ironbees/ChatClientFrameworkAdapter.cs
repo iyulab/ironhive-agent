@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Ironbees.Core;
 using Ironbees.Core.Streaming;
+using IronHive.Agent.Delegation;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
 using Microsoft.Extensions.AI;
@@ -133,7 +134,7 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                 };
             }
 
-            messages.Add(await ExecuteToolCallsAsync(pendingToolCalls, tools, cancellationToken));
+            messages.Add(await ExecuteToolCallsAsync(pendingToolCalls, tools, messages, cancellationToken));
         }
 
         // The model still wanted tools when the limit ran out: say so rather than pass the partial text off as an answer.
@@ -239,7 +240,7 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                 yield break;
             }
 
-            messages.Add(await ExecuteToolCallsAsync(pendingToolCalls, tools, cancellationToken));
+            messages.Add(await ExecuteToolCallsAsync(pendingToolCalls, tools, messages, cancellationToken));
         }
 
         var partial = ExtractLastTextFromMessages(messages);
@@ -380,6 +381,7 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     private async Task<ChatMessage> ExecuteToolCallsAsync(
         IReadOnlyList<FunctionCallContent> toolCalls,
         IList<AITool> tools,
+        IReadOnlyList<ChatMessage> conversation,
         CancellationToken cancellationToken)
     {
         var toolResults = new List<AIContent>();
@@ -418,7 +420,13 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                     var args = arguments is not null
                         ? new AIFunctionArguments(arguments)
                         : null;
-                    var result = await function.InvokeAsync(args, cancellationToken);
+                    // This loop is not FunctionInvokingChatClient, so a tool that reads the conversation (the advisor)
+                    // gets it from here instead of FunctionInvokingChatClient.CurrentContext.
+                    object? result;
+                    using (ToolInvocationScope.Enter(conversation))
+                    {
+                        result = await function.InvokeAsync(args, cancellationToken);
+                    }
                     var resultText = result?.ToString() ?? "null";
 
                     toolResults.Add(new FunctionResultContent(functionCall.CallId, resultText));

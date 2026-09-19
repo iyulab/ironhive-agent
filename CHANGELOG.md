@@ -30,6 +30,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   bounds nesting depth (followed across agents), concurrency across a set of tools, and counts the delegated usage —
   priced on the delegated model — against the parent's usage limit. A refused or failed delegation, and a run cut off
   at its turn limit, come back as results the calling model can read.
+- **Advisor: a tool that consults a stronger model** (`AdvisorTool.Create(advisorClient, AdvisorOptions)`). It takes
+  no arguments; calling it sends the conversation so far, rendered as a transcript (tool results cut, reasoning left
+  out), to the advisor model — with no tools — and returns its review. The conversation comes from
+  `FunctionInvokingChatClient.CurrentContext`, from the Ironbees adapter's own tool loop, or from
+  `AdvisorOptions.Conversation`. `MaxCalls`, `UsageLimiter` and `UsageTracker` bound and account for consultations.
 
 ### Removed
 
