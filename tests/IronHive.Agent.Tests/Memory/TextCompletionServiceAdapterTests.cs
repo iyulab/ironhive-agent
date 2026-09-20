@@ -103,13 +103,14 @@ public class TextCompletionServiceAdapterTests
             .Returns(Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "ok")])));
 
         var adapter = new TextCompletionServiceAdapter(chatClient);
+        // The three sampling knobs this used to assert (TopP, PresencePenalty, FrequencyPenalty) are
+        // gone from TextCompletionOptions in MemoryIndexer 0.18.0: nothing in that library ever
+        // populated them, so this test was their only writer and the mapping could never fire in
+        // production.
         var options = new TextCompletionOptions
         {
             Temperature = 0.5f,
             MaxTokens = 200,
-            TopP = 0.9f,
-            PresencePenalty = 0.1f,
-            FrequencyPenalty = 0.2f,
             StopSequences = ["stop1", "stop2"]
         };
         await adapter.CompleteAsync("test", options, TestContext.Current.CancellationToken);
@@ -117,9 +118,6 @@ public class TextCompletionServiceAdapterTests
         Assert.NotNull(capturedOptions);
         Assert.Equal(0.5f, capturedOptions!.Temperature);
         Assert.Equal(200, capturedOptions.MaxOutputTokens);
-        Assert.Equal(0.9f, capturedOptions.TopP);
-        Assert.Equal(0.1f, capturedOptions.PresencePenalty);
-        Assert.Equal(0.2f, capturedOptions.FrequencyPenalty);
         Assert.NotNull(capturedOptions.StopSequences);
         Assert.Equal(2, capturedOptions.StopSequences!.Count);
         Assert.Contains("stop1", capturedOptions.StopSequences);

@@ -64,13 +64,12 @@ public class TextCompletionServiceAdapter : ITextCompletionService
             return null;
         }
 
+        // TopP, PresencePenalty and FrequencyPenalty are not mapped: MemoryIndexer never populated
+        // them, so they always arrived null, and they are gone from TextCompletionOptions in 0.18.0.
         return new ChatOptions
         {
             Temperature = options.Temperature,
             MaxOutputTokens = options.MaxTokens,
-            TopP = options.TopP,
-            PresencePenalty = options.PresencePenalty,
-            FrequencyPenalty = options.FrequencyPenalty,
             StopSequences = options.StopSequences?.ToList()
         };
     }
