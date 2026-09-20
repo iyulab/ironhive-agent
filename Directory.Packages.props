@@ -6,8 +6,8 @@
     <!-- IronHive (LLM abstraction) -->
     <PackageVersion Include="IronHive.Abstractions" Version="0.33.0" />
     <!-- Ironbees (multi-agent orchestration) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.17.1" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.17.1" />
+    <PackageVersion Include="Ironbees.Core" Version="0.17.2" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.17.2" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.5" />
     <!-- Microsoft.Extensions.AI -->

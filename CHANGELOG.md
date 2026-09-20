@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.32.0 -> 0.33.0, `WebFlux` 0.7.4 -> 0.8.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.1 -> 0.17.2, `Ironbees.Core` 0.17.1 -> 0.17.2 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
 
 ### Fixed
 - **DeepResearch with `UseWebFluxPackage = true` extracted a placeholder sentence instead of the
