@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.14.5] - 2026-09-20
+
+### Changed
+- `TextCompletionServiceAdapter` no longer maps `TopP`, `PresencePenalty` or `FrequencyPenalty`.
+  MemoryIndexer never populated them, so they always arrived null, and they are removed from
+  `TextCompletionOptions` in MemoryIndexer 0.18.0. `Temperature`, `MaxTokens` and `StopSequences`
+  are unchanged.
+
 ## [0.14.4] - 2026-09-20
 
 ### Changed
