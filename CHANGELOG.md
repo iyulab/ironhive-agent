@@ -11,6 +11,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   MemoryIndexer never populated them, so they always arrived null, and they are removed from
   `TextCompletionOptions` in MemoryIndexer 0.18.0. `Temperature`, `MaxTokens` and `StopSequences`
   are unchanged.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.16.0 -> 0.17.0, `MemoryIndexer` 0.17.16 -> 0.18.0, `MemoryIndexer.Sdk` 0.17.16 -> 0.18.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
 
 ## [0.14.4] - 2026-09-20
 
