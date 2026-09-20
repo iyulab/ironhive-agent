@@ -50,7 +50,7 @@ public partial class WebFluxIntegratedContentExtractor : DeepResearchContentExtr
                 return CreateFailedResult(url, "유효하지 않은 URL 형식입니다.");
             }
 
-            // 1. WebFlux Crawler로 HTML 가져오기 (Intelligent 크롤러 사용)
+            // 1. WebFlux Crawler로 HTML 가져오기
             var crawler = GetCrawler();
             var crawlOptions = new CrawlOptions
             {
@@ -126,19 +126,22 @@ public partial class WebFluxIntegratedContentExtractor : DeepResearchContentExtr
     }
 
     /// <summary>
-    /// WebFlux Crawler 가져오기 (Intelligent 우선, 없으면 BreadthFirst)
+    /// WebFlux Crawler 가져오기 (BreadthFirst, 없으면 기본 등록).
     /// </summary>
+    /// <remarks>
+    /// 이전에는 keyed "Intelligent" 크롤러를 우선했다. WebFlux 0.7.x 의 그 크롤러는 요청을 보내지 않고
+    /// placeholder 본문으로 성공을 돌려주는 스텁이었고(0.8.0 에서 제거), 이 추출기는 그 문장을 페이지
+    /// 본문으로 받았다. 단일 URL fetch 는 HTTP 크롤러면 충분하다.
+    /// </remarks>
     private ICrawler GetCrawler()
     {
-        // 키드 서비스로 등록된 크롤러 시도 (우선순위: Intelligent > BreadthFirst > Default)
-        var crawler = _serviceProvider.GetKeyedService<ICrawler>("Intelligent")
-            ?? _serviceProvider.GetKeyedService<ICrawler>("BreadthFirst")
+        var crawler = _serviceProvider.GetKeyedService<ICrawler>("BreadthFirst")
             ?? _serviceProvider.GetService<ICrawler>();
 
         if (crawler == null)
         {
             throw new InvalidOperationException(
-                "WebFlux ICrawler가 등록되지 않았습니다. services.AddWebFlux()를 호출하세요.");
+                "No WebFlux ICrawler is registered. Call services.AddWebFlux().");
         }
 
         return crawler;

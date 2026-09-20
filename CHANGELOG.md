@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.14.2] - 2026-09-20
+
+### Fixed
+- **DeepResearch with `UseWebFluxPackage = true` extracted a placeholder sentence instead of the
+  page.** The WebFlux-backed extractor preferred the crawler registered under the key
+  `"Intelligent"`, which in WebFlux up to 0.7.x made no request and returned
+  `"Basic Intelligent crawl result for {url}"` as a successful page. The extractor now fetches
+  through the HTTP crawler. `UseWebFluxPackage` is off by default, so only consumers that turned it
+  on were affected. The "no crawler registered" exception message is now in English.
+
 ## [0.14.1] - 2026-09-19
 
 ### Changed
