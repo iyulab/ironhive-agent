@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.15.0] - 2026-09-21
+
+### Added
+- **`IFileWriteInterceptor` — a hook around the built-in `WriteFile` tool.** Pass one to
+  `new ToolProvider(workingDirectory, interceptor)` or `BuiltInTools.GetAll(workingDirectory, interceptor)`
+  and it runs around every write: it receives the absolute path the tool resolved and a delegate that
+  performs the write, may decline to call it, and may return text appended to the tool's success
+  message. This is how a host attaches snapshots, auditing or a policy check to file writes without
+  keeping its own copy of the file tools. Without an interceptor nothing changes.
+
+### Changed
+- `BuiltInTools.GetAll` returns a mutable list, so a host can append its own tools to it.
+
 ## [0.14.8] - 2026-09-22
 
 ### Changed

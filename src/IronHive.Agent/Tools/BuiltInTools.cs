@@ -19,13 +19,22 @@ public static class BuiltInTools
     /// <param name="workingDirectory">Working directory for tools.</param>
     /// <returns>List of AI tools.</returns>
     public static IList<AITool> GetAll(string? workingDirectory = null)
+        => GetAll(workingDirectory, writeInterceptor: null);
+
+    /// <summary>
+    /// Gets all built-in tools, with a hook around every file write.
+    /// </summary>
+    /// <param name="workingDirectory">Working directory for tools.</param>
+    /// <param name="writeInterceptor">Runs around each <c>WriteFile</c>; <see langword="null"/> for none.</param>
+    /// <returns>List of AI tools. The list is mutable so a host can append its own tools.</returns>
+    public static IList<AITool> GetAll(string? workingDirectory, IFileWriteInterceptor? writeInterceptor)
     {
         var wd = workingDirectory ?? Directory.GetCurrentDirectory();
-        var tools = new ToolProvider(wd);
+        var tools = new ToolProvider(wd, writeInterceptor);
         var todoTool = new TodoTool(wd);
 
-        return
-        [
+        return new List<AITool>
+        {
             AIFunctionFactory.Create(tools.ReadFile),
             AIFunctionFactory.Create(tools.WriteFile),
             AIFunctionFactory.Create(tools.ListDirectory),
@@ -33,7 +42,7 @@ public static class BuiltInTools
             AIFunctionFactory.Create(tools.GrepFiles),
             AIFunctionFactory.Create(tools.ExecuteCommand),
             todoTool.GetAITool()
-        ];
+        };
     }
 
 }
@@ -44,12 +53,14 @@ public static class BuiltInTools
 public class ToolProvider
 {
     private readonly string _workingDirectory;
+    private readonly IFileWriteInterceptor? _writeInterceptor;
     private const int MaxFileSize = 1024 * 1024; // 1MB
     private const int MaxOutputLength = 50000; // Characters
     private const int DefaultCommandTimeout = 30000; // 30 seconds
 
-    public ToolProvider(string workingDirectory)
+    public ToolProvider(string workingDirectory, IFileWriteInterceptor? writeInterceptor = null)
     {
+        _writeInterceptor = writeInterceptor;
         _workingDirectory = workingDirectory;
     }
 
@@ -119,18 +130,23 @@ public class ToolProvider
                 Directory.CreateDirectory(directory);
             }
 
-            if (append)
+            Func<Task> write = append
+                ? () => File.AppendAllTextAsync(fullPath, content)
+                : () => File.WriteAllTextAsync(fullPath, content);
+
+            string? note = null;
+            if (_writeInterceptor is null)
             {
-                await File.AppendAllTextAsync(fullPath, content);
+                await write();
             }
             else
             {
-                await File.WriteAllTextAsync(fullPath, content);
+                note = await _writeInterceptor.InterceptAsync(fullPath, write);
             }
 
             return append
-                ? $"Successfully appended to file: {path}"
-                : $"Successfully wrote to file: {path}";
+                ? $"Successfully appended to file: {path}{note}"
+                : $"Successfully wrote to file: {path}{note}";
         }
         catch (Exception ex)
         {
