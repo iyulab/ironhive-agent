@@ -19,18 +19,18 @@ public static class BuiltInTools
     /// <param name="workingDirectory">Working directory for tools.</param>
     /// <returns>List of AI tools.</returns>
     public static IList<AITool> GetAll(string? workingDirectory = null)
-        => GetAll(workingDirectory, writeInterceptor: null);
+        => GetAll(workingDirectory, options: null);
 
     /// <summary>
-    /// Gets all built-in tools, with a hook around every file write.
+    /// Gets all built-in tools, with the host's decisions about the file tools.
     /// </summary>
     /// <param name="workingDirectory">Working directory for tools.</param>
-    /// <param name="writeInterceptor">Runs around each <c>WriteFile</c>; <see langword="null"/> for none.</param>
+    /// <param name="options">Where the file tools may reach and what runs around a write; <see langword="null"/> for the defaults.</param>
     /// <returns>List of AI tools. The list is mutable so a host can append its own tools.</returns>
-    public static IList<AITool> GetAll(string? workingDirectory, IFileWriteInterceptor? writeInterceptor)
+    public static IList<AITool> GetAll(string? workingDirectory, FileToolOptions? options)
     {
         var wd = workingDirectory ?? Directory.GetCurrentDirectory();
-        var tools = new ToolProvider(wd, writeInterceptor);
+        var tools = new ToolProvider(wd, options);
         var todoTool = new TodoTool(wd);
 
         return new List<AITool>
@@ -50,17 +50,26 @@ public static class BuiltInTools
 /// <summary>
 /// Tool provider with working directory context.
 /// </summary>
+/// <remarks>
+/// The working directory is where relative paths start. It is not a boundary: absolute paths and
+/// <c>..</c> leave it unless <see cref="FileToolOptions.AllowedRoots"/> says where the tools may reach.
+/// </remarks>
 public class ToolProvider
 {
     private readonly string _workingDirectory;
     private readonly IFileWriteInterceptor? _writeInterceptor;
+    private readonly string[] _allowedRoots;
     private const int MaxFileSize = 1024 * 1024; // 1MB
     private const int MaxOutputLength = 50000; // Characters
     private const int DefaultCommandTimeout = 30000; // 30 seconds
 
-    public ToolProvider(string workingDirectory, IFileWriteInterceptor? writeInterceptor = null)
+    public ToolProvider(string workingDirectory, FileToolOptions? options = null)
     {
-        _writeInterceptor = writeInterceptor;
+        _writeInterceptor = options?.WriteInterceptor;
+        _allowedRoots = [.. (options?.AllowedRoots ?? [])
+            .Where(root => !string.IsNullOrWhiteSpace(root))
+            .Select(root => Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(Path.IsPathRooted(root) ? root : Path.Combine(workingDirectory, root))))];
         _workingDirectory = workingDirectory;
     }
 
@@ -76,7 +85,10 @@ public class ToolProvider
         [Description("Line number to start reading from (1-based, optional)")] int? startLine = null,
         [Description("Number of lines to read (optional, reads all if not specified)")] int? lineCount = null)
     {
-        var fullPath = ResolvePath(path);
+        if (!TryResolvePath(path, out var fullPath, out var refusal))
+        {
+            return refusal;
+        }
 
         if (!File.Exists(fullPath))
         {
@@ -120,7 +132,10 @@ public class ToolProvider
         [Description("Content to write to the file")] string content,
         [Description("If true, append to existing file instead of overwriting")] bool append = false)
     {
-        var fullPath = ResolvePath(path);
+        if (!TryResolvePath(path, out var fullPath, out var refusal))
+        {
+            return refusal;
+        }
 
         try
         {
@@ -164,7 +179,10 @@ public class ToolProvider
         [Description("Path to the directory (relative to working directory or absolute)")] string? path = null,
         [Description("If true, list contents recursively")] bool recursive = false)
     {
-        var fullPath = ResolvePath(path ?? ".");
+        if (!TryResolvePath(path ?? ".", out var fullPath, out var refusal))
+        {
+            return refusal;
+        }
 
         if (!Directory.Exists(fullPath))
         {
@@ -215,7 +233,10 @@ public class ToolProvider
         [Description("Glob pattern to match (e.g., '**/*.cs', 'src/**/*.json')")] string pattern,
         [Description("Base directory for the search (optional, defaults to working directory)")] string? path = null)
     {
-        var basePath = ResolvePath(path ?? ".");
+        if (!TryResolvePath(path ?? ".", out var basePath, out var refusal))
+        {
+            return refusal;
+        }
 
         if (!Directory.Exists(basePath))
         {
@@ -229,22 +250,25 @@ public class ToolProvider
 
             var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
 
-            if (!result.HasMatches)
+            // A pattern such as "../**" climbs out of the base directory; what it finds is held to the boundary too.
+            var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+
+            if (files.Count == 0)
             {
                 return $"No files found matching pattern: {pattern}";
             }
 
             var sb = new StringBuilder();
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Found {result.Files.Count()} files matching '{pattern}':");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Found {files.Count} files matching '{pattern}':");
 
-            foreach (var file in result.Files.Take(100))
+            foreach (var file in files.Take(100))
             {
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  {file.Path}");
             }
 
-            if (result.Files.Count() > 100)
+            if (files.Count > 100)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  ... (truncated, total: {result.Files.Count()} files)");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  ... (truncated, total: {files.Count} files)");
             }
 
             return sb.ToString();
@@ -267,7 +291,10 @@ public class ToolProvider
         [Description("Glob pattern for files to search in (e.g., '**/*.cs')")] string filePattern,
         [Description("Base directory for the search (optional)")] string? path = null)
     {
-        var basePath = ResolvePath(path ?? ".");
+        if (!TryResolvePath(path ?? ".", out var basePath, out var refusal))
+        {
+            return refusal;
+        }
 
         if (!Directory.Exists(basePath))
         {
@@ -281,7 +308,9 @@ public class ToolProvider
 
             var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
 
-            if (!result.HasMatches)
+            var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+
+            if (files.Count == 0)
             {
                 return $"No files found matching pattern: {filePattern}";
             }
@@ -290,7 +319,7 @@ public class ToolProvider
             var matchCount = 0;
             var fileCount = 0;
 
-            foreach (var file in result.Files.Take(50))
+            foreach (var file in files.Take(50))
             {
                 var fullFilePath = Path.Combine(basePath, file.Path);
 
@@ -427,14 +456,45 @@ public class ToolProvider
         }
     }
 
-    private string ResolvePath(string path)
+    // The one place a path from the model becomes a path on disk - and so the one place the boundary is
+    // checked, on the path the tool will actually open rather than on the text the model wrote.
+    private bool TryResolvePath(string path, out string fullPath, out string refusal)
     {
-        if (Path.IsPathRooted(path))
+        fullPath = Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(_workingDirectory, path));
+
+        if (IsWithinAllowedRoots(fullPath))
         {
-            return Path.GetFullPath(path);
+            refusal = string.Empty;
+            return true;
         }
 
-        return Path.GetFullPath(Path.Combine(_workingDirectory, path));
+        refusal = $"Error: '{path}' is outside the directories this tool may access ({string.Join(", ", _allowedRoots)}). " +
+                  "This is a policy boundary, not a transient failure: another spelling of the same path will be refused too.";
+        return false;
+    }
+
+    private bool IsWithinAllowedRoots(string fullPath)
+    {
+        if (_allowedRoots.Length == 0)
+        {
+            return true;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var candidate = Path.TrimEndingDirectorySeparator(fullPath);
+
+        foreach (var root in _allowedRoots)
+        {
+            if (candidate.Equals(root, comparison)
+                || candidate.StartsWith(root + Path.DirectorySeparatorChar, comparison))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string FormatSize(long bytes) => bytes switch

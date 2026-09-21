@@ -27,7 +27,7 @@ public class FileWriteInterceptorTests : IDisposable
     public async Task TheInterceptor_SeesTheResolvedPath_AndItsNoteReachesTheModel()
     {
         var interceptor = new Recording(note: " (snapshot saved)");
-        var tools = new ToolProvider(_dir, interceptor);
+        var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = interceptor });
 
         var result = await tools.WriteFile("sub/notes.md", "hello");
 
@@ -50,7 +50,7 @@ public class FileWriteInterceptorTests : IDisposable
     public async Task AppendMode_GoesThroughTheInterceptorToo()
     {
         var interceptor = new Recording(note: null);
-        var tools = new ToolProvider(_dir, interceptor);
+        var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = interceptor });
         await tools.WriteFile("log.txt", "a");
 
         var result = await tools.WriteFile("log.txt", "b", append: true);
@@ -63,7 +63,7 @@ public class FileWriteInterceptorTests : IDisposable
     [Fact]
     public async Task AnInterceptorThatDoesNotCallWrite_PreventsTheWrite()
     {
-        var tools = new ToolProvider(_dir, new Recording(note: " (refused)", callWrite: false));
+        var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = new Recording(note: " (refused)", callWrite: false) });
 
         await tools.WriteFile("blocked.txt", "x");
 
@@ -73,7 +73,7 @@ public class FileWriteInterceptorTests : IDisposable
     [Fact]
     public async Task AnInterceptorThatThrows_IsReportedAsAFailedWrite()
     {
-        var tools = new ToolProvider(_dir, new Throwing());
+        var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = new Throwing() });
 
         var result = await tools.WriteFile("x.txt", "x");
 
@@ -84,7 +84,7 @@ public class FileWriteInterceptorTests : IDisposable
     public async Task GetAll_PassesTheInterceptorToTheWriteTool()
     {
         var interceptor = new Recording(note: null);
-        var write = BuiltInTools.GetAll(_dir, interceptor).OfType<Microsoft.Extensions.AI.AIFunction>().Single(t => t.Name == "WriteFile");
+        var write = BuiltInTools.GetAll(_dir, new FileToolOptions { WriteInterceptor = interceptor }).OfType<Microsoft.Extensions.AI.AIFunction>().Single(t => t.Name == "WriteFile");
 
         await write.InvokeAsync(
             new Microsoft.Extensions.AI.AIFunctionArguments { ["path"] = "via-tool.txt", ["content"] = "x" },

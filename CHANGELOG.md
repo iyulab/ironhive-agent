@@ -7,9 +7,18 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.15.0] - 2026-09-21
 
 ### Added
-- **`IFileWriteInterceptor` — a hook around the built-in `WriteFile` tool.** Pass one to
-  `new ToolProvider(workingDirectory, interceptor)` or `BuiltInTools.GetAll(workingDirectory, interceptor)`
-  and it runs around every write: it receives the absolute path the tool resolved and a delegate that
+- **`FileToolOptions.AllowedRoots` — a boundary for the built-in file tools.** The working directory
+  was never one: it is where relative paths start, and absolute paths or `..` left it freely. A host can
+  now declare the directories `ReadFile`, `WriteFile`, `ListDirectory`, `GlobFiles` and `GrepFiles` may
+  touch; a path that resolves outside all of them is refused with a message that tells the model it is
+  a policy boundary rather than returning content, and glob / grep results found through a climbing
+  pattern (`../**`) are held to it too. The check is made where the path is resolved, on the path the
+  tool will actually open. **Default: empty — no boundary, behaviour unchanged.** Not covered, and said
+  so in the XML docs: symbolic links and junctions are not followed, and `ExecuteCommand` is a shell
+  that no path check confines.
+- **`IFileWriteInterceptor` — a hook around the built-in `WriteFile` tool.** Set
+  `FileToolOptions.WriteInterceptor` (`new ToolProvider(workingDirectory, options)` or
+  `BuiltInTools.GetAll(workingDirectory, options)`) and it runs around every write: it receives the absolute path the tool resolved and a delegate that
   performs the write, may decline to call it, and may return text appended to the tool's success
   message. This is how a host attaches snapshots, auditing or a policy check to file writes without
   keeping its own copy of the file tools. Without an interceptor nothing changes.
