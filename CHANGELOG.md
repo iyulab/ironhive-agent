@@ -6,13 +6,22 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.14.7] - 2026-09-21
 
+### Fixed
+- **Correction to the 0.14.6 notes below.** They said the extraction timeout "now reaches the
+  crawler". It did not: WebFlux 0.10.0's HTTP crawlers read neither timeout option, so through
+  0.14.6 the configured value was enforced only by the extractor's own outer cancellation, exactly
+  as before. WebFlux 0.11.0 (re-pinned here) is the release that honours `CrawlOptions.TimeoutMs`
+  on every HTTP request. What a caller of `WebFluxIntegratedContentExtractor` observes is unchanged
+  either way — a slow page fails after about `ContentExtractionOptions.Timeout` — because the
+  outer cancellation is still in place with the same value.
+
 ### Changed
 - Re-pinned sibling package(s) `MemoryIndexer` 0.18.1 -> 0.18.2, `MemoryIndexer.Sdk` 0.18.1 -> 0.18.2, `WebFlux` 0.10.0 -> 0.11.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
 
 ## [0.14.6] - 2026-09-21
 
 ### Fixed
-- **The extraction timeout now reaches the crawler.** `WebFluxIntegratedContentExtractor` passed it as `CrawlOptions.Timeout`,
+- *(Corrected in 0.14.7 — the first sentence was wrong; see above.)* **The extraction timeout now reaches the crawler.** `WebFluxIntegratedContentExtractor` passed it as `CrawlOptions.Timeout`,
   a second spelling WebFlux never read (removed in WebFlux 0.10.0), so each request ran on the crawler's own 30-second default
   and only the outer cancellation enforced the configured value. It is now passed as `TimeoutMs`.
 
