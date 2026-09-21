@@ -7,6 +7,18 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.15.0] - 2026-09-21
 
 ### Added
+- **`ISystemInstructionContributor` — add a section to the system instructions without replacing the
+  system prompt.** Until now the only way to tell the agent something more was `AgentOptions.SystemPrompt`,
+  a whole-prompt replacement: adding one paragraph meant copying the host's default prompt, and the
+  copy went stale whenever the host changed it. Register a contributor (in the container, or with
+  `ContextManager.AddInstructionContributor`) and `ContextManager` adds its text as a system message
+  after the system prompt on every prepared turn — contributors in order, then the scratchpad. Sections
+  are recomputed each turn and are not stored in the conversation, so they are always current and
+  survive compaction. With no contributor the prepared history is what it was. An agent loop that runs
+  without a `ContextManager` does not apply contributors.
+- `ContextFitWarning.Sections` — the system prompt and each contributed section with its token cost,
+  largest first, so an over-budget warning says which section caused it. `ValidateContextFit` now
+  judges the sections that will be sent, not only the stored system messages.
 - **`FileToolOptions.AllowedRoots` — a boundary for the built-in file tools.** The working directory
   was never one: it is where relative paths start, and absolute paths or `..` left it freely. A host can
   now declare the directories `ReadFile`, `WriteFile`, `ListDirectory`, `GlobFiles` and `GrepFiles` may
@@ -22,6 +34,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   performs the write, may decline to call it, and may return text appended to the tool's success
   message. This is how a host attaches snapshots, auditing or a policy check to file writes without
   keeping its own copy of the file tools. Without an interceptor nothing changes.
+
+### Fixed
+- **The scratchpad block no longer piles up.** The agent loops store the prepared history and prepare it
+  again on the next turn, so every turn added another copy of the scratchpad's system message. Blocks
+  that `ContextManager` composes are now marked, removed and recomputed on each preparation.
 
 ### Changed
 - `BuiltInTools.GetAll` returns a mutable list, so a host can append its own tools to it.

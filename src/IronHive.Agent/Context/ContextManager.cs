@@ -47,7 +47,17 @@ public record ContextFitWarning
         ? (float)SystemPromptTokens / MaxContextTokens : 0;
     /// <summary>Whether the system prompt alone exceeds 80% of context budget.</summary>
     public bool IsOverBudget => SystemPromptPercentage > 0.80f;
+    /// <summary>
+    /// Where those tokens come from: the system prompt and each contributed section by name, largest
+    /// first — so an over-budget warning says which section to look at.
+    /// </summary>
+    public IReadOnlyList<ContextFitSection> Sections { get; init; } = [];
 }
+
+/// <summary>One system section and what it costs.</summary>
+/// <param name="Name">"system prompt", "scratchpad", or an <see cref="ISystemInstructionContributor.Name"/>.</param>
+/// <param name="Tokens">Tokens the section takes.</param>
+public sealed record ContextFitSection(string Name, int Tokens);
 
 /// <summary>
 /// Manages context window for agent conversations.
@@ -62,6 +72,14 @@ public class ContextManager
     private readonly ToolResultCompactor? _toolResultCompactor;
     private readonly ObservationMasker? _observationMasker;
     private readonly Scratchpad? _scratchpad;
+    private readonly List<ISystemInstructionContributor> _instructionContributors = [];
+
+    /// <summary>
+    /// Marks a system message this manager composed for one turn. Such a message is not conversation:
+    /// it is removed and recomputed every time history is prepared, so it can neither pile up when a
+    /// caller stores the prepared history nor go stale.
+    /// </summary>
+    internal const string InjectedBlockKey = "ironhive.injected_instruction";
 
     public ContextManager(
         IContextTokenCounter tokenCounter,
@@ -70,7 +88,8 @@ public class ContextManager
         GoalReminderOptions? goalReminderOptions = null,
         ToolResultCompactor? toolResultCompactor = null,
         ObservationMasker? observationMasker = null,
-        Scratchpad? scratchpad = null)
+        Scratchpad? scratchpad = null,
+        IEnumerable<ISystemInstructionContributor>? instructionContributors = null)
     {
         _tokenCounter = tokenCounter ?? throw new ArgumentNullException(nameof(tokenCounter));
         _compactionTrigger = compactionTrigger ?? new ThresholdCompactionTrigger();
@@ -79,6 +98,25 @@ public class ContextManager
         _toolResultCompactor = toolResultCompactor;
         _observationMasker = observationMasker;
         _scratchpad = scratchpad;
+        if (instructionContributors is not null)
+        {
+            _instructionContributors.AddRange(instructionContributors);
+        }
+    }
+
+    /// <summary>
+    /// The contributors whose sections are added after the system prompt, in the order they apply.
+    /// The scratchpad, when configured, is composed after them.
+    /// </summary>
+    public IReadOnlyList<ISystemInstructionContributor> InstructionContributors => _instructionContributors;
+
+    /// <summary>
+    /// Adds a contributor. Its section appears from the next prepared turn on.
+    /// </summary>
+    public void AddInstructionContributor(ISystemInstructionContributor contributor)
+    {
+        ArgumentNullException.ThrowIfNull(contributor);
+        _instructionContributors.Add(contributor);
     }
 
     /// <summary>
@@ -200,6 +238,10 @@ public class ContextManager
         IReadOnlyList<ChatMessage> history,
         CancellationToken cancellationToken = default)
     {
+        // Step 0: drop the blocks a previous preparation composed. Callers store the prepared history
+        // (the agent loops do), and without this every turn would add another copy of each block.
+        history = RemoveInjectedBlocks(history);
+
         // Step 0a: Compact large tool results (cheap, always runs if enabled)
         var compactedResults = _toolResultCompactor?.CompactToolResults(history) ?? history;
 
@@ -213,24 +255,69 @@ public class ContextManager
         // Step 2: Inject goal reminder if needed
         preparedHistory = _goalReminder.InjectReminderIfNeeded(preparedHistory);
 
-        // Step 3: Inject scratchpad if present
+        // Step 3: Compose the contributed instruction blocks (contributors in order, then the scratchpad).
         // Insert after leading system messages for cross-provider compatibility
         // (OpenAI, Anthropic, Gemini all expect system messages at the start)
-        if (_scratchpad?.HasContent == true)
+        var blocks = ComposeInstructionBlocks();
+        if (blocks.Count > 0)
         {
-            var result = new List<ChatMessage>(preparedHistory.Count + 1);
+            var result = new List<ChatMessage>(preparedHistory.Count + blocks.Count);
             var insertAt = 0;
             while (insertAt < preparedHistory.Count && preparedHistory[insertAt].Role == ChatRole.System)
             {
                 insertAt++;
             }
             result.AddRange(preparedHistory.Take(insertAt));
-            result.Add(new ChatMessage(ChatRole.System, _scratchpad.ToContextBlock()));
+            result.AddRange(blocks);
             result.AddRange(preparedHistory.Skip(insertAt));
             preparedHistory = result;
         }
 
         return preparedHistory;
+    }
+
+    private List<ChatMessage> ComposeInstructionBlocks()
+    {
+        var blocks = new List<ChatMessage>();
+
+        foreach (var contributor in _instructionContributors)
+        {
+            var text = contributor.GetInstructions();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                blocks.Add(InjectedBlock(contributor.Name, text));
+            }
+        }
+
+        if (_scratchpad?.HasContent == true)
+        {
+            blocks.Add(InjectedBlock("scratchpad", _scratchpad.ToContextBlock()));
+        }
+
+        return blocks;
+    }
+
+    private static ChatMessage InjectedBlock(string name, string text)
+        => new(ChatRole.System, text)
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { [InjectedBlockKey] = name },
+        };
+
+    private static IReadOnlyList<ChatMessage> RemoveInjectedBlocks(IReadOnlyList<ChatMessage> history)
+    {
+        var any = false;
+        foreach (var message in history)
+        {
+            if (message.AdditionalProperties?.ContainsKey(InjectedBlockKey) == true)
+            {
+                any = true;
+                break;
+            }
+        }
+
+        return any
+            ? [.. history.Where(m => m.AdditionalProperties?.ContainsKey(InjectedBlockKey) != true)]
+            : history;
     }
 
     /// <summary>
@@ -240,7 +327,12 @@ public class ContextManager
     /// </summary>
     public ContextFitWarning? ValidateContextFit(IReadOnlyList<ChatMessage> history)
     {
-        var systemMessages = history.Where(m => m.Role == ChatRole.System).ToList();
+        // Judge what the model will actually be sent: the stored system messages plus the sections
+        // contributed for the coming turn - whether or not the caller passed a prepared history.
+        var systemMessages = RemoveInjectedBlocks(history)
+            .Where(m => m.Role == ChatRole.System)
+            .Concat(ComposeInstructionBlocks())
+            .ToList();
         if (systemMessages.Count == 0)
         {
             return null;
@@ -257,7 +349,16 @@ public class ContextManager
         return new ContextFitWarning
         {
             SystemPromptTokens = systemTokens,
-            MaxContextTokens = maxTokens
+            MaxContextTokens = maxTokens,
+            Sections =
+            [
+                .. systemMessages.Select(m => new ContextFitSection(
+                    m.AdditionalProperties?.TryGetValue(InjectedBlockKey, out var name) == true && name is string s
+                        ? s
+                        : "system prompt",
+                    _tokenCounter.CountTokens(m)))
+                    .OrderByDescending(section => section.Tokens),
+            ],
         };
     }
 
