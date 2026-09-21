@@ -6,6 +6,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.14.6] - 2026-09-21
 
+### Fixed
+- **The extraction timeout now reaches the crawler.** `WebFluxIntegratedContentExtractor` passed it as `CrawlOptions.Timeout`,
+  a second spelling WebFlux never read (removed in WebFlux 0.10.0), so each request ran on the crawler's own 30-second default
+  and only the outer cancellation enforced the configured value. It is now passed as `TimeoutMs`.
+
 ### Changed
 - Re-pinned sibling package(s) `MemoryIndexer` 0.18.0 -> 0.18.1, `MemoryIndexer.Sdk` 0.18.0 -> 0.18.1, `WebFlux` 0.9.0 -> 0.10.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
 

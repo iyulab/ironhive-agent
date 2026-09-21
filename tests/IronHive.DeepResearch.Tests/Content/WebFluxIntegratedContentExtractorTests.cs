@@ -56,4 +56,33 @@ public class WebFluxIntegratedContentExtractorTests
         await fabricating.DidNotReceive().CrawlAsync(
             Arg.Any<string>(), Arg.Any<CrawlOptions?>(), Arg.Any<CancellationToken>());
     }
+
+    // The configured timeout used to be assigned to a CrawlOptions member the crawler never read, so the
+    // crawler kept its own default whatever the caller asked for.
+    [Fact]
+    public async Task ExtractAsync_PassesTheConfiguredTimeoutToTheCrawler()
+    {
+        CrawlOptions? seen = null;
+        var http = Substitute.For<ICrawler>();
+        http.CrawlAsync(Arg.Any<string>(), Arg.Do<CrawlOptions?>(o => seen = o), Arg.Any<CancellationToken>())
+            .Returns(new CrawlResult { Url = "https://example.com/", IsSuccess = false, ErrorMessage = "unreachable in this test" });
+
+        var provider = new ServiceCollection()
+            .AddKeyedSingleton("BreadthFirst", http)
+            .BuildServiceProvider();
+
+        using var extractor = new WebFluxIntegratedContentExtractor(
+            provider,
+            new DeepResearchOptions { MaxParallelExtractions = 1 },
+            NullLogger<WebFluxIntegratedContentExtractor>.Instance);
+
+        await extractor.ExtractAsync(
+            "https://example.com/",
+            new IronHive.DeepResearch.Abstractions.ContentExtractionOptions { Timeout = TimeSpan.FromSeconds(7) },
+            TestContext.Current.CancellationToken);
+
+        seen.Should().NotBeNull();
+        seen!.TimeoutMs.Should().Be(7000);
+        new CrawlOptions().TimeoutMs.Should().NotBe(7000, "the control: the crawler's default is a different number");
+    }
 }

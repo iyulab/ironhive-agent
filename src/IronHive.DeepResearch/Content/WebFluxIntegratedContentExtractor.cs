@@ -54,7 +54,7 @@ public partial class WebFluxIntegratedContentExtractor : DeepResearchContentExtr
             var crawler = GetCrawler();
             var crawlOptions = new CrawlOptions
             {
-                Timeout = options.Timeout,
+                TimeoutMs = (int)Math.Min(int.MaxValue, options.Timeout.TotalMilliseconds),
                 MaxRetries = 3,
                 EnableMetadataExtraction = options.ExtractMetadata
             };
