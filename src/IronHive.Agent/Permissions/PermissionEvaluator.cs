@@ -18,13 +18,13 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// <inheritdoc />
     public PermissionResult EvaluateRead(string filePath)
     {
-        return EvaluateRules(_config.Read, NormalizePath(filePath));
+        return EvaluatePathRules(_config.Read, filePath);
     }
 
     /// <inheritdoc />
     public PermissionResult EvaluateEdit(string filePath)
     {
-        return EvaluateRules(_config.Edit, NormalizePath(filePath));
+        return EvaluatePathRules(_config.Edit, filePath);
     }
 
     /// <inheritdoc />
@@ -42,7 +42,62 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// <inheritdoc />
     public PermissionResult EvaluateExternalDirectory(string directoryPath)
     {
-        return EvaluateRules(_config.ExternalDirectory, NormalizePath(directoryPath));
+        return EvaluateRules(_config.ExternalDirectory, ResolvePath(directoryPath).AbsolutePath);
+    }
+
+    // A path rule judges the path the tool will open. The file tools resolve their argument with
+    // Path.GetFullPath against the working directory, so the policy resolves it the same way first:
+    // inside the working directory it becomes the relative path the Read/Edit patterns describe;
+    // outside, Read/Edit do not apply at all and the ExternalDirectory rules decide.
+    private PermissionResult EvaluatePathRules(List<PermissionRule> rules, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return EvaluateRules(rules, string.Empty);
+        }
+
+        var resolved = ResolvePath(path);
+        if (!resolved.IsExternal)
+        {
+            return EvaluateRules(rules, resolved.RelativePath);
+        }
+
+        var external = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath);
+        return external.MatchedRule is not null
+            ? external with { OutsideWorkingDirectory = true }
+            : new PermissionResult
+            {
+                Action = _config.DefaultAction,
+                OutsideWorkingDirectory = true,
+                Reason = "Path is outside the working directory and no external-directory rule covers it"
+            };
+    }
+
+    private (string RelativePath, string AbsolutePath, bool IsExternal) ResolvePath(string path)
+    {
+        var root = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(_config.WorkingDirectory ?? Directory.GetCurrentDirectory()));
+
+        string full;
+        try
+        {
+            full = Path.IsPathRooted(path)
+                ? Path.GetFullPath(path)
+                : Path.GetFullPath(Path.Combine(root, path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A path the runtime cannot resolve is not a path inside the working directory.
+            var text = NormalizePath(path);
+            return (text, text, true);
+        }
+
+        var relative = Path.GetRelativePath(root, full);
+        var isExternal = relative == ".."
+            || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || Path.IsPathRooted(relative);
+
+        return (relative.Replace('\\', '/'), full.Replace('\\', '/'), isExternal);
     }
 
     /// <inheritdoc />

@@ -94,8 +94,19 @@ public static class PermissionConfigLoader
     /// Searches in order: .ironhive/permissions.yaml, .ironhive/permissions.json
     /// </summary>
     /// <param name="workingDirectory">Working directory to search from.</param>
-    /// <returns>Loaded configuration or default if no file found.</returns>
+    /// <returns>
+    /// Loaded configuration or default if no file found. Its <see cref="PermissionConfig.WorkingDirectory"/>
+    /// is <paramref name="workingDirectory"/>: the rules were found relative to it, and they describe
+    /// paths relative to it.
+    /// </returns>
     public static PermissionConfig LoadFromDefaultLocations(string workingDirectory)
+    {
+        var config = LoadFromDefaultLocationsCore(workingDirectory);
+        config.WorkingDirectory ??= workingDirectory;
+        return config;
+    }
+
+    private static PermissionConfig LoadFromDefaultLocationsCore(string workingDirectory)
     {
         var searchPaths = new[]
         {

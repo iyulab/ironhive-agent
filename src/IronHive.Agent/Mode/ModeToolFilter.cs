@@ -189,6 +189,7 @@ public class ModeToolFilter : IModeToolFilter
             "read_file" => AssessReadRisk(arguments),
             "write_file" => AssessWriteRisk(arguments),
             "delete_file" => AssessDeleteRisk(arguments),
+            "glob_files" or "grep_files" or "list_directory" => AssessDirectoryReadRisk(toolName, arguments),
             "shell" or "execute_command" => AssessShellRisk(arguments),
             _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) => AssessMcpToolRisk(toolName),
             _ => AssessToolRisk(toolName)
@@ -230,6 +231,32 @@ public class ModeToolFilter : IModeToolFilter
 
         var result = _permissionEvaluator.EvaluateRead(path);
         return ToRiskAssessment(result, $"Read file: {TruncatePath(path)}");
+    }
+
+    // The directory tools read too: a Read rule that closes a directory has to close it for a search
+    // inside it, not only for ReadFile. They keep answering to their tool-name rule as before, and
+    // the directory they are pointed at additionally answers to the Read rules - but only where a
+    // Read rule actually speaks about that directory (or it lies outside the working directory):
+    // Read patterns are written for files, and "no file pattern matches this directory name" is not
+    // a verdict on the directory.
+    private RiskAssessment AssessDirectoryReadRisk(string toolName, IDictionary<string, object?>? arguments)
+    {
+        var byName = AssessToolRisk(toolName);
+        if (byName.Verdict == PermissionAction.Deny)
+        {
+            return byName;
+        }
+
+        var path = GetStringArgument(arguments, "path");
+        var byPath = _permissionEvaluator.EvaluateRead(string.IsNullOrEmpty(path) ? "." : path);
+        if (byPath.Action == PermissionAction.Allow
+            || (byPath.MatchedRule is null && !byPath.OutsideWorkingDirectory))
+        {
+            return byName;
+        }
+
+        var assessment = ToRiskAssessment(byPath, $"Search directory: {TruncatePath(path ?? ".")}");
+        return byName.IsRisky && assessment.Verdict != PermissionAction.Deny ? byName : assessment;
     }
 
     private RiskAssessment AssessWriteRisk(IDictionary<string, object?>? arguments)

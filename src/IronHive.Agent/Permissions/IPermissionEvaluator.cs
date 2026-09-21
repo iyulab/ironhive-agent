@@ -16,6 +16,12 @@ public record PermissionResult
     public PermissionRule? MatchedRule { get; init; }
 
     /// <summary>
+    /// True when the judged path resolves outside <c>PermissionConfig.WorkingDirectory</c>, so the
+    /// external-directory rules (or the default action) decided rather than the Read/Edit rules.
+    /// </summary>
+    public bool OutsideWorkingDirectory { get; init; }
+
+    /// <summary>
     /// Reason for the decision.
     /// </summary>
     public string? Reason { get; init; }

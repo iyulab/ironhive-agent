@@ -339,6 +339,16 @@ scoredBudget = max(floor, MaxTools - pinnedCount)
 **Tools** — every other tool, matched by function name: Allow the read-only built-ins
 (`ListDirectory`, `GlobFiles`, `GrepFiles` and their snake_case spellings)
 
+**Paths are judged as the tools will open them.** `Read` and `Edit` patterns match the path
+*relative to* `PermissionConfig.WorkingDirectory` (default: the current directory — the file tools'
+default too; `PermissionConfigLoader.LoadFromDefaultLocations(dir)` sets it to `dir`) after `.` and
+`..` are resolved, so `src/a.cs`, `docs/../src/a.cs` and its absolute path get one answer, and
+`src/../../x` is not covered by a rule for `src/**`. A path that resolves **outside** the working
+directory is not covered by `Read`/`Edit` at all: `ExternalDirectory` rules decide (patterns match the
+absolute path with `/` separators), else `DefaultAction`. `ListDirectory`, `GlobFiles` and `GrepFiles`
+answer to the `Read` rules for the directory they are pointed at, as well as to their tool-name rule.
+Give the permission layer the same working directory you give the tools.
+
 **DefaultAction** — `Ask` for anything unmatched — including a tool no rule names, so an unknown
 tool is asked about rather than run
 

@@ -6,6 +6,21 @@ namespace IronHive.Agent.Permissions;
 public class PermissionConfig
 {
     /// <summary>
+    /// The directory relative paths are resolved against — the same one the file tools were given.
+    /// <c>null</c> (the default) means the process's current directory, which is also the file
+    /// tools' default.
+    /// </summary>
+    /// <remarks>
+    /// Path rules judge the path a tool will actually open. <c>Read</c> and <c>Edit</c> patterns
+    /// are matched against that path <b>relative to this directory</b>, after <c>.</c> and <c>..</c>
+    /// are resolved, so every spelling of one file gets one answer. A path that resolves outside
+    /// this directory is not covered by <c>Read</c>/<c>Edit</c> at all: it is judged by
+    /// <see cref="ExternalDirectory"/>, whose patterns match the absolute path (with <c>/</c>
+    /// separators).
+    /// </remarks>
+    public string? WorkingDirectory { get; set; }
+
+    /// <summary>
     /// Rules for file read operations.
     /// Patterns match file paths.
     /// </summary>

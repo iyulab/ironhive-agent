@@ -36,6 +36,22 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   keeping its own copy of the file tools. Without an interceptor nothing changes.
 
 ### Fixed
+- **Path rules judge the path the tool will open, not the text the model typed.** The permission
+  layer matched the unresolved argument: with `Read: src/** -> Allow` and a default of `Deny`,
+  `src/../../outside.txt` was **allowed** and the tool then opened a file outside the working
+  directory; `public/../secrets/key.pem` slipped past a `secrets/**` deny; an absolute path to a file
+  inside the working directory matched no relative rule. Paths are now resolved the way the file
+  tools resolve them (against the new `PermissionConfig.WorkingDirectory`, default: the current
+  directory) and matched as working-directory-relative paths, so every spelling of one file gets one
+  answer.
+- **`ExternalDirectory` rules are consulted.** Nothing called them. A path that resolves outside the
+  working directory is now judged by them — and *not* by `Read`/`Edit`, whose catch-all `**/*` used
+  to cover it — falling back to `DefaultAction`. **Behaviour change with the default configuration:**
+  a read that climbs out of the working directory is asked about instead of allowed.
+  `PermissionResult.OutsideWorkingDirectory` says when this happened.
+- **`ListDirectory`, `GlobFiles` and `GrepFiles` answer to the `Read` rules** for the directory they
+  search, in addition to their tool-name rule. A directory closed to `ReadFile` could be read through
+  `GrepFiles`.
 - **The scratchpad block no longer piles up.** The agent loops store the prepared history and prepare it
   again on the next turn, so every turn added another copy of the scratchpad's system message. Blocks
   that `ContextManager` composes are now marked, removed and recomputed on each preparation.
