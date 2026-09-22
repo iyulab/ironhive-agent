@@ -57,6 +57,28 @@ public class PermissionPathResolutionTests
     }
 
     [Fact]
+    public void OnWindows_ATrailingDotOrSpace_DoesNotSlipPastAFileNameRule()
+    {
+        // Win32 drops a trailing dot or space from the last segment, so "server.pem." opens server.pem.
+        // The evaluator resolves through Path.GetFullPath, which applies the same rule, so a *.pem deny
+        // judges the file that will actually be opened. On Linux "server.pem." is a distinct file and a
+        // non-match is the correct verdict, which is why this fact is Windows-only.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "trailing-dot normalisation is a Win32 rule");
+
+        var evaluator = new PermissionEvaluator(new PermissionConfig
+        {
+            WorkingDirectory = Root,
+            Read = [new() { Pattern = "**/*.pem", Action = PermissionAction.Deny }],
+            DefaultAction = PermissionAction.Allow,
+        });
+
+        evaluator.EvaluateRead("certs/server.pem.").Action.Should().Be(PermissionAction.Deny, "the dot is dropped and server.pem is what opens");
+        evaluator.EvaluateRead("certs/server.pem ").Action.Should().Be(PermissionAction.Deny, "the space is dropped and server.pem is what opens");
+        evaluator.EvaluateRead("certs/server.pem").Action.Should().Be(PermissionAction.Deny);
+        evaluator.EvaluateRead("certs/server.txt").Action.Should().Be(PermissionAction.Allow, "the rule is about .pem files only");
+    }
+
+    [Fact]
     public void ADenyRuleForADirectory_HoldsWhenThePathEntersItThroughAnotherOne()
     {
         var evaluator = new PermissionEvaluator(new PermissionConfig
