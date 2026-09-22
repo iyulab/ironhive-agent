@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <Description>IronHive Agent - Reusable agent layer for AI-powered CLI tools</Description>
@@ -15,6 +15,8 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="NetEscapades.Configuration.Yaml" />
+    <!-- SKILL.md frontmatter (IronHive.Agent.Skills); already in the closure through Ironbees.Core and the YAML configuration provider. -->
+    <PackageReference Include="YamlDotNet" />
 
     <!-- OpenAI SDK -->
     <PackageReference Include="OpenAI" />

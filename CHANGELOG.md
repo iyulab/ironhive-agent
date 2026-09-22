@@ -7,6 +7,22 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.15.0] - 2026-09-21
 
 ### Added
+- **Agent Skills loader (`IronHive.Agent.Skills`).** A consumer that wants `SKILL.md` bundles no longer
+  builds discovery, prompt injection and the load tool itself. `SkillDiscovery.Discover(SkillsConfig)`
+  finds skills under the configured roots and validates the frontmatter as the specification's
+  reference validator does — name pattern/length and directory match (NFKC), description 1–1024,
+  compatibility ≤ 500, `metadata` string→string, no unknown keys — reporting what it rejects in
+  `Diagnostics` instead of throwing. `SkillsLoader` turns the result into progressive disclosure that is
+  enforceable: `Contributor` (an `ISystemInstructionContributor`, so it survives compaction and does not
+  depend on the host's prompt) lists name + description; `LoadTool` (`load_skill`) returns the body, or a
+  file inside the skill's directory, and refuses any path that resolves outside it. `SkillsConfig`:
+  `Roots` (first root wins a name collision; the shadowed skill is reported), `Enabled` (also the
+  order and the drop order), `Exclude`, `Filter`, `MaxMetadataCharacters` (default 12 000; what does
+  not fit is dropped from the tail into `Dropped`, and stays loadable by name). `AddAgentSkills(config)`
+  registers the loader and its contributor. Text only; `allowed-tools` is parsed and exposed, not enforced.
+  `SkillsConfig.UnknownFields` decides what an undefined frontmatter key does — `Reject` (default, the
+  validator's behaviour) or `Accept` with a warning diagnostic; a real skill tree measured here had 7 of 22
+  skills carrying client-specific keys (`argument-hint`, `when_to_use`, …), which the strict default keeps out.
 - **`ISystemInstructionContributor` — add a section to the system instructions without replacing the
   system prompt.** Until now the only way to tell the agent something more was `AgentOptions.SystemPrompt`,
   a whole-prompt replacement: adding one paragraph meant copying the host's default prompt, and the

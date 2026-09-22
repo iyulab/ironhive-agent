@@ -1,4 +1,4 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
@@ -26,6 +26,7 @@
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
     <PackageVersion Include="IndexThinking" Version="0.22.0" />
     <!-- Security pin: override transitive Microsoft.Bcl.Memory 9.0.4 (NU1903 / GHSA-73j8-2gch-69rq,

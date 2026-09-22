@@ -127,6 +127,26 @@ public static class AgentServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Adds Agent Skills (<c>SKILL.md</c> bundles) to the container: a <see cref="Skills.SkillsLoader"/> built from
+    /// <paramref name="config"/>, and its <see cref="Context.ISystemInstructionContributor"/> so a loop built with the
+    /// container's contributors carries the skills' metadata. The <c>load_skill</c> tool is
+    /// <see cref="Skills.SkillsLoader.LoadTool"/> — a host adds it to the loop's tools where it assembles them.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="config">Roots, enable/exclude, per-session filter and metadata budget.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddAgentSkills(this IServiceCollection services, Skills.SkillsConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(config);
+
+        services.AddSingleton(config);
+        services.AddSingleton(sp => Skills.SkillsLoader.Create(sp.GetRequiredService<Skills.SkillsConfig>()));
+        services.AddSingleton<Context.ISystemInstructionContributor>(sp => sp.GetRequiredService<Skills.SkillsLoader>().Contributor);
+        return services;
+    }
+
+    /// <summary>
     /// Adds IronHive Agent permission services.
     /// </summary>
     /// <param name="services">The service collection.</param>
