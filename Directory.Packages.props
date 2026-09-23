@@ -6,8 +6,8 @@
     <!-- IronHive (LLM abstraction) -->
     <PackageVersion Include="IronHive.Abstractions" Version="0.33.1" />
     <!-- Ironbees (multi-agent orchestration) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.17.3" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.17.3" />
+    <PackageVersion Include="Ironbees.Core" Version="0.18.0" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.18.0" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.5" />
     <!-- Microsoft.Extensions.AI -->
@@ -34,12 +34,12 @@
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.8" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.18.5" />
-    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.18.5" />
+    <PackageVersion Include="MemoryIndexer" Version="0.19.0" />
+    <PackageVersion Include="MemoryIndexer.Sdk" Version="0.19.0" />
     <!-- FluxGuard (opt-in MCP tool-call guardrail — see IronHive.Agent.Mcp.McpPluginManager) -->
     <PackageVersion Include="FluxGuard.Remote" Version="0.17.0" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.14.0" />
+    <PackageVersion Include="WebFlux" Version="0.14.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
