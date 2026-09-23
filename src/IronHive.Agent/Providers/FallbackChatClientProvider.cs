@@ -88,6 +88,28 @@ public sealed class FallbackChatClientProvider : IChatClientProvider, IDisposabl
         return false;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The models of every available provider in the chain, in chain order (each entry names its
+    /// <see cref="AvailableModelInfo.Provider"/>). Before, this fell through to the interface default
+    /// and reported no models although the chain held providers that list theirs.
+    /// </remarks>
+    public async Task<IReadOnlyList<AvailableModelInfo>> GetAvailableModelsAsync(CancellationToken cancellationToken = default)
+    {
+        var models = new List<AvailableModelInfo>();
+        foreach (var provider in _providers)
+        {
+            if (!provider.IsAvailable)
+            {
+                continue;
+            }
+
+            models.AddRange(await provider.GetAvailableModelsAsync(cancellationToken));
+        }
+
+        return models;
+    }
+
     /// <summary>
     /// Gets the currently active provider.
     /// </summary>

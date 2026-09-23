@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.15.5] - 2026-09-23
+
+### Fixed
+- **`FallbackChatClientProvider.GetAvailableModelsAsync` lists the models of the providers it holds.** It fell through to
+  `IChatClientProvider`'s default and returned an empty list. It now returns the models of every available provider, in
+  chain order, each entry naming its `Provider`.
+
 ## [0.15.4] - 2026-09-23
 
 ### Changed
