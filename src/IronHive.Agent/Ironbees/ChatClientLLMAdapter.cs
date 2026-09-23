@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Ironbees.Core;
+using Ironbees.Core.Streaming;
 using IronHive.Agent.Providers;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -117,6 +118,115 @@ public sealed partial class ChatClientLLMAdapter : ILLMFrameworkAdapter
             {
                 yield return update.Text;
             }
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Carries the response's <see cref="AgentRunResult.Usage"/>. Before, this fell through to the interface default,
+    /// which returned the text alone although the chat response reported token usage. Per-invoke options are refused
+    /// exactly as the default refuses them.
+    /// </remarks>
+    public async Task<AgentRunResult> RunStructuredAsync(
+        IAgent agent,
+        string input,
+        IReadOnlyList<ChatMessage>? conversationHistory = null,
+        AgentRunOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input);
+        RefuseUnsupported(options);
+
+        var client = await GetChatClientAsync(agent.Config.Model, cancellationToken);
+        var messages = BuildMessages(agent.Config.SystemPrompt, input, conversationHistory);
+        var response = await client.GetResponseAsync(messages, BuildChatOptions(agent.Config.Model), cancellationToken);
+
+        return new AgentRunResult { Text = response.Text ?? string.Empty, Usage = response.Usage };
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Emits the reasoning the model streams as <see cref="ThinkingChunk"/>, its token usage as <see cref="UsageChunk"/>,
+    /// and the finish reason on the closing <see cref="CompletionChunk"/>. Before, this fell through to the interface
+    /// default, which forwarded text only.
+    /// </remarks>
+    public IAsyncEnumerable<StreamChunk> StreamStructuredAsync(
+        IAgent agent,
+        string input,
+        IReadOnlyList<ChatMessage>? conversationHistory = null,
+        AgentRunOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input);
+        RefuseUnsupported(options);
+        return StreamStructuredCoreAsync(agent, input, conversationHistory, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<StreamChunk> StreamStructuredCoreAsync(
+        IAgent agent,
+        string input,
+        IReadOnlyList<ChatMessage>? conversationHistory,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var client = await GetChatClientAsync(agent.Config.Model, cancellationToken);
+        var messages = BuildMessages(agent.Config.SystemPrompt, input, conversationHistory);
+        string? finishReason = null;
+
+        await foreach (var update in client.GetStreamingResponseAsync(messages, BuildChatOptions(agent.Config.Model), cancellationToken))
+        {
+            foreach (var content in update.Contents)
+            {
+                switch (content)
+                {
+                    case TextReasoningContent reasoning when !string.IsNullOrEmpty(reasoning.Text):
+                        yield return new ThinkingChunk(reasoning.Text);
+                        break;
+                    case UsageContent usage:
+                        yield return new UsageChunk(
+                            (int)(usage.Details.InputTokenCount ?? 0),
+                            (int)(usage.Details.OutputTokenCount ?? 0),
+                            usage.Details.TotalTokenCount is { } total ? (int)total : null);
+                        break;
+                }
+            }
+
+            if (update.Text is { Length: > 0 } text)
+            {
+                yield return new TextChunk(text);
+            }
+
+            if (update.FinishReason is { } reason)
+            {
+                finishReason = reason.Value;
+            }
+        }
+
+        yield return new CompletionChunk(FinishReason: finishReason);
+    }
+
+    /// <summary>The per-invoke options this adapter does not honour — the same set the interface default refuses.</summary>
+    private static void RefuseUnsupported(AgentRunOptions? options)
+    {
+        if (options is null)
+        {
+            return;
+        }
+
+        var unsupported = new[]
+        {
+            (options.Suggestions is not null, nameof(AgentRunOptions.Suggestions)),
+            (options.ThinkingEffort is not null, nameof(AgentRunOptions.ThinkingEffort)),
+            (options.Tools is not null, nameof(AgentRunOptions.Tools)),
+            (options.MaxTokens is not null, nameof(AgentRunOptions.MaxTokens)),
+            (options.MaxToolTurns is not null, nameof(AgentRunOptions.MaxToolTurns)),
+        }.FirstOrDefault(o => o.Item1);
+
+        if (unsupported.Item1)
+        {
+            throw new NotSupportedException(
+                $"{nameof(ChatClientLLMAdapter)} does not support AgentRunOptions.{unsupported.Item2}.");
         }
     }
 

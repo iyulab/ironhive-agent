@@ -10,6 +10,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **`FallbackChatClientProvider.GetAvailableModelsAsync` lists the models of the providers it holds.** It fell through to
   `IChatClientProvider`'s default and returned an empty list. It now returns the models of every available provider, in
   chain order, each entry naming its `Provider`.
+- **`ChatClientLLMAdapter` (the Ironbees adapter over `IChatClientFactory`) carries usage, reasoning and the finish reason
+  on the structured surface.** `RunStructuredAsync` and `StreamStructuredAsync` fell through to Ironbees' interface
+  defaults: the result's `Usage` was always null although the chat response reported it, and the stream forwarded text
+  only. `RunStructuredAsync` now returns `Usage`; `StreamStructuredAsync` emits `ThinkingChunk` for streamed reasoning,
+  `UsageChunk`, and the finish reason on the closing `CompletionChunk`. Per-invoke `AgentRunOptions` are refused as before.
 
 ## [0.15.4] - 2026-09-23
 
