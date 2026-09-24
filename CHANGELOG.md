@@ -9,7 +9,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Changed
 - Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.3 -> 0.19.4, `Ironbees.Core` 0.19.3 -> 0.19.4, `IronHive.Abstractions` 0.36.0 -> 0.37.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
 
-## [0.17.0] - unreleased
+## [0.17.0] - 2026-09-24
 
 ### Added
 - **`IToolResultGuard` — in-process tool results can be inspected before the model reads them.** Before, only MCP
