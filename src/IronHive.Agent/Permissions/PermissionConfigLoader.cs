@@ -159,6 +159,7 @@ public static class PermissionConfigLoader
         int rulePropertyIndent = -1;  // Indent level for rule properties (action:, priority:)
 
         List<PermissionRule>? currentRules = null;
+        List<string>? currentNames = null;  // a plain list section (read_only_tools:)
         PermissionRule? currentRule = null;
 
         foreach (var line in lines)
@@ -195,6 +196,7 @@ public static class PermissionConfigLoader
                 }
 
                 var section = trimmed.TrimEnd(':');
+                currentNames = section == "read_only_tools" ? config.ReadOnlyTools : null;
                 currentRules = section switch
                 {
                     "read" => config.Read,
@@ -213,6 +215,13 @@ public static class PermissionConfigLoader
             {
                 var value = trimmed["default_action:".Length..].Trim();
                 config.DefaultAction = ParseAction(value);
+                continue;
+            }
+
+            // A plain list item (- name) under a list section
+            if (currentNames != null && indent > sectionIndent && trimmed.StartsWith("- ", StringComparison.Ordinal))
+            {
+                currentNames.Add(ExtractValue(trimmed, "- "));
                 continue;
             }
 

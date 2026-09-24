@@ -95,6 +95,14 @@ public interface IPermissionEvaluator
     PermissionResult EvaluateTool(string toolName);
 
     /// <summary>
+    /// Whether the host declared <paramref name="toolName"/> read-only (<see cref="PermissionConfig.ReadOnlyTools"/>).
+    /// Planning mode permits such a tool alongside the built-in read-only tools.
+    /// </summary>
+    /// <param name="toolName">The tool's function name.</param>
+    /// <returns><c>true</c> when a declared pattern matches the name.</returns>
+    bool IsReadOnlyTool(string toolName);
+
+    /// <summary>
     /// Evaluates permission for a generic tool operation.
     /// </summary>
     /// <param name="permissionType">Type of permission (read, edit, bash, mcp, tool, etc.).</param>

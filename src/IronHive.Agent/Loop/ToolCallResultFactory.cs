@@ -112,4 +112,29 @@ public static class ToolCallResultFactory
 
         return results;
     }
+
+    /// <summary>
+    /// The outcome of each call in <paramref name="functionResults"/> whose call is among
+    /// <paramref name="functionCallsSoFar"/>, by the same rule as <see cref="Extract(IEnumerable{FunctionCallContent}, IEnumerable{FunctionResultContent})"/>.
+    /// The streaming loops use it to report each call the moment its result arrives, so the per-call
+    /// chunk and the final turn record cannot disagree about the same call.
+    /// </summary>
+    public static IEnumerable<ToolCallResult> ForArrivedResults(
+        IReadOnlyList<FunctionCallContent> functionCallsSoFar,
+        IEnumerable<FunctionResultContent> functionResults)
+    {
+        ArgumentNullException.ThrowIfNull(functionCallsSoFar);
+        ArgumentNullException.ThrowIfNull(functionResults);
+
+        foreach (var result in functionResults)
+        {
+            var call = functionCallsSoFar.LastOrDefault(c => c.CallId == result.CallId);
+            if (call is null)
+            {
+                continue; // a result for a call this turn never announced has nothing to correlate with
+            }
+
+            yield return Extract([call], [result])[0];
+        }
+    }
 }

@@ -174,7 +174,7 @@ public class ModeToolFilter : IModeToolFilter
         return mode switch
         {
             AgentMode.Idle => false,
-            AgentMode.Planning => ReadOnlyTools.Contains(toolName),
+            AgentMode.Planning => ReadOnlyTools.Contains(toolName) || _permissionEvaluator.IsReadOnlyTool(toolName),
             AgentMode.Working => true, // All tools permitted (but may trigger HITL)
             AgentMode.HumanInTheLoop => false,
             _ => false

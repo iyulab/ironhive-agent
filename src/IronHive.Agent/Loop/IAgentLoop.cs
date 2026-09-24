@@ -178,6 +178,15 @@ public record AgentResponseChunk
     public ToolCallChunk? ToolCallDelta { get; init; }
 
     /// <summary>
+    /// A tool call that just finished: its outcome, on its own chunk, the moment the result arrives.
+    /// <see cref="ToolCallResult.CallId"/> is the <see cref="ToolCallChunk.Id"/> of the call's earlier
+    /// <see cref="ToolCallDelta"/>, and the record is built by the same rule as the matching entry of the final
+    /// <see cref="Turn"/>. Results arrive only when the chat client invokes tools (function-invocation middleware);
+    /// otherwise no chunk carries this.
+    /// </summary>
+    public ToolCallResult? ToolResult { get; init; }
+
+    /// <summary>
     /// Final token usage (only set on last chunk).
     /// </summary>
     public TokenUsage? Usage { get; init; }

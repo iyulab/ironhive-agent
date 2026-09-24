@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.16.0] - unreleased
+
+### Added
+- **`AgentResponseChunk.ToolResult` — each tool call's outcome the moment it arrives.** `RunStreamingAsync` (and
+  `ThinkingAgentLoop`'s) used to report a call's start (`ToolCallDelta`) and then nothing about it until the final
+  `Turn`. It now yields a chunk carrying the `ToolCallResult` (`CallId` = the earlier `ToolCallDelta.Id`, name,
+  arguments, result text, `Success`) as soon as the function-invocation middleware returns it — built by the same rule
+  as the turn record's entry, so the two agree. Consumers that ignore the member are unaffected.
+- **Host-declared read-only tools: `PermissionConfig.ReadOnlyTools`.** Name patterns (matched like `Tools`) of the
+  host's own tools that only read; Planning mode offers and permits them next to the built-in read-only file tools.
+  Before, a host tool could never run in Planning. It declares a side-effect class only — whether a call is allowed,
+  asked about or denied stays with `Tools`. Readable from a permission file too (`readOnlyTools` in JSON,
+  `read_only_tools:` list in YAML).
+
+### Changed
+- **Breaking** — `IPermissionEvaluator` gains `bool IsReadOnlyTool(string toolName)`. A custom evaluator adds it
+  (return `false` to keep the old Planning behaviour).
+
 ## [0.15.10] - 2026-09-24
 
 ### Changed

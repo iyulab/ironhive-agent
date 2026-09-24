@@ -185,6 +185,12 @@ public class AgentLoop : IAgentLoop
             toolResults.AddRange(updateResults);
             historyBuilder.AppendResults(updateResults);
 
+            // Each call's outcome as it arrives, not only in the final Turn record.
+            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(toolCalls, updateResults))
+            {
+                yield return new AgentResponseChunk { ToolResult = arrived };
+            }
+
             usageDetails = TurnGuards.AccumulateUsage(usageDetails, update);
         }
 

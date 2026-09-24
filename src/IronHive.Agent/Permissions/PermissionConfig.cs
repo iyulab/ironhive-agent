@@ -60,6 +60,14 @@ public class PermissionConfig
     public List<PermissionRule> Tools { get; set; } = [];
 
     /// <summary>
+    /// Tools of the host's own that only read — name patterns, matched like <see cref="Tools"/>
+    /// (e.g. <c>"read_current_tab"</c>, <c>"list_saved_*"</c>). Planning mode offers and permits them next to the
+    /// built-in read-only file tools; without this a host tool can never run in Planning. This declares a side-effect
+    /// class only: whether a call is allowed, asked about or denied is still <see cref="Tools"/>' decision.
+    /// </summary>
+    public List<string> ReadOnlyTools { get; set; } = [];
+
+    /// <summary>
     /// Default action when no rule matches.
     /// </summary>
     public PermissionAction DefaultAction { get; set; } = PermissionAction.Ask;

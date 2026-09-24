@@ -353,6 +353,14 @@ Give the permission layer the same working directory you give the tools.
 **DefaultAction** — `Ask` for anything unmatched — including a tool no rule names, so an unknown
 tool is asked about rather than run
 
+**ReadOnlyTools** — names (patterns, like `Tools`) of *your* tools that only read. Planning mode offers and
+permits them next to the built-in read-only file tools; without a declaration a host tool never runs in Planning.
+This is a side-effect class, not a permission: `Tools` still decides `Allow` / `Ask` / `Deny`.
+
+```csharp
+services.Configure<PermissionConfig>(config => config.ReadOnlyTools.AddRange(["read_current_tab", "list_saved_*"]));
+```
+
 Override any category in your config:
 
 ```csharp
@@ -461,6 +469,21 @@ await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))
 
 `RunAsync` already returned `AgentResponse.ToolCalls`; the streaming path used to yield tool calls one
 delta at a time and nothing consolidated.
+
+### Each tool call's outcome as it finishes
+
+When the chat client invokes tools (`UseFunctionInvocation()`), every call's outcome is also yielded on its own
+chunk the moment it arrives — for a step timeline that says "reading the page… done" without waiting for the turn:
+
+```csharp
+await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))
+{
+    if (chunk.ToolCallDelta is { } call) ShowStarted(call.Id, call.NameDelta);
+    if (chunk.ToolResult is { } done) ShowFinished(done.CallId, done.Success);
+}
+```
+
+`ToolResult.CallId` is the `ToolCallDelta.Id` of the same call, and the record is the one the final `Turn` carries.
 
 ### `ToolCallResult.Success` is `bool?` on purpose
 

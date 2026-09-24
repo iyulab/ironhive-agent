@@ -113,6 +113,10 @@ public class PermissionEvaluator : IPermissionEvaluator
     }
 
     /// <inheritdoc />
+    public bool IsReadOnlyTool(string toolName) =>
+        !string.IsNullOrWhiteSpace(toolName) && _config.ReadOnlyTools.Any(pattern => MatchesPattern(toolName, pattern));
+
+    /// <inheritdoc />
     public PermissionResult Evaluate(string permissionType, string target)
     {
         return permissionType.ToLowerInvariant() switch
