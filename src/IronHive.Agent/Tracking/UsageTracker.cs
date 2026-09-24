@@ -45,6 +45,11 @@ public record SessionUsage
     public long TotalOutputTokens { get; init; }
 
     /// <summary>
+    /// How many of <see cref="TotalInputTokens"/> were read from the provider's prompt cache.
+    /// </summary>
+    public long TotalCachedInputTokens { get; init; }
+
+    /// <summary>
     /// Total tokens used in the session.
     /// </summary>
     public long TotalTokens => TotalInputTokens + TotalOutputTokens;
@@ -85,6 +90,7 @@ public class UsageTracker : IUsageTracker
 {
     private long _totalInputTokens;
     private long _totalOutputTokens;
+    private long _totalCachedInputTokens;
     private int _requestCount;
     private string? _modelId;
     private ModelInfo? _pricing;
@@ -119,6 +125,7 @@ public class UsageTracker : IUsageTracker
         {
             _totalInputTokens += usage.InputTokens;
             _totalOutputTokens += usage.OutputTokens;
+            _totalCachedInputTokens += usage.CachedInputTokens;
             _requestCount++;
         }
     }
@@ -129,12 +136,18 @@ public class UsageTracker : IUsageTracker
         lock (_lock)
         {
             var pricing = _pricing ?? DefaultPricing;
-            var cost = pricing.CalculateCost((int)_totalInputTokens, (int)_totalOutputTokens);
+            var cost = new TokenUsage
+            {
+                InputTokens = _totalInputTokens,
+                OutputTokens = _totalOutputTokens,
+                CachedInputTokens = _totalCachedInputTokens,
+            }.CostAt(pricing);
 
             return new SessionUsage
             {
                 TotalInputTokens = _totalInputTokens,
                 TotalOutputTokens = _totalOutputTokens,
+                TotalCachedInputTokens = _totalCachedInputTokens,
                 RequestCount = _requestCount,
                 EstimatedCostUsd = cost ?? 0m,
                 ModelId = _modelId,
@@ -150,6 +163,7 @@ public class UsageTracker : IUsageTracker
         {
             _totalInputTokens = 0;
             _totalOutputTokens = 0;
+            _totalCachedInputTokens = 0;
             _requestCount = 0;
             // Keep model and pricing settings
         }

@@ -56,7 +56,7 @@ internal sealed class TurnGuards
         }
 
         var pricing = !string.IsNullOrEmpty(_modelId) ? ModelCatalog.FindModel(_modelId) : null;
-        var cost = pricing?.CalculateCost((int)usage.InputTokens, (int)usage.OutputTokens) ?? 0m;
+        var cost = usage.CostAt(pricing) ?? 0m;
 
         _usageLimiter.RecordTokenUsage((int)usage.TotalTokens, cost);
     }

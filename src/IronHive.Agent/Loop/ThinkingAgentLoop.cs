@@ -443,19 +443,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    private static TokenUsage? MapUsage(UsageDetails? usage)
-    {
-        if (usage is null)
-        {
-            return null;
-        }
-
-        return new TokenUsage
-        {
-            InputTokens = usage.InputTokenCount ?? 0,
-            OutputTokens = usage.OutputTokenCount ?? 0
-        };
-    }
+    private static TokenUsage? MapUsage(UsageDetails? usage) => TokenUsage.From(usage);
 
     /// <summary>
     /// Clears the conversation history.

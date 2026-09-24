@@ -343,7 +343,38 @@ public record TokenUsage
     public long OutputTokens { get; init; }
 
     /// <summary>
+    /// How many of <see cref="InputTokens"/> the provider read from its prompt cache (billed at the cache-read rate).
+    /// 0 when the provider did not report it.
+    /// </summary>
+    public long CachedInputTokens { get; init; }
+
+    /// <summary>
     /// Total tokens used.
     /// </summary>
     public long TotalTokens => InputTokens + OutputTokens;
+
+    /// <summary>
+    /// The usage a <see cref="UsageDetails"/> reports, or null for none. <see cref="UsageDetails.CachedInputTokenCount"/>
+    /// is part of <see cref="UsageDetails.InputTokenCount"/>, as it is here.
+    /// </summary>
+    public static TokenUsage? From(UsageDetails? usage)
+        => usage is null
+            ? null
+            : new TokenUsage
+            {
+                InputTokens = usage.InputTokenCount ?? 0,
+                OutputTokens = usage.OutputTokenCount ?? 0,
+                CachedInputTokens = usage.CachedInputTokenCount ?? 0,
+            };
+
+    /// <summary>
+    /// The cost of this usage at <paramref name="pricing"/>'s rates: cached input at the cache-read rate (the input rate
+    /// when the catalog has none), the rest of the input and the output at their rates. Null when the model's pricing
+    /// is unknown.
+    /// </summary>
+    public decimal? CostAt(TokenMeter.ModelInfo? pricing)
+    {
+        var cached = Math.Clamp(CachedInputTokens, 0, InputTokens);
+        return pricing?.CalculateCost((int)(InputTokens - cached), (int)OutputTokens, (int)cached, cacheWriteTokens: 0);
+    }
 }

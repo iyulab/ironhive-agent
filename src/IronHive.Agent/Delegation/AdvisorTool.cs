@@ -147,13 +147,13 @@ public static class AdvisorTool
             return;
         }
 
-        var tokens = new TokenUsage { InputTokens = usage.InputTokenCount ?? 0, OutputTokens = usage.OutputTokenCount ?? 0 };
+        var tokens = TokenUsage.From(usage)!;
         settings.UsageTracker?.Record(tokens);
 
         if (settings.UsageLimiter is { } limiter)
         {
             var pricing = !string.IsNullOrEmpty(settings.ModelId) ? ModelCatalog.FindModel(settings.ModelId) : null;
-            var cost = pricing?.CalculateCost((int)tokens.InputTokens, (int)tokens.OutputTokens) ?? 0m;
+            var cost = tokens.CostAt(pricing) ?? 0m;
             limiter.RecordTokenUsage((int)tokens.TotalTokens, cost);
         }
     }

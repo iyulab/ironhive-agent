@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.18.0] - Unreleased
+
+### Fixed
+- **Prompt-cache reads are priced at the cache-read rate** in the usage tracker, the turn guards' usage limiter and the
+  advisor/delegation tools. A provider reports cache reads as part of the input (`UsageDetails.CachedInputTokenCount`),
+  and every input token was priced at the full input rate, so a session with cache hits reported and budgeted a cost up
+  to ten times too high — since IronHive 0.37.0 counts Anthropic's cache reads in the input, on every provider.
+
+### Added
+- `TokenUsage.CachedInputTokens`, `TokenUsage.From(UsageDetails?)` (the one mapping the loops and tools share) and
+  `TokenUsage.CostAt(ModelInfo?)`; `SessionUsage.TotalCachedInputTokens`.
+
 ## [0.17.1] - 2026-09-24
 
 ### Changed

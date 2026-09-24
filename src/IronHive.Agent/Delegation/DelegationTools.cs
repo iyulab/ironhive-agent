@@ -157,14 +157,14 @@ public static partial class DelegationTools
             return;
         }
 
-        var tokens = new TokenUsage { InputTokens = usage.InputTokenCount ?? 0, OutputTokens = usage.OutputTokenCount ?? 0 };
+        var tokens = TokenUsage.From(usage)!;
         settings.UsageTracker?.Record(tokens);
 
         if (settings.UsageLimiter is { } limiter)
         {
             // Priced on the model the delegated agent ran on, not the parent's.
             var pricing = !string.IsNullOrEmpty(agent.Model) ? ModelCatalog.FindModel(agent.Model) : null;
-            var cost = pricing?.CalculateCost((int)tokens.InputTokens, (int)tokens.OutputTokens) ?? 0m;
+            var cost = tokens.CostAt(pricing) ?? 0m;
             limiter.RecordTokenUsage((int)tokens.TotalTokens, cost);
         }
     }
