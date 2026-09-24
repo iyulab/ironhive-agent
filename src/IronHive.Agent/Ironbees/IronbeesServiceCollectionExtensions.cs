@@ -90,7 +90,8 @@ public static class IronbeesServiceCollectionExtensions
                 permissionEvaluator,
                 options.MaxToolTurns,
                 sp.GetService<IModeToolFilter>(),
-                sp.GetService<IHumanApprovalService>());
+                sp.GetService<IHumanApprovalService>(),
+                sp.GetService<IToolResultGuard>());
         });
 
         // Register orchestrator

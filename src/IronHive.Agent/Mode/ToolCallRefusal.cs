@@ -12,7 +12,10 @@ public enum ToolCallRefusalKind
     ApprovalUnavailable,
 
     /// <summary>The rules said <c>Ask</c> and the approver said no.</summary>
-    Rejected
+    Rejected,
+
+    /// <summary>The tool ran, and an <see cref="IToolResultGuard"/> withheld its result from the model.</summary>
+    ResultWithheld
 }
 
 /// <summary>
@@ -21,7 +24,7 @@ public enum ToolCallRefusalKind
 /// <i>outcome</i>: a loop reports it with <c>Success = false</c>, so an observer or a client can tell
 /// "the tool was refused" from "the tool ran and said this" without matching on the text.
 /// </summary>
-/// <param name="Kind">Which gate refused the call.</param>
+/// <param name="Kind">Which gate refused the call (or withheld its result).</param>
 /// <param name="Reason">The rule's or the approver's reason.</param>
 public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
 {
@@ -33,6 +36,7 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.Denied => $"Permission denied: {Reason}",
         ToolCallRefusalKind.ApprovalUnavailable => $"Approval required but no approval service is configured: {Reason}",
         ToolCallRefusalKind.Rejected => $"Approval rejected: {Reason}",
+        ToolCallRefusalKind.ResultWithheld => $"Tool result withheld by guard: {Reason}",
         _ => $"Tool call refused: {Reason}"
     };
 

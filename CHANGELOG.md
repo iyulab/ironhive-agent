@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.17.0] - unreleased
+
+### Added
+- **`IToolResultGuard` — in-process tool results can be inspected before the model reads them.** Before, only MCP
+  results went through a guard (`IMCPGuardrail`), and in-process tools reached the model unguarded.
+  - `ToolResultGuardedFunctionInvoker.Create(guard)` installs the guard on a function-invoking client and composes
+    behind `ApprovalGatedFunctionInvoker` through its `inner` argument.
+  - The Ironbees adapter takes a `toolResultGuard` constructor argument; `AddIronbees` resolves it from DI.
+  - A verdict allows the result, replaces it with a sanitized text, or withholds it. A withheld result is a
+    `ToolCallRefusal` with the new `ToolCallRefusalKind.ResultWithheld`, so the call reports `Success = false`.
+  - A guard that throws withholds the result (fail-closed, as on the MCP path).
+  - `McpGuardrailToolResultGuard` reuses a FluxGuard `IMCPGuardrail` for in-process results.
+
 ## [0.16.1] - 2026-09-24
 
 ### Changed

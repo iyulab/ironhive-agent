@@ -246,6 +246,24 @@ await manager.ConnectAsync("filesystem", config);
 A guardrail that itself throws is treated as fail-closed (the call is blocked, not silently
 dispatched unguarded) — see `McpPluginManager.CallToolAsync`'s XML doc remarks for the reasoning.
 
+## In-Process Tool-Result Guard (opt-in)
+
+In-process tools (a web page's text, a file's contents) return text the model then reads, which is the same prompt-injection surface an MCP result has. `IToolResultGuard` inspects every result before the model does. Each inspection gets a verdict: `Allow`, `Replace(sanitized)`, or `Withhold(reason)`.
+- A withheld result becomes a `ToolCallRefusal` (`ToolCallRefusalKind.ResultWithheld`). The model reads «Tool result withheld by guard: …» and the loop reports the call with `Success = false`.
+- A guard that throws withholds the result. This is fail-closed, the same rule as the MCP guardrail.
+
+On a function-invoking client, compose it behind the permission gate. The gate decides whether a call runs, and the guard decides what its result becomes:
+
+```csharp
+var client = inner.AsBuilder()
+    .UseFunctionInvocation(configure: c => c.FunctionInvoker = ApprovalGatedFunctionInvoker.Create(
+        modeToolFilter, approvalService,
+        inner: ToolResultGuardedFunctionInvoker.Create(guard)))
+    .Build();
+```
+
+The Ironbees adapter applies the same guard through its `toolResultGuard` constructor argument, and `AddIronbees` resolves `IToolResultGuard` from DI. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)`. In-process tools are then reported to it under the server name `in-process`.
+
 ## Available Tools Context
 
 After the agent loop factory filters tools via `IModeToolFilter.FilterTools()`, it should populate

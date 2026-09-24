@@ -5,6 +5,7 @@ using IronHive.Agent.Delegation;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IronHive.Agent.Ironbees;
 
@@ -17,6 +18,7 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     private readonly Func<ModelConfig, IChatClient> _clientFactory;
     private readonly Func<IList<AITool>>? _toolsFactory;
     private readonly ApprovalGate? _gate;
+    private readonly IToolResultGuard? _resultGuard;
     private readonly int _maxToolTurns;
 
     /// <summary>
@@ -34,14 +36,20 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     /// Asked when a verdict is <c>Ask</c>. Without one, an <c>Ask</c> verdict is refused with a reason —
     /// the same rule <see cref="ApprovalGatedFunctionInvoker"/> applies.
     /// </param>
+    /// <param name="toolResultGuard">
+    /// Inspects every tool result before the model reads it — the rule <see cref="ToolResultGuardedFunctionInvoker"/>
+    /// applies on a function-invoking client. Without one, results reach the model unguarded.
+    /// </param>
     public ChatClientFrameworkAdapter(
         Func<ModelConfig, IChatClient> clientFactory,
         Func<IList<AITool>>? toolsFactory = null,
         IPermissionEvaluator? permissionEvaluator = null,
         int maxToolTurns = 20,
         IModeToolFilter? modeToolFilter = null,
-        IHumanApprovalService? approvalService = null)
+        IHumanApprovalService? approvalService = null,
+        IToolResultGuard? toolResultGuard = null)
     {
+        _resultGuard = toolResultGuard;
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _toolsFactory = toolsFactory;
         _maxToolTurns = maxToolTurns;
@@ -426,6 +434,11 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                     using (ToolInvocationScope.Enter(conversation))
                     {
                         result = await function.InvokeAsync(args, cancellationToken);
+                    }
+                    if (_resultGuard is not null)
+                    {
+                        result = await ToolResultGuardedFunctionInvoker.ApplyAsync(
+                            _resultGuard, function.Name, arguments, result, NullLogger.Instance, cancellationToken);
                     }
                     var resultText = result?.ToString() ?? "null";
 
