@@ -35,7 +35,7 @@
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.8" />
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.19.4" />
-    <!-- FluxGuard (opt-in MCP tool-call guardrail — see IronHive.Agent.Mcp.McpPluginManager) -->
+    <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
     <PackageVersion Include="FluxGuard.Remote" Version="0.17.0" />
     <!-- DeepResearch dependencies -->
     <PackageVersion Include="WebFlux" Version="0.16.0" />

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using IronHive.Agent.Webhook;
 using Microsoft.Extensions.Logging;
@@ -19,6 +19,7 @@ public class LogLanguageConventionTests
     [
         typeof(WebhookService).Assembly,
         typeof(IronHive.Agent.Memory.SessionMemoryService).Assembly,
+        typeof(IronHive.Agent.FluxGuard.FluxGuardMcpToolCallGuard).Assembly,
     ];
 
     public static IEnumerable<object[]> AssemblyTypes()

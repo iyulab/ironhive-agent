@@ -12,6 +12,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   and `TextCompletionServiceAdapter` are now in `IronHive.Agent.Memory` (same namespace, `IronHive.Agent.Memory`); the
   interfaces `ISessionMemoryService` and `IAgentEmbeddingProvider` stay in `IronHive.Agent`. Migration: add
   `IronHive.Agent.Memory` if you construct any of the three classes.
+- **Breaking: the MCP tool-call guard is an IronHive.Agent seam; FluxGuard moved to `IronHive.Agent.FluxGuard`.**
+  `McpPluginManager` takes an `IMcpToolCallGuard` (`guard:`) instead of FluxGuard's `IMCPGuardrail` (`guardrail:`),
+  so `IronHive.Agent` no longer references FluxGuard.Remote, whose ONNX Runtime natives every host shipped. Request
+  and result checks, the fail-closed policy and the error texts are unchanged. Migration:
+  `new McpPluginManager(guard: new FluxGuardMcpToolCallGuard(guardrail))`, or with DI
+  `services.AddIronHiveAgentFluxGuard()` after registering the guardrail (a registered `IMCPGuardrail` is no longer
+  injected by itself). `McpGuardrailToolResultGuard` moved to the same package (namespace `IronHive.Agent.FluxGuard`).
 - **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
   OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
   SDK's storage wiring references `MemoryIndexer.Sdk` itself.

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>IronHive Agent - FluxGuard-backed tool guards: an IMcpToolCallGuard for MCP tool calls and an IToolResultGuard for in-process tool results, over one FluxGuard IMCPGuardrail</Description>
+    <PackageTags>IronHive;Agent;FluxGuard;Guardrail;MCP</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronHive.Agent\IronHive.Agent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- FluxGuard.Remote: IMCPGuardrail (MCPToolValidator). It carries FluxGuard's ONNX Runtime natives (L2 guards),
+         which is why it is not a dependency of IronHive.Agent itself. -->
+    <PackageReference Include="FluxGuard.Remote" />
+  </ItemGroup>
+
+</Project>

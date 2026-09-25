@@ -1,5 +1,4 @@
-using System.Text.Json;
-using FluxGuard.Remote.MCP;
+﻿using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,7 +42,7 @@ public sealed record ToolResultVerdict
 
 /// <summary>
 /// Inspects what an in-process tool returned before the model reads it — the prompt-injection seam the MCP path has
-/// (<see cref="Mcp.McpPluginManager"/> with an <c>IMCPGuardrail</c>), for tools that run in-process (a web page's text,
+/// (<see cref="Mcp.McpPluginManager"/> with an <see cref="Mcp.IMcpToolCallGuard"/>), for tools that run in-process (a web page's text,
 /// a file's contents). Installed with <see cref="ToolResultGuardedFunctionInvoker"/> on a function-invoking client,
 /// or passed to the Ironbees adapter. Like the MCP guard it is fail-closed: a guard that throws withholds the result.
 /// </summary>
@@ -136,31 +135,4 @@ public static partial class ToolResultGuardedFunctionInvoker
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Tool result of '{Tool}' withheld by guard: {Reason}")]
     private static partial void LogWithheld(ILogger logger, string tool, string reason);
-}
-
-/// <summary>
-/// An <see cref="IToolResultGuard"/> backed by a FluxGuard <see cref="IMCPGuardrail"/> — the same guardrail the MCP path
-/// uses, so one configured guard covers in-process and MCP tool results alike. In-process tools are reported to it
-/// under <paramref name="serverName"/>.
-/// </summary>
-public sealed class McpGuardrailToolResultGuard(IMCPGuardrail guardrail, string serverName = "in-process") : IToolResultGuard
-{
-    private readonly IMCPGuardrail _guardrail = guardrail ?? throw new ArgumentNullException(nameof(guardrail));
-
-    /// <inheritdoc />
-    public async ValueTask<ToolResultVerdict> InspectAsync(ToolResultInspection inspection, CancellationToken cancellationToken)
-    {
-        var request = new MCPToolRequest
-        {
-            ServerName = serverName,
-            ToolName = inspection.ToolName,
-            Arguments = inspection.Arguments?.ToDictionary(kv => kv.Key, kv => kv.Value ?? (object)string.Empty)
-        };
-        var validation = await _guardrail.ValidateToolResultAsync(request, inspection.Result, cancellationToken);
-        if (validation.ShouldBlock || !validation.IsValid)
-        {
-            return ToolResultVerdict.Withhold(validation.Reason ?? "policy violation");
-        }
-        return validation.SanitizedResult is { } sanitized ? ToolResultVerdict.Replace(sanitized) : ToolResultVerdict.Allow();
-    }
 }

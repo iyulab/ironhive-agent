@@ -28,6 +28,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 |---|---|
 | `IronHive.Agent` | Agent loop, context management, modes, MCP plugins, built-in tools, delegation and advisor tools |
 | `IronHive.DeepResearch` | Iterative web research pipeline with cited reports (`AddDeepResearch`) |
+| `IronHive.Agent.FluxGuard` | FluxGuard-backed tool guards: `FluxGuardMcpToolCallGuard` (`IMcpToolCallGuard`), `McpGuardrailToolResultGuard` (`IToolResultGuard`), `AddIronHiveAgentFluxGuard()` |
 | `IronHive.Agent.Memory` | Long-term session memory over [MemoryIndexer](https://github.com/iyulab/memory-indexer): `SessionMemoryService` (`ISessionMemoryService`), `EmbeddingServiceAdapter` and `TextCompletionServiceAdapter` |
 
 ## Installation
@@ -36,6 +37,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 dotnet add package IronHive.Agent
 dotnet add package IronHive.DeepResearch   # only for deep research
 dotnet add package IronHive.Agent.Memory   # only for long-term memory (MemoryIndexer)
+dotnet add package IronHive.Agent.FluxGuard   # only for FluxGuard tool-call / tool-result guards
 ```
 
 ## Quick Start
@@ -225,19 +227,22 @@ plugins:
 
 ## MCP Tool-Call Guardrail (opt-in)
 
-`McpPluginManager` accepts an optional `FluxGuard.Remote.MCP.IMCPGuardrail` — when supplied, every
-`CallToolAsync` validates the request before dispatch and the result before returning it (server/
-tool allowlisting, dangerous-argument detection, indirect-injection and sensitive-data checks on
-tool results). Nothing changes if you don't pass one — this is off by default.
+`McpPluginManager` accepts an optional `IMcpToolCallGuard` — when supplied, every `CallToolAsync` checks the request
+before dispatch (`McpToolCallVerdict`: `Allow` or `Block(reason)`) and the result before returning it
+(`ToolResultVerdict`: `Allow`, `Replace(sanitized)` or `Withhold(reason)`). Nothing changes if you don't pass one —
+this is off by default, and `IronHive.Agent` itself references no guard engine.
+
+The `IronHive.Agent.FluxGuard` package backs it with FluxGuard (server/tool allowlisting, dangerous-argument
+detection, indirect-injection and sensitive-data checks on tool results):
 
 ```csharp
 using FluxGuard.Remote.MCP;
+using IronHive.Agent.FluxGuard;
 
-// Or register it via DI: services.AddFluxGuardMcpGuardrail();
 var guardrail = new MCPToolValidator();
 guardrail.RegisterServer(new MCPServerInfo { Name = "filesystem", IsTrusted = true });
 
-var manager = new McpPluginManager(guardrail: guardrail);
+var manager = new McpPluginManager(guard: new FluxGuardMcpToolCallGuard(guardrail));
 await manager.ConnectAsync("filesystem", config);
 
 // A call to an unregistered server, or one whose result trips the injection/sensitive-data
@@ -246,7 +251,11 @@ await manager.ConnectAsync("filesystem", config);
 // result-block case.
 ```
 
-A guardrail that itself throws is treated as fail-closed (the call is blocked, not silently
+With DI, register FluxGuard's guardrail and then the guards: `services.AddFluxGuardMcpGuardrail();
+services.AddIronHiveAgentFluxGuard();` — the `McpPluginManager` that `AddIronHiveAgent` registers picks up the
+`IMcpToolCallGuard`, and the Ironbees adapter the `IToolResultGuard`.
+
+A guard that itself throws is treated as fail-closed (the call is blocked, not silently
 dispatched unguarded) — see `McpPluginManager.CallToolAsync`'s XML doc remarks for the reasoning.
 
 ## In-Process Tool-Result Guard (opt-in)
@@ -265,7 +274,7 @@ var client = inner.AsBuilder()
     .Build();
 ```
 
-The Ironbees adapter applies the same guard through its `toolResultGuard` constructor argument, and `AddIronbees` resolves `IToolResultGuard` from DI. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)`. In-process tools are then reported to it under the server name `in-process`.
+The Ironbees adapter applies the same guard through its `toolResultGuard` constructor argument, and `AddIronbees` resolves `IToolResultGuard` from DI. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)` (`IronHive.Agent.FluxGuard` package). In-process tools are then reported to it under the server name `in-process`.
 
 ## Available Tools Context
 

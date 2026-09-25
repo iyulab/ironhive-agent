@@ -10,7 +10,7 @@ namespace IronHive.Agent.Tests;
 /// </summary>
 public class OptionsReachabilityRosterTests
 {
-    private static readonly Assembly[] Libraries = [Assembly.Load("IronHive.Agent"), Assembly.Load("IronHive.Agent.Memory")];
+    private static readonly Assembly[] Libraries = [Assembly.Load("IronHive.Agent"), Assembly.Load("IronHive.Agent.Memory"), Assembly.Load("IronHive.Agent.FluxGuard")];
 
     /// <summary>Options accepted as unread today, each with the reason. Shrink this list; never grow it silently.</summary>
     private static readonly Dictionary<string, string[]> KnownUnread = new()

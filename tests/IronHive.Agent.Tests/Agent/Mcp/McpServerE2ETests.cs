@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using IronHive.Agent.FluxGuard;
 using IronHive.Agent.Mcp;
 using Xunit;
 
@@ -264,8 +265,8 @@ public class McpServerE2ETests : IAsyncLifetime
     {
         SkipIfNotAvailable();
 
-        var guardrail = new FluxGuard.Remote.MCP.MCPToolValidator();
-        await using var manager = new McpPluginManager(guardrail: guardrail);
+        var guardrail = new global::FluxGuard.Remote.MCP.MCPToolValidator();
+        await using var manager = new McpPluginManager(guard: new FluxGuardMcpToolCallGuard(guardrail));
         var config = CreateEverythingServerConfig();
         await manager.ConnectAsync(EverythingServerName, config, TestContext.Current.CancellationToken);
 
@@ -282,13 +283,13 @@ public class McpServerE2ETests : IAsyncLifetime
     {
         SkipIfNotAvailable();
 
-        var guardrail = new FluxGuard.Remote.MCP.MCPToolValidator();
-        guardrail.RegisterServer(new FluxGuard.Remote.MCP.MCPServerInfo
+        var guardrail = new global::FluxGuard.Remote.MCP.MCPToolValidator();
+        guardrail.RegisterServer(new global::FluxGuard.Remote.MCP.MCPServerInfo
         {
             Name = EverythingServerName,
             IsTrusted = true
         });
-        await using var manager = new McpPluginManager(guardrail: guardrail);
+        await using var manager = new McpPluginManager(guard: new FluxGuardMcpToolCallGuard(guardrail));
         var config = CreateEverythingServerConfig();
         await manager.ConnectAsync(EverythingServerName, config, TestContext.Current.CancellationToken);
 
@@ -303,13 +304,13 @@ public class McpServerE2ETests : IAsyncLifetime
     {
         SkipIfNotAvailable();
 
-        var guardrail = new FluxGuard.Remote.MCP.MCPToolValidator();
-        guardrail.RegisterServer(new FluxGuard.Remote.MCP.MCPServerInfo
+        var guardrail = new global::FluxGuard.Remote.MCP.MCPToolValidator();
+        guardrail.RegisterServer(new global::FluxGuard.Remote.MCP.MCPServerInfo
         {
             Name = EverythingServerName,
             IsTrusted = true
         });
-        await using var manager = new McpPluginManager(guardrail: guardrail);
+        await using var manager = new McpPluginManager(guard: new FluxGuardMcpToolCallGuard(guardrail));
         var config = CreateEverythingServerConfig();
         await manager.ConnectAsync(EverythingServerName, config, TestContext.Current.CancellationToken);
 

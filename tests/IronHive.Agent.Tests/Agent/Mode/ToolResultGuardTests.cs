@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using FluxGuard.Remote.MCP;
+using IronHive.Agent.FluxGuard;
 using Ironbees.Core;
 using IronHive.Agent.Ironbees;
 using IronHive.Agent.Loop;
