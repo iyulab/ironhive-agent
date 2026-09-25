@@ -53,6 +53,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
   OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
   SDK's storage wiring references `MemoryIndexer.Sdk` itself.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.4 -> 0.20.0, `Ironbees.Core` 0.19.4 -> 0.20.0, `IronHive.Abstractions` 0.37.0 -> 0.38.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
 
 ## [0.17.1] - 2026-09-24
 
