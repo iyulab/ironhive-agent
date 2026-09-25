@@ -20,6 +20,7 @@ public class LogLanguageConventionTests
         typeof(WebhookService).Assembly,
         typeof(IronHive.Agent.Memory.SessionMemoryService).Assembly,
         typeof(IronHive.Agent.FluxGuard.FluxGuardMcpToolCallGuard).Assembly,
+        typeof(IronHive.Agent.Ironbees.ChatClientFrameworkAdapter).Assembly,
     ];
 
     public static IEnumerable<object[]> AssemblyTypes()

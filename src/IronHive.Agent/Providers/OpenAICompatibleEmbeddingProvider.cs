@@ -1,17 +1,16 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using IronbeesEmbeddingProvider = global::Ironbees.Core.IEmbeddingProvider;
 
 namespace IronHive.Agent.Providers;
 
 /// <summary>
-/// OpenAI-compatible embedding provider that implements both the ironhive-agent
-/// <see cref="IEmbeddingProvider"/> and the ironbees <see cref="IronbeesEmbeddingProvider"/>
-/// interfaces. Works with any OpenAI-compatible API endpoint (GPUStack, vLLM, Ollama, etc.).
+/// OpenAI-compatible <see cref="IEmbeddingProvider"/>. Works with any OpenAI-compatible API endpoint
+/// (GPUStack, vLLM, Ollama, etc.). For Ironbees, wrap it with <c>IronbeesEmbeddingProviderAdapter</c>
+/// (<c>IronHive.Agent.Ironbees</c> package).
 /// </summary>
 public sealed class OpenAICompatibleEmbeddingProvider
-    : IEmbeddingProvider, IronbeesEmbeddingProvider, IDisposable
+    : IEmbeddingProvider, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly string _model;
@@ -83,27 +82,8 @@ public sealed class OpenAICompatibleEmbeddingProvider
         return await EmbedBatchCoreAsync(texts, cancellationToken);
     }
 
-    // --- Ironbees.Core.IEmbeddingProvider ---
-
-    /// <inheritdoc />
+    /// <summary>The embedding model requests are sent for.</summary>
     public string ModelName => _model;
-
-    /// <inheritdoc />
-    public async Task<float[]> GenerateEmbeddingAsync(
-        string text,
-        CancellationToken cancellationToken = default)
-    {
-        var results = await EmbedBatchCoreAsync([text], cancellationToken);
-        return results[0];
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<float[]>> GenerateEmbeddingsAsync(
-        IReadOnlyList<string> texts,
-        CancellationToken cancellationToken = default)
-    {
-        return await EmbedBatchCoreAsync(texts, cancellationToken);
-    }
 
     // --- IAsyncDisposable + IDisposable ---
 

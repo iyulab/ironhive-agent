@@ -1,7 +1,8 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
+using IronHive.Agent.Ironbees;
 using IronHive.Agent.Providers;
 using Xunit;
 using IronbeesEmbeddingProvider = global::Ironbees.Core.IEmbeddingProvider;
@@ -172,21 +173,21 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GenerateEmbeddingAsync_ReturnsSingleEmbedding()
+    public async Task IronbeesAdapter_GenerateEmbeddingAsync_ReturnsSingleEmbedding()
     {
         // Arrange
         float[] expected = [0.1f, 0.2f, 0.3f];
         _handler.SetResponse(CreateEmbeddingResponse([(0, expected)]));
 
         // Act
-        var result = await _sut.GenerateEmbeddingAsync("hello world", TestContext.Current.CancellationToken);
+        var result = await new IronbeesEmbeddingProviderAdapter(_sut, TestModel).GenerateEmbeddingAsync("hello world", TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEquivalentTo(expected);
     }
 
     [Fact]
-    public async Task GenerateEmbeddingsAsync_ReturnsMultipleEmbeddings()
+    public async Task IronbeesAdapter_GenerateEmbeddingsAsync_ReturnsMultipleEmbeddings()
     {
         // Arrange
         float[] embedding0 = [0.1f, 0.2f, 0.3f];
@@ -194,7 +195,7 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
         _handler.SetResponse(CreateEmbeddingResponse([(0, embedding0), (1, embedding1)]));
 
         // Act
-        var results = await _sut.GenerateEmbeddingsAsync(["text1", "text2"], TestContext.Current.CancellationToken);
+        var results = await new IronbeesEmbeddingProviderAdapter(_sut, TestModel).GenerateEmbeddingsAsync(["text1", "text2"], TestContext.Current.CancellationToken);
 
         // Assert
         results.Should().HaveCount(2);
@@ -203,12 +204,11 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
     }
 
     [Fact]
-    public void IronbeesInterface_CanBeReferencedAsIEmbeddingProvider()
+    public void IronbeesAdapter_PresentsTheProviderAsAnIronbeesEmbeddingProvider()
     {
-        // Verify the class can be assigned to the ironbees interface
-        // (intentional interface-typed variable to validate compatibility)
-#pragma warning disable CA1859 // Use concrete types when possible for improved performance
-        IronbeesEmbeddingProvider ironbeesProvider = _sut;
+        // One configured provider serves Ironbees through the adapter (IronHive.Agent.Ironbees, 0.19.0).
+#pragma warning disable CA1859 // the interface-typed variable is the point: this is what Ironbees receives
+        IronbeesEmbeddingProvider ironbeesProvider = new IronbeesEmbeddingProviderAdapter(_sut, TestModel);
 #pragma warning restore CA1859
         ironbeesProvider.ModelName.Should().Be(TestModel);
         ironbeesProvider.Dimensions.Should().Be(TestDimensions);
@@ -265,19 +265,6 @@ public sealed class OpenAICompatibleEmbeddingProviderTests : IDisposable
 
         // Act
         var act = () => _sut.EmbedBatchAsync(["text"]).AsTask();
-
-        // Assert
-        await act.Should().ThrowAsync<HttpRequestException>();
-    }
-
-    [Fact]
-    public async Task GenerateEmbeddingsAsync_ThrowsOnHttpError()
-    {
-        // Arrange
-        _handler.SetResponse(new HttpResponseMessage(HttpStatusCode.InternalServerError));
-
-        // Act
-        var act = () => _sut.GenerateEmbeddingsAsync(["text"]);
 
         // Assert
         await act.Should().ThrowAsync<HttpRequestException>();

@@ -53,7 +53,7 @@ public static class AdvisorTool
                 ?? ToolInvocationScope.Messages
                 ?? throw new InvalidOperationException(
                     "The advisor could not see a conversation: it was not called from a tool loop that publishes one " +
-                    "(FunctionInvokingChatClient, or ChatClientFrameworkAdapter). Set AdvisorOptions.Conversation to supply it.");
+                    "(FunctionInvokingChatClient, or a loop that sets ToolInvocationScope such as ChatClientFrameworkAdapter). Set AdvisorOptions.Conversation to supply it.");
 
             if (settings.MaxCalls is { } max && Interlocked.Increment(ref calls) > max)
             {

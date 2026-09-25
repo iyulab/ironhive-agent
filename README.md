@@ -11,7 +11,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Agent Skills (`SKILL.md`)**: `SkillsLoader.Create(new SkillsConfig { Roots = [userSkillsDir, projectSkillsDir] })` discovers skills per the [Agent Skills specification](https://agentskills.io/specification) and validates them as `skills-ref validate` does (invalid ones are *reported* in `Diagnostics`, never thrown; the first root wins a name collision and the shadowed one is reported). `loader.Contributor` puts every name + description in the system instructions; `loader.LoadTool` (`load_skill`) returns a skill's body — or a file inside its directory, and nothing outside it — on demand. `Enabled`/`Exclude`/`Filter` narrow the set per session; `MaxMetadataCharacters` bounds the section and what does not fit is in `Dropped`/`DroppedCount` (still loadable by name). `SkillDiscovery.Discover(config)` is the same discovery as a plain call, for a UI that lists skills before a session exists. Frontmatter keys the specification does not define reject the skill by default (as `skills-ref validate` does); `UnknownFields = UnknownFieldPolicy.Accept` loads such skills and reports the keys as a warning — skill trees written for one client's extensions (e.g. `argument-hint`) need this. A name in `Enabled` that matches nothing is reported (`EnabledNotFound`), not dropped silently. DI: `services.AddAgentSkills(config)` registers the loader and its contributor; add `LoadTool` to the loop's tools yourself. Text only — `scripts/` are never executed; `allowed-tools` is parsed, not enforced
 - **System instruction sections**: add to the system instructions without replacing the prompt — implement `ISystemInstructionContributor` and register it in the container (or `ContextManager.AddInstructionContributor`); needs a `ContextManager` on the loop
 - **Built-in Tools**: Read, Write, Shell, Glob, Grep, Todo — `BuiltInTools.GetAll(workingDirectory)`. A host decides where they reach and what runs around a write with `FileToolOptions`: `BuiltInTools.GetAll(workingDirectory, new FileToolOptions { AllowedRoots = ["."], WriteInterceptor = ... })`. The working directory alone is not a boundary — `AllowedRoots` is (default: none, opt-in)
-- **Delegation (agent as a tool)**: `DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research", Model = ..., MaxToolTurns = ... })` turns an Ironbees named agent into an `AIFunction` the model calls to hand off a sub-task. Each call is an isolated run of that agent — its `agent.yaml` tools (an agent that lists `tools` gets exactly those), prompt and model, with per-delegation model, reasoning level, output cap and tool-turn limit. `DelegationOptions` bounds nesting depth (across agents), concurrency, and feeds the delegated usage into the parent's `IUsageLimiter`/`IUsageTracker`. A run that stops at its turn limit comes back marked partial. Not registered by `AddIronHiveAgent`: create the tools where the orchestrator is available and add them to the loop's `Tools`. To call a named agent from application code instead, use `IAgentOrchestrator.ProcessStructuredAsync(input, new ProcessOptions { AgentName = ... })`
+- **Delegation (agent as a tool, `IronHive.Agent.Ironbees` package)**: `DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research", Model = ..., MaxToolTurns = ... })` turns an Ironbees named agent into an `AIFunction` the model calls to hand off a sub-task. Each call is an isolated run of that agent — its `agent.yaml` tools (an agent that lists `tools` gets exactly those), prompt and model, with per-delegation model, reasoning level, output cap and tool-turn limit. `DelegationOptions` bounds nesting depth (across agents), concurrency, and feeds the delegated usage into the parent's `IUsageLimiter`/`IUsageTracker`. A run that stops at its turn limit comes back marked partial. Not registered by `AddIronHiveAgent`: create the tools where the orchestrator is available and add them to the loop's `Tools`. To call a named agent from application code instead, use `IAgentOrchestrator.ProcessStructuredAsync(input, new ProcessOptions { AgentName = ... })`
 - **Advisor (consult a stronger model)**: `AdvisorTool.Create(strongerClient, new AdvisorOptions { ModelId = ..., MaxCalls = 5 })` gives the working model a no-argument tool that sends the conversation so far — its requests, tool calls and results — to a stronger model and returns that model's review. The working model decides when to consult (the default description says: before committing to an approach, when stuck, before declaring done), so the strong model is paid for only where judgment matters. Works under `FunctionInvokingChatClient` and inside Ironbees agents (`ChatClientFrameworkAdapter`); elsewhere pass `AdvisorOptions.Conversation`. The advisor is never given tools; `MaxCalls`, `UsageLimiter` and `UsageTracker` bound and account for it. Not registered by `AddIronHiveAgent`: add the tool to the loop's `Tools`
 - **Long-term session memory (`IronHive.Agent.Memory` package)**: `new SessionMemoryService(memoryService, userId)` implements `ISessionMemoryService` over a MemoryIndexer `IMemoryService`; `EmbeddingServiceAdapter` (over an `IAgentEmbeddingProvider`) and `TextCompletionServiceAdapter` (over an `IChatClient`) supply the MemoryIndexer services it needs. The interfaces (`ISessionMemoryService`, `IAgentEmbeddingProvider`) live in `IronHive.Agent`, so a host that does not use memory ships no MemoryIndexer.
 - **Deep research (`IronHive.DeepResearch` package)**: `AddDeepResearch(...)` registers an iterative research pipeline — query planning, web search, content extraction, sufficiency analysis, then a cited report — over one text-generation service (`ChatClientTextGenerationAdapter` for an `IChatClient`). Results report the run's token usage; the cost is left null because the run does not know which model priced its calls. Tune it through the options callback: `services.AddDeepResearch(chatClient, o => { o.SufficiencyThreshold = 0.7m; o.MinSourcesBeforeReport = 5; o.MaxSearchRetriesPerIteration = 2; })`. `SufficiencyThreshold` is the score at which research stops. `MinSourcesBeforeReport` keeps it iterating while fewer sources were collected and a gap remains. The per-query iteration limit is `ResearchRequest.MaxIterations`, capped by `Depth`
@@ -26,8 +26,9 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 
 | Package | Purpose |
 |---|---|
-| `IronHive.Agent` | Agent loop, context management, modes, MCP plugins, built-in tools, delegation and advisor tools |
+| `IronHive.Agent` | Agent loop, context management, modes, approvals, MCP plugins, built-in tools, advisor tool, and the guard/memory seams |
 | `IronHive.DeepResearch` | Iterative web research pipeline with cited reports (`AddDeepResearch`) |
+| `IronHive.Agent.Ironbees` | Ironbees integration: `ChatClientFrameworkAdapter`, `AddIronbees`, `OrchestratedAgentLoop`, `DelegationTools` (a named agent as a tool), `IronbeesEmbeddingProviderAdapter` |
 | `IronHive.Agent.FluxGuard` | FluxGuard-backed tool guards: `FluxGuardMcpToolCallGuard` (`IMcpToolCallGuard`), `McpGuardrailToolResultGuard` (`IToolResultGuard`), `AddIronHiveAgentFluxGuard()` |
 | `IronHive.Agent.Memory` | Long-term session memory over [MemoryIndexer](https://github.com/iyulab/memory-indexer): `SessionMemoryService` (`ISessionMemoryService`), `EmbeddingServiceAdapter` and `TextCompletionServiceAdapter` |
 
@@ -38,6 +39,7 @@ dotnet add package IronHive.Agent
 dotnet add package IronHive.DeepResearch   # only for deep research
 dotnet add package IronHive.Agent.Memory   # only for long-term memory (MemoryIndexer)
 dotnet add package IronHive.Agent.FluxGuard   # only for FluxGuard tool-call / tool-result guards
+dotnet add package IronHive.Agent.Ironbees    # only for Ironbees agents, AddIronbees and delegation tools
 ```
 
 ## Quick Start
@@ -131,18 +133,27 @@ IronHive.Agent/
 ├── Mode/           # Plan/Work/HITL mode system
 ├── Mcp/            # MCP plugin management and tool discovery
 ├── Tools/          # Built-in tools (BuiltInTools, TodoTool)
-├── Delegation/     # Agent-as-tool delegation (DelegationTools) and the advisor tool (AdvisorTool)
+├── Delegation/     # The advisor tool (AdvisorTool) and ToolInvocationScope
 ├── Planning/       # Plan-and-execute orchestration (DefaultTaskPlanner, DefaultPlanExecutor, HeuristicPlanEvaluator, PlannerTriggerDetector)
 ├── Services/       # Cross-cutting services (ICheckpointService for pre-destructive-op snapshots)
 ├── Permissions/    # Permission evaluation and configuration
 ├── Tracking/       # Usage tracking and limits
 ├── Providers/      # Chat client, embedding, rerank provider abstractions
-├── Memory/         # Session memory service
+├── Memory/         # Session memory contracts (ISessionMemoryService, IAgentEmbeddingProvider)
 ├── Webhook/        # Webhook event notifications
 ├── ErrorRecovery/  # Error categorization and recovery
-├── Ironbees/       # Multi-agent orchestration integration
 └── Extensions/     # DI registration extensions
+
+IronHive.Agent.Ironbees/   # Ironbees integration: ChatClientFrameworkAdapter, AddIronbees, OrchestratedAgentLoop,
+                           # DelegationTools, IronbeesEmbeddingProviderAdapter
+IronHive.Agent.FluxGuard/  # FluxGuard-backed IMcpToolCallGuard / IToolResultGuard
+IronHive.Agent.Memory/     # MemoryIndexer-backed SessionMemoryService and adapters
 ```
+
+`IronHive.Agent` itself references none of Ironbees, FluxGuard or MemoryIndexer (0.19.0), so a host that uses the
+loop, modes, approvals and tools ships none of their natives or SDKs. The seams they plug into — `IToolResultGuard`,
+`IMcpToolCallGuard`, `ApprovalGate`, `ToolInvocationScope`, `ISessionMemoryService` — are in the core package, so a
+host's own adapter judges tool calls and results by the same rules.
 
 ## Native (In-Process) Tools
 
@@ -437,7 +448,7 @@ lets "ask" through when nobody can be asked is a silent no-op. Either register a
 `ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time.
 
 Pass another invoker as `inner` to compose (for example one that turns marshalling errors into
-recovery directives). The Ironbees adapter (`ChatClientFrameworkAdapter`) applies the same gate on its
+recovery directives). The Ironbees adapter (`ChatClientFrameworkAdapter`, `IronHive.Agent.Ironbees`) applies the same gate (`ApprovalGate`) on its
 own tool loop when it is given a filter or evaluator, so a verdict means the same thing on both paths.
 
 ## Post-Turn Seam

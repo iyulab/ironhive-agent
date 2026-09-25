@@ -7,15 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Ironbees (multi-agent orchestration) -->
-    <PackageReference Include="Ironbees.Core" />
     <!-- Microsoft.Extensions.AI -->
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="NetEscapades.Configuration.Yaml" />
-    <!-- SKILL.md frontmatter (IronHive.Agent.Skills); already in the closure through Ironbees.Core and the YAML configuration provider. -->
+    <!-- SKILL.md frontmatter (IronHive.Agent.Skills); also in the closure through the YAML configuration provider. -->
     <PackageReference Include="YamlDotNet" />
 
     <!-- OpenAI SDK -->

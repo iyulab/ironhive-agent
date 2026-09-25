@@ -91,8 +91,13 @@ public static partial class ToolResultGuardedFunctionInvoker
         };
     }
 
-    /// <summary>Runs <paramref name="guard"/> over one result; the shared rule of every path that invokes tools.</summary>
-    internal static async ValueTask<object?> ApplyAsync(
+    /// <summary>
+    /// Runs <paramref name="guard"/> over one result — the shared rule of every path that invokes tools, public so a
+    /// host's own tool loop applies it the same way. Returns the result, its replacement, or a
+    /// <see cref="ToolCallRefusal"/> (<see cref="ToolCallRefusalKind.ResultWithheld"/>) when withheld or when the guard
+    /// throws (fail-closed).
+    /// </summary>
+    public static async ValueTask<object?> ApplyAsync(
         IToolResultGuard guard,
         string toolName,
         IEnumerable<KeyValuePair<string, object?>>? arguments,

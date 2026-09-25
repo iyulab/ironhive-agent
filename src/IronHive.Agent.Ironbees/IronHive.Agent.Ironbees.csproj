@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>IronHive Agent - Ironbees integration: the IChatClient framework adapter, AddIronbees, OrchestratedAgentLoop and delegation tools (a named Ironbees agent as a tool)</Description>
+    <PackageTags>IronHive;Agent;Ironbees;MultiAgent;Delegation</PackageTags>
+    <!-- CA1716: "Loop" namespace, as in IronHive.Agent. -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronHive.Agent\IronHive.Agent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ironbees.Core: agents, orchestration, the framework-adapter contract. It carries ONNX Runtime natives
+         (embeddings) and Azure.AI.ContentSafety, which is why it is not a dependency of IronHive.Agent itself. -->
+    <PackageReference Include="Ironbees.Core" />
+  </ItemGroup>
+
+</Project>

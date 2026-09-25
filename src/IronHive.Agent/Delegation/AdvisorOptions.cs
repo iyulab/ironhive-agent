@@ -39,7 +39,7 @@ public sealed record AdvisorOptions
     /// <summary>
     /// Supplies the conversation to review. By default the advisor reads it from the tool loop it is called from —
     /// <see cref="FunctionInvokingChatClient.CurrentContext"/>, or the loop of
-    /// <see cref="Ironbees.ChatClientFrameworkAdapter"/>. Set this when calling it from somewhere else.
+    /// a loop that sets <see cref="ToolInvocationScope"/> (the Ironbees adapter does). Set this when calling it from somewhere else.
     /// </summary>
     public Func<IReadOnlyList<ChatMessage>>? Conversation { get; init; }
 

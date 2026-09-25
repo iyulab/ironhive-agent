@@ -6,6 +6,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.19.0] - Unreleased
 
+### Added
+- **`ApprovalGate`/`GateDecision`, `ToolInvocationScope` and `ToolResultGuardedFunctionInvoker.ApplyAsync` are public** —
+  the rules a tool loop applies (permission verdict before a call, the conversation a tool sees, the result guard after
+  it). The Ironbees adapter uses them from its own package, and a host's own loop can judge calls the same way.
+
 ### Changed
 - **Breaking: long-term memory moved to a new package, `IronHive.Agent.Memory`.** `IronHive.Agent` no longer references
   MemoryIndexer, so a host that does not use memory no longer ships it. `SessionMemoryService`, `EmbeddingServiceAdapter`
@@ -19,6 +24,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `new McpPluginManager(guard: new FluxGuardMcpToolCallGuard(guardrail))`, or with DI
   `services.AddIronHiveAgentFluxGuard()` after registering the guardrail (a registered `IMCPGuardrail` is no longer
   injected by itself). `McpGuardrailToolResultGuard` moved to the same package (namespace `IronHive.Agent.FluxGuard`).
+- **Breaking: the Ironbees integration moved to `IronHive.Agent.Ironbees`.** `IronHive.Agent` no longer references
+  Ironbees.Core, whose ONNX Runtime natives and Azure.AI.ContentSafety every host shipped. Moved (same namespaces,
+  `IronHive.Agent.Ironbees` and `IronHive.Agent.Delegation`): `ChatClientFrameworkAdapter`, `ChatClientLLMAdapter`,
+  `AddIronbees`/`IronbeesOptions`, `OrchestratedAgentLoop`, `DelegationTools`, `DelegatedAgent`, `DelegationOptions`.
+  Migration: add `IronHive.Agent.Ironbees` if you use any of them.
+- **Breaking: `OpenAICompatibleEmbeddingProvider` no longer implements Ironbees' `IEmbeddingProvider`** (its
+  `GenerateEmbeddingAsync`/`GenerateEmbeddingsAsync` are gone; `EmbedAsync`/`EmbedBatchAsync` and `ModelName` remain).
+  To give it to Ironbees, wrap it: `new IronbeesEmbeddingProviderAdapter(provider, modelName)`.
 - **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
   OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
   SDK's storage wiring references `MemoryIndexer.Sdk` itself.

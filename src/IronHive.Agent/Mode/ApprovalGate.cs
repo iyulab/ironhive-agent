@@ -1,4 +1,4 @@
-using IronHive.Agent.Permissions;
+﻿using IronHive.Agent.Permissions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -8,14 +8,18 @@ namespace IronHive.Agent.Mode;
 /// The one place a tool call is judged before it runs. Both invocation paths the library offers —
 /// <see cref="ApprovalGatedFunctionInvoker"/> for a Microsoft.Extensions.AI function-invoking client,
 /// and the Ironbees adapter's own loop — defer to this so a permission verdict means the same thing
-/// on either path.
+/// on either path. Public so a host's own tool loop (another framework's adapter) judges calls by the same rule.
 /// </summary>
-internal sealed partial class ApprovalGate
+public sealed partial class ApprovalGate
 {
     private readonly IModeToolFilter _filter;
     private readonly IHumanApprovalService? _approval;
     private readonly ILogger _logger;
 
+    /// <summary>Creates a gate over the mode's permission rules and, for <c>Ask</c> verdicts, an approval service.</summary>
+    /// <param name="filter">Assesses each call's risk (the permission rules of the current mode).</param>
+    /// <param name="approval">Asked when a rule says <c>Ask</c>; without one such a call is refused.</param>
+    /// <param name="logger">Receives a line per refusal; optional.</param>
     public ApprovalGate(IModeToolFilter filter, IHumanApprovalService? approval, ILogger? logger = null)
     {
         _filter = filter ?? throw new ArgumentNullException(nameof(filter));
@@ -87,8 +91,15 @@ internal sealed partial class ApprovalGate
 /// Outcome of <see cref="ApprovalGate.DecideAsync"/>: either run (optionally with arguments the
 /// approver edited) or return <see cref="Refusal"/> to the model as the tool's result.
 /// </summary>
-internal readonly record struct GateDecision(bool ShouldProceed, ToolCallRefusal? Refusal, IDictionary<string, object?>? ModifiedArguments)
+/// <summary>What <see cref="ApprovalGate.DecideAsync"/> decided about one tool call.</summary>
+/// <param name="ShouldProceed">Run the call.</param>
+/// <param name="Refusal">When not proceeding: the result the model reads instead of the tool's.</param>
+/// <param name="ModifiedArguments">When proceeding: arguments the approver changed, to run with instead; null to keep the call's own.</param>
+public readonly record struct GateDecision(bool ShouldProceed, ToolCallRefusal? Refusal, IDictionary<string, object?>? ModifiedArguments)
 {
+    /// <summary>Run the call, with <paramref name="modifiedArguments"/> when the approver changed them.</summary>
     public static GateDecision Proceed(IDictionary<string, object?>? modifiedArguments) => new(true, null, modifiedArguments);
+
+    /// <summary>Do not run the call; the model reads <paramref name="refusal"/>.</summary>
     public static GateDecision Refuse(ToolCallRefusal refusal) => new(false, refusal, null);
 }
