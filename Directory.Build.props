@@ -23,6 +23,7 @@
     <Copyright>Copyright (c) iyulab</Copyright>
     <RepositoryUrl>https://github.com/iyulab/ironhive-agent</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <!-- Version: Update this to trigger a new release -->

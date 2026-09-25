@@ -11,6 +11,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   advisor/delegation tools. A provider reports cache reads as part of the input (`UsageDetails.CachedInputTokenCount`),
   and every input token was priced at the full input rate, so a session with cache hits reported and budgeted a cost up
   to ten times too high — since IronHive 0.37.0 counts Anthropic's cache reads in the input, on every provider.
+- **`IronHive.Agent` and `IronHive.DeepResearch` declare their license (MIT).** Their packages carried no license
+  metadata, so nuget.org showed none and license scanners reported them as unlicensed.
 
 ### Added
 - `TokenUsage.CachedInputTokens`, `TokenUsage.From(UsageDetails?)` (the one mapping the loops and tools share) and
