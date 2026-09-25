@@ -6,10 +6,22 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.19.0] - Unreleased
 
+0.18.0 was never published; its changes ship in 0.19.0.
+
 ### Added
+- `TokenUsage.CachedInputTokens`, `TokenUsage.From(UsageDetails?)` (the one mapping the loops and tools share) and
+  `TokenUsage.CostAt(ModelInfo?)`; `SessionUsage.TotalCachedInputTokens`.
 - **`ApprovalGate`/`GateDecision`, `ToolInvocationScope` and `ToolResultGuardedFunctionInvoker.ApplyAsync` are public** —
   the rules a tool loop applies (permission verdict before a call, the conversation a tool sees, the result guard after
   it). The Ironbees adapter uses them from its own package, and a host's own loop can judge calls the same way.
+
+### Fixed
+- **Prompt-cache reads are priced at the cache-read rate** in the usage tracker, the turn guards' usage limiter and the
+  advisor/delegation tools. A provider reports cache reads as part of the input (`UsageDetails.CachedInputTokenCount`),
+  and every input token was priced at the full input rate, so a session with cache hits reported and budgeted a cost up
+  to ten times too high — since IronHive 0.37.0 counts Anthropic's cache reads in the input, on every provider.
+- **`IronHive.Agent` and `IronHive.DeepResearch` declare their license (MIT).** Their packages carried no license
+  metadata, so nuget.org showed none and license scanners reported them as unlicensed.
 
 ### Changed
 - **Breaking: long-term memory moved to a new package, `IronHive.Agent.Memory`.** `IronHive.Agent` no longer references
@@ -41,20 +53,6 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
   OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
   SDK's storage wiring references `MemoryIndexer.Sdk` itself.
-
-## [0.18.0] - Unreleased
-
-### Fixed
-- **Prompt-cache reads are priced at the cache-read rate** in the usage tracker, the turn guards' usage limiter and the
-  advisor/delegation tools. A provider reports cache reads as part of the input (`UsageDetails.CachedInputTokenCount`),
-  and every input token was priced at the full input rate, so a session with cache hits reported and budgeted a cost up
-  to ten times too high — since IronHive 0.37.0 counts Anthropic's cache reads in the input, on every provider.
-- **`IronHive.Agent` and `IronHive.DeepResearch` declare their license (MIT).** Their packages carried no license
-  metadata, so nuget.org showed none and license scanners reported them as unlicensed.
-
-### Added
-- `TokenUsage.CachedInputTokens`, `TokenUsage.From(UsageDetails?)` (the one mapping the loops and tools share) and
-  `TokenUsage.CostAt(ModelInfo?)`; `SessionUsage.TotalCachedInputTokens`.
 
 ## [0.17.1] - 2026-09-24
 
