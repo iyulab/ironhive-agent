@@ -14,10 +14,16 @@ public class LogLanguageConventionTests
 {
     private static readonly Regex HangulRegex = new(@"[가-힣ᄀ-ᇿ㄰-㆏]");
 
+    // Every assembly the family ships: a type that moves to a satellite package must not leave the convention.
+    private static readonly Assembly[] Libraries =
+    [
+        typeof(WebhookService).Assembly,
+        typeof(IronHive.Agent.Memory.SessionMemoryService).Assembly,
+    ];
+
     public static IEnumerable<object[]> AssemblyTypes()
     {
-        var assembly = typeof(WebhookService).Assembly;
-        foreach (var type in assembly.GetTypes().Where(t => !t.IsCompilerGenerated()))
+        foreach (var type in Libraries.SelectMany(a => a.GetTypes()).Where(t => !t.IsCompilerGenerated()))
         {
             yield return new object[] { type };
         }

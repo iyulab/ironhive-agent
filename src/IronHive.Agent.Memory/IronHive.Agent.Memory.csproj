@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>IronHive Agent - long-term session memory backed by MemoryIndexer (ISessionMemoryService, embedding and text-completion adapters)</Description>
+    <PackageTags>IronHive;Agent;Memory;MemoryIndexer</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronHive.Agent\IronHive.Agent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MemoryIndexer: IMemoryService, IEmbeddingService, ITextCompletionService. The SDK package (SQLite,
+         OpenTelemetry, MCP) is not needed here; a host that wants the SDK's storage wiring references it itself. -->
+    <PackageReference Include="MemoryIndexer" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+  </ItemGroup>
+
+</Project>

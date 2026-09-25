@@ -98,14 +98,10 @@ jobs:
       run: |
         mkdir -p ./packages
 
-        echo "Packing IronHive.Agent..."
-        dotnet pack src/IronHive.Agent/IronHive.Agent.csproj \
-          --configuration Release \
-          --no-build \
-          --output ./packages
-
-        echo "Packing IronHive.DeepResearch..."
-        dotnet pack src/IronHive.DeepResearch/IronHive.DeepResearch.csproj \
+        # The solution, not each project: every packable project of the family is packed at the same
+        # version, so a new package (IronHive.Agent.Memory, 0.19.0) cannot be left out of a release.
+        echo "Packing the IronHive.Agent family..."
+        dotnet pack IronHive.Agent.slnx \
           --configuration Release \
           --no-build \
           --output ./packages

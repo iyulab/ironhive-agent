@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\IronHive.Agent\IronHive.Agent.csproj" />
+    <ProjectReference Include="..\..\src\IronHive.Agent.Memory\IronHive.Agent.Memory.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.19.0] - Unreleased
+
+### Changed
+- **Breaking: long-term memory moved to a new package, `IronHive.Agent.Memory`.** `IronHive.Agent` no longer references
+  MemoryIndexer, so a host that does not use memory no longer ships it. `SessionMemoryService`, `EmbeddingServiceAdapter`
+  and `TextCompletionServiceAdapter` are now in `IronHive.Agent.Memory` (same namespace, `IronHive.Agent.Memory`); the
+  interfaces `ISessionMemoryService` and `IAgentEmbeddingProvider` stay in `IronHive.Agent`. Migration: add
+  `IronHive.Agent.Memory` if you construct any of the three classes.
+- **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
+  OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
+  SDK's storage wiring references `MemoryIndexer.Sdk` itself.
+
 ## [0.18.0] - Unreleased
 
 ### Fixed
