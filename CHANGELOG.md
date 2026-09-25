@@ -32,6 +32,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **Breaking: `OpenAICompatibleEmbeddingProvider` no longer implements Ironbees' `IEmbeddingProvider`** (its
   `GenerateEmbeddingAsync`/`GenerateEmbeddingsAsync` are gone; `EmbedAsync`/`EmbedBatchAsync` and `ModelName` remain).
   To give it to Ironbees, wrap it: `new IronbeesEmbeddingProviderAdapter(provider, modelName)`.
+- **Breaking: a permission file that cannot be read throws `PermissionConfigException` instead of becoming the
+  defaults.** A malformed file, one without a `permissions` section, a misspelled section or key (`raed:`) or an
+  unknown action (`dney`) used to yield `PermissionConfig.CreateDefault()` (or, for YAML, silently drop the misspelled
+  section's rules, or read the action as `ask`) — the defaults allow more than a restrictive file would, so a typo
+  widened what the agent may do. YAML is now read with YamlDotNet (the same keys); an unsupported file extension passed
+  to `Load` throws `ArgumentException`. A missing file still yields the defaults.
 - **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
   OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
   SDK's storage wiring references `MemoryIndexer.Sdk` itself.

@@ -1,10 +1,16 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using YamlDotNet.Core;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace IronHive.Agent.Permissions;
 
 /// <summary>
-/// Loads permission configuration from YAML or JSON files.
+/// Loads permission configuration from YAML or JSON files. A missing file yields
+/// <see cref="PermissionConfig.CreateDefault"/>; a file that exists but is not a permission configuration throws
+/// <see cref="PermissionConfigException"/> — the defaults allow more than a restrictive file would, so a typo must not
+/// silently widen what the agent may do.
 /// </summary>
 public static class PermissionConfigLoader
 {
@@ -13,7 +19,9 @@ public static class PermissionConfigLoader
         PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
         ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
+        AllowTrailingCommas = true,
+        // A misspelled key is an error, not a dropped rule list.
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
     };
 
     private static readonly JsonSerializerOptions JsonWriteOptions = new()
@@ -23,11 +31,20 @@ public static class PermissionConfigLoader
         WriteIndented = true
     };
 
+    // Unmatched keys throw: a misspelled section (raed:) is an error, not a dropped rule list.
+    private static readonly IDeserializer YamlReader = new DeserializerBuilder()
+        .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .Build();
+
     /// <summary>
-    /// Loads permission configuration from a JSON file.
+    /// Loads permission configuration from a JSON file: <c>{ "permissions": { "read": [...], ... } }</c>.
     /// </summary>
     /// <param name="filePath">Path to the JSON file.</param>
-    /// <returns>Loaded configuration or default if file doesn't exist.</returns>
+    /// <returns>The file's configuration, or <see cref="PermissionConfig.CreateDefault"/> when the file does not exist.</returns>
+    /// <exception cref="PermissionConfigException">
+    /// The file exists but is not a permission configuration: malformed JSON, no <c>permissions</c> object, or a key or
+    /// action this configuration does not have.
+    /// </exception>
     public static PermissionConfig LoadFromJson(string filePath)
     {
         if (!File.Exists(filePath))
@@ -35,25 +52,32 @@ public static class PermissionConfigLoader
             return PermissionConfig.CreateDefault();
         }
 
+        PermissionConfigWrapper? wrapper;
         try
         {
-            var json = File.ReadAllText(filePath);
-            var wrapper = JsonSerializer.Deserialize<PermissionConfigWrapper>(json, JsonReadOptions);
-            return wrapper?.Permissions ?? PermissionConfig.CreateDefault();
+            wrapper = JsonSerializer.Deserialize<PermissionConfigWrapper>(File.ReadAllText(filePath), JsonReadOptions);
         }
-        catch
+        catch (JsonException ex)
         {
-            return PermissionConfig.CreateDefault();
+            throw new PermissionConfigException(filePath, ex.Message, ex);
         }
+
+        return wrapper?.Permissions
+            ?? throw new PermissionConfigException(filePath, "no 'permissions' object");
     }
 
     /// <summary>
-    /// Loads permission configuration from a YAML file.
-    /// Note: Requires NetEscapades.Configuration.Yaml for full YAML support.
-    /// This is a simplified YAML parser for the permission format.
+    /// Loads permission configuration from a YAML file: a <c>permissions:</c> section with <c>read</c>, <c>edit</c>,
+    /// <c>bash</c>, <c>external_directory</c>, <c>mcp_tools</c> and <c>tools</c> (lists of rules — <c>pattern</c>,
+    /// <c>action</c>, <c>priority</c>, <c>reason</c>), <c>read_only_tools</c> (a list of tool names) and
+    /// <c>default_action</c>.
     /// </summary>
     /// <param name="filePath">Path to the YAML file.</param>
-    /// <returns>Loaded configuration or default if file doesn't exist.</returns>
+    /// <returns>The file's configuration, or <see cref="PermissionConfig.CreateDefault"/> when the file does not exist.</returns>
+    /// <exception cref="PermissionConfigException">
+    /// The file exists but is not a permission configuration: malformed YAML, no <c>permissions</c> section, or a
+    /// section, key or action this configuration does not have.
+    /// </exception>
     public static PermissionConfig LoadFromYaml(string filePath)
     {
         if (!File.Exists(filePath))
@@ -61,23 +85,43 @@ public static class PermissionConfigLoader
             return PermissionConfig.CreateDefault();
         }
 
+        YamlPermissionFile? file;
         try
         {
-            var yaml = File.ReadAllText(filePath);
-            return ParseYaml(yaml);
+            file = YamlReader.Deserialize<YamlPermissionFile?>(File.ReadAllText(filePath));
         }
-        catch
+        catch (YamlException ex)
         {
-            return PermissionConfig.CreateDefault();
+            throw new PermissionConfigException(filePath, ex.InnerException?.Message ?? ex.Message, ex);
         }
+
+        if (file?.Permissions is not { } section)
+        {
+            throw new PermissionConfigException(filePath, "no 'permissions' section");
+        }
+
+        return new PermissionConfig
+        {
+            Read = ToRules(filePath, "read", section.Read),
+            Edit = ToRules(filePath, "edit", section.Edit),
+            Bash = ToRules(filePath, "bash", section.Bash),
+            ExternalDirectory = ToRules(filePath, "external_directory", section.ExternalDirectory),
+            McpTools = ToRules(filePath, "mcp_tools", section.McpTools),
+            Tools = ToRules(filePath, "tools", section.Tools),
+            ReadOnlyTools = section.ReadOnlyTools ?? [],
+            DefaultAction = section.DefaultAction is null
+                ? PermissionAction.Ask
+                : ParseAction(filePath, "default_action", section.DefaultAction)
+        };
     }
 
     /// <summary>
-    /// Loads permission configuration from any supported file format.
-    /// Determines format from file extension.
+    /// Loads permission configuration from a <c>.json</c>, <c>.yaml</c> or <c>.yml</c> file.
     /// </summary>
     /// <param name="filePath">Path to the configuration file.</param>
-    /// <returns>Loaded configuration or default if file doesn't exist.</returns>
+    /// <returns>The file's configuration, or <see cref="PermissionConfig.CreateDefault"/> when the file does not exist.</returns>
+    /// <exception cref="PermissionConfigException">The file exists and is not a readable permission configuration.</exception>
+    /// <exception cref="ArgumentException">The extension is none of the three.</exception>
     public static PermissionConfig Load(string filePath)
     {
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
@@ -85,13 +129,15 @@ public static class PermissionConfigLoader
         {
             ".json" => LoadFromJson(filePath),
             ".yaml" or ".yml" => LoadFromYaml(filePath),
-            _ => PermissionConfig.CreateDefault()
+            _ => throw new ArgumentException(
+                $"Permission configuration '{filePath}' has an unsupported extension '{extension}' (expected .json, .yaml or .yml).",
+                nameof(filePath))
         };
     }
 
     /// <summary>
     /// Loads permission configuration from the default locations.
-    /// Searches in order: .ironhive/permissions.yaml, .ironhive/permissions.json
+    /// Searches in order: .ironhive/permissions.yaml, .ironhive/permissions.yml, .ironhive/permissions.json
     /// </summary>
     /// <param name="workingDirectory">Working directory to search from.</param>
     /// <returns>
@@ -99,6 +145,7 @@ public static class PermissionConfigLoader
     /// is <paramref name="workingDirectory"/>: the rules were found relative to it, and they describe
     /// paths relative to it.
     /// </returns>
+    /// <exception cref="PermissionConfigException">The file found is not a readable permission configuration.</exception>
     public static PermissionConfig LoadFromDefaultLocations(string workingDirectory)
     {
         var config = LoadFromDefaultLocationsCore(workingDirectory);
@@ -143,171 +190,68 @@ public static class PermissionConfigLoader
         File.WriteAllText(filePath, json);
     }
 
-    /// <summary>
-    /// Simple YAML parser for permission configuration.
-    /// Handles the specific format used for permissions.
-    /// Uses relative indentation levels instead of absolute values for flexibility.
-    /// </summary>
-    private static PermissionConfig ParseYaml(string yaml)
+    private static List<PermissionRule> ToRules(string filePath, string section, List<YamlPermissionRule>? rules)
     {
-        var config = new PermissionConfig();
-        var lines = yaml.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
-
-        int baseIndent = -1;  // Will be set when we find 'permissions:'
-        int sectionIndent = -1;  // Indent level for sections (read:, edit:, etc.)
-        int ruleStartIndent = -1;  // Indent level for rule start (- pattern:)
-        int rulePropertyIndent = -1;  // Indent level for rule properties (action:, priority:)
-
-        List<PermissionRule>? currentRules = null;
-        List<string>? currentNames = null;  // a plain list section (read_only_tools:)
-        PermissionRule? currentRule = null;
-
-        foreach (var line in lines)
+        if (rules is null)
         {
-            if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith('#'))
-            {
-                continue;
-            }
-
-            var indent = line.Length - line.TrimStart().Length;
-            var trimmed = line.Trim();
-
-            // Top-level: permissions:
-            if (trimmed == "permissions:")
-            {
-                baseIndent = indent;
-                continue;
-            }
-
-            // Detect section level dynamically
-            if (baseIndent >= 0 && sectionIndent < 0 && indent > baseIndent && trimmed.EndsWith(':'))
-            {
-                sectionIndent = indent;
-            }
-
-            // Section level (read:, edit:, bash:, etc.)
-            if (sectionIndent >= 0 && indent == sectionIndent && trimmed.EndsWith(':'))
-            {
-                // Save current rule before switching sections
-                if (currentRule != null && currentRules != null)
-                {
-                    currentRules.Add(currentRule);
-                    currentRule = null;
-                }
-
-                var section = trimmed.TrimEnd(':');
-                currentNames = section == "read_only_tools" ? config.ReadOnlyTools : null;
-                currentRules = section switch
-                {
-                    "read" => config.Read,
-                    "edit" => config.Edit,
-                    "bash" => config.Bash,
-                    "external_directory" => config.ExternalDirectory,
-                    "mcp_tools" => config.McpTools,
-                    "tools" => config.Tools,
-                    _ => null
-                };
-                continue;
-            }
-
-            // Default action at section level
-            if (sectionIndent >= 0 && indent == sectionIndent && trimmed.StartsWith("default_action:", StringComparison.Ordinal))
-            {
-                var value = trimmed["default_action:".Length..].Trim();
-                config.DefaultAction = ParseAction(value);
-                continue;
-            }
-
-            // A plain list item (- name) under a list section
-            if (currentNames != null && indent > sectionIndent && trimmed.StartsWith("- ", StringComparison.Ordinal))
-            {
-                currentNames.Add(ExtractValue(trimmed, "- "));
-                continue;
-            }
-
-            // Detect rule start indent dynamically
-            if (sectionIndent >= 0 && ruleStartIndent < 0 && indent > sectionIndent && trimmed.StartsWith("- pattern:", StringComparison.Ordinal))
-            {
-                ruleStartIndent = indent;
-            }
-
-            // Rule start (- pattern:)
-            if (ruleStartIndent >= 0 && indent == ruleStartIndent && trimmed.StartsWith("- pattern:", StringComparison.Ordinal) && currentRules != null)
-            {
-                // Save previous rule
-                if (currentRule != null)
-                {
-                    currentRules.Add(currentRule);
-                }
-
-                var pattern = ExtractValue(trimmed, "- pattern:");
-                currentRule = new PermissionRule { Pattern = pattern };
-                rulePropertyIndent = -1;  // Reset for next rule's properties
-                continue;
-            }
-
-            // Detect rule property indent dynamically
-            if (ruleStartIndent >= 0 && rulePropertyIndent < 0 && indent > ruleStartIndent && currentRule != null)
-            {
-                rulePropertyIndent = indent;
-            }
-
-            // Rule properties
-            if (rulePropertyIndent >= 0 && indent == rulePropertyIndent && currentRule != null)
-            {
-                if (trimmed.StartsWith("action:", StringComparison.Ordinal))
-                {
-                    var action = ParseAction(ExtractValue(trimmed, "action:"));
-                    currentRule = currentRule with { Action = action };
-                }
-                else if (trimmed.StartsWith("priority:", StringComparison.Ordinal))
-                {
-                    if (int.TryParse(ExtractValue(trimmed, "priority:"), out var priority))
-                    {
-                        currentRule = currentRule with { Priority = priority };
-                    }
-                }
-                else if (trimmed.StartsWith("reason:", StringComparison.Ordinal))
-                {
-                    currentRule = currentRule with { Reason = ExtractValue(trimmed, "reason:") };
-                }
-            }
+            return [];
         }
 
-        // Add last rule if exists
-        if (currentRule != null && currentRules != null)
+        var result = new List<PermissionRule>(rules.Count);
+        foreach (var rule in rules)
         {
-            currentRules.Add(currentRule);
-        }
+            if (string.IsNullOrWhiteSpace(rule.Pattern))
+            {
+                throw new PermissionConfigException(filePath, $"a rule in '{section}' has no pattern");
+            }
 
-        return config;
+            result.Add(new PermissionRule
+            {
+                Pattern = rule.Pattern,
+                Action = rule.Action is null ? PermissionAction.Ask : ParseAction(filePath, section, rule.Action),
+                Priority = rule.Priority ?? 0,
+                Reason = rule.Reason
+            });
+        }
+        return result;
     }
 
-    private static string ExtractValue(string line, string prefix)
-    {
-        var value = line[prefix.Length..].Trim();
-        // Remove quotes if present
-        if ((value.StartsWith('"') && value.EndsWith('"')) ||
-            (value.StartsWith('\'') && value.EndsWith('\'')))
-        {
-            value = value[1..^1];
-        }
-        return value;
-    }
-
-    private static PermissionAction ParseAction(string value)
-    {
-        return value.ToLowerInvariant() switch
+    private static PermissionAction ParseAction(string filePath, string where, string value)
+        => value.Trim().ToLowerInvariant() switch
         {
             "allow" => PermissionAction.Allow,
             "deny" => PermissionAction.Deny,
             "ask" => PermissionAction.Ask,
-            _ => PermissionAction.Ask
+            _ => throw new PermissionConfigException(filePath, $"'{value}' in '{where}' is not an action (allow, deny or ask)")
         };
-    }
 
     private sealed class PermissionConfigWrapper
     {
         public PermissionConfig? Permissions { get; set; }
+    }
+
+    private sealed class YamlPermissionFile
+    {
+        public YamlPermissionSection? Permissions { get; set; }
+    }
+
+    private sealed class YamlPermissionSection
+    {
+        public List<YamlPermissionRule>? Read { get; set; }
+        public List<YamlPermissionRule>? Edit { get; set; }
+        public List<YamlPermissionRule>? Bash { get; set; }
+        public List<YamlPermissionRule>? ExternalDirectory { get; set; }
+        public List<YamlPermissionRule>? McpTools { get; set; }
+        public List<YamlPermissionRule>? Tools { get; set; }
+        public List<string>? ReadOnlyTools { get; set; }
+        public string? DefaultAction { get; set; }
+    }
+
+    private sealed class YamlPermissionRule
+    {
+        public string? Pattern { get; set; }
+        public string? Action { get; set; }
+        public int? Priority { get; set; }
+        public string? Reason { get; set; }
     }
 }

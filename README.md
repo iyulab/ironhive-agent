@@ -368,6 +368,8 @@ scoredBudget = max(floor, MaxTools - pinnedCount)
 
 ## Permission Defaults
 
+`PermissionConfigLoader` reads `.ironhive/permissions.yaml` (or `.yml`, `.json`). With no file, the defaults below apply. A file that exists but is not a permission configuration (malformed, no `permissions` section, a misspelled section or key, an action other than `allow`/`deny`/`ask`) throws `PermissionConfigException` rather than falling back to the defaults, which allow more than a restrictive file would.
+
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:
 
 **Read** — Allow `**/*`; Ask on `.env*` files; Deny `**/secrets/**`

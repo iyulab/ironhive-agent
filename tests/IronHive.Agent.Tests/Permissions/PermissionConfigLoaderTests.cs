@@ -1,4 +1,4 @@
-using IronHive.Agent.Permissions;
+﻿using IronHive.Agent.Permissions;
 
 namespace IronHive.Agent.Tests.Permissions;
 
@@ -129,19 +129,76 @@ public class PermissionConfigLoaderTests : IDisposable
         Assert.NotEmpty(config.Read); // Default has rules
     }
 
+    // A file that exists but is not a permission configuration throws (0.19.0). It used to become
+    // PermissionConfig.CreateDefault(), which allows more than a restrictive file would: a typo widened the policy.
     [Fact]
-    public void LoadFromYaml_InvalidYaml_ReturnsDefault()
+    public void LoadFromYaml_InvalidYaml_Throws()
     {
-        // Arrange - completely invalid YAML
-        var yamlContent = "this is not: : : valid yaml {{}}";
         var filePath = Path.Combine(_tempDir, "invalid.yaml");
-        File.WriteAllText(filePath, yamlContent);
+        File.WriteAllText(filePath, "this is not: : : valid yaml {{}}");
 
-        // Act
-        var config = PermissionConfigLoader.LoadFromYaml(filePath);
+        var ex = Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromYaml(filePath));
+        Assert.Equal(filePath, ex.FilePath);
+    }
 
-        // Assert - should return default config, not throw
-        Assert.NotNull(config);
+    [Fact]
+    public void LoadFromYaml_MisspelledSection_Throws_InsteadOfDroppingItsRules()
+    {
+        var filePath = Path.Combine(_tempDir, "permissions.yaml");
+        File.WriteAllText(filePath, """
+            permissions:
+              raed:
+                - pattern: "**/secrets/**"
+                  action: deny
+            """);
+
+        var ex = Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromYaml(filePath));
+        Assert.Contains("raed", ex.Message);
+    }
+
+    [Fact]
+    public void LoadFromYaml_UnknownAction_Throws_InsteadOfBecomingAsk()
+    {
+        var filePath = Path.Combine(_tempDir, "permissions.yaml");
+        File.WriteAllText(filePath, """
+            permissions:
+              bash:
+                - pattern: "rm -rf *"
+                  action: dney
+            """);
+
+        var ex = Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromYaml(filePath));
+        Assert.Contains("dney", ex.Message);
+    }
+
+    [Fact]
+    public void LoadFromYaml_NoPermissionsSection_Throws()
+    {
+        var filePath = Path.Combine(_tempDir, "permissions.yaml");
+        File.WriteAllText(filePath, "# nothing here yet\n");
+
+        Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromYaml(filePath));
+    }
+
+    [Fact]
+    public void LoadFromJson_MisspelledKey_Throws()
+    {
+        var filePath = Path.Combine(_tempDir, "permissions.json");
+        File.WriteAllText(filePath, """{ "permissions": { "raed": [ { "pattern": "**/*", "action": "deny" } ] } }""");
+
+        Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromJson(filePath));
+    }
+
+    [Fact]
+    public void LoadFromJson_Malformed_or_without_permissions_Throws()
+    {
+        var malformed = Path.Combine(_tempDir, "malformed.json");
+        File.WriteAllText(malformed, "{ \"permissions\": ");
+        var empty = Path.Combine(_tempDir, "empty.json");
+        File.WriteAllText(empty, "{ }");
+
+        Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromJson(malformed));
+        Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromJson(empty));
     }
 
     #endregion
@@ -284,18 +341,12 @@ public class PermissionConfigLoaderTests : IDisposable
     }
 
     [Fact]
-    public void Load_UnknownExtension_ReturnsDefault()
+    public void Load_UnknownExtension_Throws()
     {
-        // Arrange
         var filePath = Path.Combine(_tempDir, "permissions.txt");
         File.WriteAllText(filePath, "some content");
 
-        // Act
-        var config = PermissionConfigLoader.Load(filePath);
-
-        // Assert
-        Assert.NotNull(config);
-        Assert.NotEmpty(config.Read); // Default config
+        Assert.Throws<ArgumentException>(() => PermissionConfigLoader.Load(filePath));
     }
 
     #endregion
