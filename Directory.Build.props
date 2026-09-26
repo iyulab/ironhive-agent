@@ -28,7 +28,7 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.19.2</Version>
+    <Version>0.19.3</Version>
   </PropertyGroup>
 
   <!-- Ship the XML documentation with the package (2026-09-17, umbrella check-xml-doc-file): without this the nupkg
