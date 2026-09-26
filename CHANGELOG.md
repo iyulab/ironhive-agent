@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.19.6] - Unreleased
+
+### Fixed
+- **`McpPluginHotReloader` can be disposed synchronously.** It implemented only `IAsyncDisposable`, so a host that
+  disposed it with `using` or registered it in a synchronously disposed container scope got an exception instead of
+  the watcher stopping and the plugins disconnecting. It now implements `IDisposable` too, blocking on `DisposeAsync`.
+
 ## [0.19.5] - 2026-09-26
 
 ### Changed

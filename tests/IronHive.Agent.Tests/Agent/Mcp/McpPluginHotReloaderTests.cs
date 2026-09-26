@@ -208,6 +208,20 @@ public class McpPluginHotReloaderTests
     }
 
     [Fact]
+    public async Task SynchronousDispose_StopsTheReloader()
+    {
+        // A host that disposes with `using` or a synchronously disposed container scope; before 0.19.6 this threw.
+        var manager = new McpPluginManager();
+        var reloader = new McpPluginHotReloader(manager, new McpPluginsConfig(), enableFileWatcher: false);
+
+        ((IDisposable)reloader).Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => reloader.IncludePluginAsync("p", TestContext.Current.CancellationToken));
+        await manager.DisposeAsync();
+    }
+
+    [Fact]
     public async Task AfterDispose_MethodsThrowObjectDisposedException()
     {
         var manager = new McpPluginManager();

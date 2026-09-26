@@ -4,7 +4,7 @@ namespace IronHive.Agent.Mcp;
 /// Watches for configuration file changes and reloads plugins automatically.
 /// Provides hot reload capability for MCP plugins.
 /// </summary>
-public class McpPluginHotReloader : IAsyncDisposable
+public class McpPluginHotReloader : IAsyncDisposable, IDisposable
 {
     private readonly IMcpPluginManager _pluginManager;
     private readonly string _watchDirectory;
@@ -341,6 +341,16 @@ public class McpPluginHotReloader : IAsyncDisposable
         }
 
         return a.All(kvp => b.TryGetValue(kvp.Key, out var value) && value == kvp.Value);
+    }
+
+    /// <summary>
+    /// Disposes synchronously by blocking on <see cref="DisposeAsync"/> — for a host that disposes the reloader with
+    /// <c>using</c> or registers it in a synchronously disposed container scope, which would otherwise throw.
+    /// </summary>
+    public void Dispose()
+    {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+        GC.SuppressFinalize(this);
     }
 
     /// <inheritdoc />
