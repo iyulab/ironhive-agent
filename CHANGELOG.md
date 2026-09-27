@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.19.13] - 2026-09-28
+
+### Changed
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.16 -> 0.19.17 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+
 ## [0.19.12] - 2026-09-28
 
 ### Changed
