@@ -135,4 +135,19 @@ public class CompactionConfig
     /// Use this for local/custom models whose context window is not in the built-in lookup table.
     /// </summary>
     public int? MaxContextTokens { get; set; }
+
+    /// <summary>
+    /// When the model's context window is not known — <see cref="MaxContextTokens"/> is not set and the model is not in the
+    /// catalog, so the counter falls back to a guess — do not compact pre-emptively against the guess. Instead, when a model
+    /// call fails with <c>ContextOverflowException</c>, compact that request once and retry it, and learn the window from the
+    /// error (its stated window, or else the size that overflowed) so later turns compact against the real number.
+    /// A second overflow on the retry propagates.
+    /// <para>
+    /// Needs a <see cref="ToolRoundContextChatClient"/> in the chat pipeline (<c>.UseFunctionInvocation().UseToolRoundContext()</c>)
+    /// — that is where overflows are caught, on every model call including each tool round. Without one, the manager keeps
+    /// compacting pre-emptively against the guess. When the window is known, compaction stays pre-emptive; an overflow that still
+    /// happens (a configured window larger than the server's) is caught and handled the same way. Default: <c>true</c>.
+    /// </para>
+    /// </summary>
+    public bool CompactOnOverflow { get; set; } = true;
 }

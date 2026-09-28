@@ -31,4 +31,18 @@ public interface IContextTokenCounter
     /// Gets the maximum context window size for the model.
     /// </summary>
     int MaxContextTokens { get; }
+
+    /// <summary>
+    /// <c>true</c> while <see cref="MaxContextTokens"/> is a guess rather than the model's known window — the model was
+    /// not configured with a size and is not in the catalog. A context manager built with
+    /// <see cref="CompactionConfig.CompactOnOverflow"/> then compacts when the server reports an overflow instead of
+    /// pre-emptively against the guess. Defaults to <c>false</c> (a counter that does not say is taken at its word).
+    /// </summary>
+    bool IsContextWindowEstimated => false;
+
+    /// <summary>
+    /// Replaces <see cref="MaxContextTokens"/> with a window learned from the server (a context-overflow error that states
+    /// it, or the size of a request that overflowed). Returns <c>false</c> when this counter cannot learn one.
+    /// </summary>
+    bool LearnContextWindow(int tokens) => false;
 }

@@ -520,7 +520,24 @@ when it is constructed over that client.
 The tool calls stay, so the model still knows what it read; only results longer than
 `ObservationMaskingMinResultLength` are replaced, and only in the request — `History` keeps them in full.
 `ToolRoundContextChatClient` also applies tool-result compaction (`EnableToolResultCompaction`) per round. It makes no LLM
-call; summarizing compaction still runs once per turn in the loop.
+call of its own, except to compact after an overflow (below); summarizing compaction otherwise runs once per turn in the loop.
+
+### When the context window is not known
+
+A server that does not report its window (many OpenAI-compatible servers) leaves `MaxContextTokens` unset, and for a model
+name the catalog does not know, the counter guesses 8192. Compacting against that guess summarizes far too early on a large
+server. With `ToolRoundContextChatClient` in the pipeline (as above), `CompactionConfig.CompactOnOverflow` (default `true`)
+waits for the server instead:
+
+- while the window is a guess (`ContextManager.DefersCompactionToOverflow`), no pre-emptive compaction runs;
+- a model call that fails with `ContextOverflowException` is compacted once (to `TargetRatio` of the window) and retried once;
+  a second overflow propagates, and a streaming call is retried only if nothing was streamed yet;
+- the window is learned from the error (`ContextWindow`, or else the size that overflowed as an upper bound), so later
+  turns compact pre-emptively against it. `ContextManager.LearnContextWindow(tokens)` sets it directly.
+
+Later tool rounds of the same turn reuse the compacted messages, so a turn compacts once. Set `CompactOnOverflow = false`
+to keep compacting against the guess. With a known window nothing changes, except that an overflow that still happens is
+caught the same way.
 
 ### Tools the host runs
 

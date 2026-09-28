@@ -8,23 +8,35 @@ namespace IronHive.Agent.Context;
 /// </summary>
 public class ContextTokenCounter : IContextTokenCounter
 {
-    private readonly int _maxContextTokens;
+    private int _maxContextTokens;
 
     private const int MessageOverhead = 4;
 
     public ContextTokenCounter(string modelName = "gpt-4o", int? maxContextTokens = null)
     {
         ModelName = modelName;
-        _maxContextTokens = maxContextTokens
-            ?? ModelCatalog.FindModel(modelName)?.ContextWindow
-            ?? 8192;
+        var known = maxContextTokens ?? ModelCatalog.FindModel(modelName)?.ContextWindow;
+        _maxContextTokens = known ?? 8192;
+        IsContextWindowEstimated = known is null;
     }
 
     /// <inheritdoc />
     public string ModelName { get; }
 
     /// <inheritdoc />
-    public int MaxContextTokens => _maxContextTokens;
+    public int MaxContextTokens => Volatile.Read(ref _maxContextTokens);
+
+    /// <inheritdoc />
+    public bool IsContextWindowEstimated { get; private set; }
+
+    /// <inheritdoc />
+    public bool LearnContextWindow(int tokens)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tokens);
+        Volatile.Write(ref _maxContextTokens, tokens);
+        IsContextWindowEstimated = false;
+        return true;
+    }
 
     /// <inheritdoc />
     public int CountTokens(string text)

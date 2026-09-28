@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.23.0] - Unreleased
+
+### Added
+- **Compaction waits for the server when the context window is not known (`CompactionConfig.CompactOnOverflow`, default
+  on).** When `MaxContextTokens` is unset and the model is not in the catalog, the counter guesses 8192, and the loop
+  summarized the history from about the third turn on a server with a far larger window. With `ToolRoundContextChatClient` in
+  the pipeline, pre-emptive compaction is now withheld while the window is a guess. A model call that fails with
+  `ContextOverflowException` is compacted once and retried once, and the window is learned from the error for the rest of the
+  session (`ContextManager.LearnContextWindow`, `IContextTokenCounter.IsContextWindowEstimated`). Without that client, or with
+  a known window, compaction stays pre-emptive as before.
+
+### Fixed
+- **`CompactionConfig.TargetRatio` is honoured.** Compaction always reduced the history to 70 % of the window whatever the
+  setting said; it now uses the configured ratio (default still 0.70).
+
 ## [0.22.0] - 2026-09-28
 
 ### Changed

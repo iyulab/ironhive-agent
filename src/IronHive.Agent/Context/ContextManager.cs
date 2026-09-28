@@ -1,3 +1,4 @@
+using IronHive.Abstractions.Exceptions;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -66,8 +67,9 @@ public sealed record ContextFitSection(string Name, int Tokens);
 public class ContextManager
 {
     private readonly IContextTokenCounter _tokenCounter;
-    private readonly ICompactionTrigger _compactionTrigger;
-    private readonly IHistoryCompactor _historyCompactor;
+    private ICompactionTrigger _compactionTrigger;
+    private IHistoryCompactor _historyCompactor;
+    private int _overflowHandlers;
     private readonly GoalReminder _goalReminder;
     private readonly ToolResultCompactor? _toolResultCompactor;
     private readonly ObservationMasker? _observationMasker;
@@ -148,6 +150,73 @@ public class ContextManager
     public int MaxContextTokens => _tokenCounter.MaxContextTokens;
 
     /// <summary>
+    /// Compact when the server reports an overflow rather than pre-emptively against a guessed window
+    /// (<see cref="CompactionConfig.CompactOnOverflow"/>). Set by <see cref="ForModel(string, CompactionConfig, IChatClient?)"/>.
+    /// </summary>
+    public bool CompactOnOverflow { get; init; }
+
+    /// <summary>
+    /// The share of the window a compaction reduces the history to (<see cref="CompactionConfig.TargetRatio"/>). Default 0.70.
+    /// </summary>
+    public float TargetRatio { get; init; } = 0.70f;
+
+    /// <summary>
+    /// <c>true</c> while pre-emptive compaction is withheld: <see cref="CompactOnOverflow"/> is on, the window is still a guess
+    /// (<see cref="IContextTokenCounter.IsContextWindowEstimated"/>), and a <see cref="ToolRoundContextChatClient"/> bound to this
+    /// manager will catch the overflow. Without such a client nothing would catch it, so the guess is used as before.
+    /// </summary>
+    public bool DefersCompactionToOverflow
+        => CompactOnOverflow && Volatile.Read(ref _overflowHandlers) > 0 && _tokenCounter.IsContextWindowEstimated;
+
+    // Rebuilds the parts sized from the window (the token-based trigger and compactor clamp their budgets to it) once the
+    // window is learned. Null for a manager assembled by hand; its parts are the caller's.
+    internal Func<int, (ICompactionTrigger Trigger, IHistoryCompactor Compactor)>? RebuildForWindow { get; init; }
+
+    internal void AttachOverflowHandler() => Interlocked.Increment(ref _overflowHandlers);
+
+    /// <summary>
+    /// Replaces the guessed window with <paramref name="tokens"/> learned from the server, and resizes the window-sized
+    /// compaction parts to it. Returns <c>false</c> when the token counter cannot learn a window.
+    /// </summary>
+    public bool LearnContextWindow(int tokens)
+    {
+        if (!_tokenCounter.LearnContextWindow(tokens))
+        {
+            return false;
+        }
+
+        if (RebuildForWindow is { } rebuild)
+        {
+            var (trigger, compactor) = rebuild(tokens);
+            _compactionTrigger = trigger;
+            _historyCompactor = compactor;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Compacts a request the server refused as too long, and learns the window from the refusal: the window it states,
+    /// or else the size that overflowed (an upper bound; a smaller real window is learned on the next overflow).
+    /// </summary>
+    internal async Task<IReadOnlyList<ChatMessage>> CompactAfterOverflowAsync(
+        IReadOnlyList<ChatMessage> messages,
+        ContextOverflowException overflow,
+        CancellationToken cancellationToken)
+    {
+        var window = overflow.ContextWindow is > 0 and var stated
+            ? stated
+            : overflow.RequestTokens is > 0 and var sent ? sent : _tokenCounter.CountTokens(messages);
+        LearnContextWindow(window);
+
+        var result = await _historyCompactor.CompactAsync(messages, (int)(window * TargetRatio), cancellationToken);
+        return result.CompactedHistory;
+    }
+
+    private bool NeedsCompaction(int currentTokens)
+        => !DefersCompactionToOverflow && _compactionTrigger.ShouldCompact(currentTokens, _tokenCounter.MaxContextTokens);
+
+    /// <summary>
     /// Gets the current context usage.
     /// </summary>
     public ContextUsage GetUsage(IReadOnlyList<ChatMessage> history)
@@ -158,7 +227,7 @@ public class ContextManager
         {
             CurrentTokens = currentTokens,
             MaxTokens = _tokenCounter.MaxContextTokens,
-            NeedsCompaction = _compactionTrigger.ShouldCompact(currentTokens, _tokenCounter.MaxContextTokens),
+            NeedsCompaction = NeedsCompaction(currentTokens),
             MessageCount = history.Count
         };
     }
@@ -168,8 +237,7 @@ public class ContextManager
     /// </summary>
     public bool ShouldCompact(IReadOnlyList<ChatMessage> history)
     {
-        var currentTokens = _tokenCounter.CountTokens(history);
-        return _compactionTrigger.ShouldCompact(currentTokens, _tokenCounter.MaxContextTokens);
+        return NeedsCompaction(_tokenCounter.CountTokens(history));
     }
 
     /// <summary>
@@ -184,7 +252,7 @@ public class ContextManager
     {
         var currentTokens = _tokenCounter.CountTokens(history);
 
-        if (!_compactionTrigger.ShouldCompact(currentTokens, _tokenCounter.MaxContextTokens))
+        if (!NeedsCompaction(currentTokens))
         {
             return new CompactionResult
             {
@@ -195,8 +263,8 @@ public class ContextManager
             };
         }
 
-        // Target: reduce to 70% of max to leave room for future messages
-        var targetTokens = (int)(_tokenCounter.MaxContextTokens * 0.70f);
+        // Reduce to TargetRatio of the window to leave room for future messages
+        var targetTokens = (int)(_tokenCounter.MaxContextTokens * TargetRatio);
 
         return await _historyCompactor.CompactAsync(history, targetTokens, cancellationToken);
     }
@@ -417,6 +485,7 @@ public class ContextManager
             UseAnchoredCompaction = source.UseAnchoredCompaction,
             MaxAnchorStateChars = source.MaxAnchorStateChars,
             MaxContextTokens = source.MaxContextTokens,
+            CompactOnOverflow = source.CompactOnOverflow,
         };
 
     /// <summary>
@@ -446,30 +515,28 @@ public class ContextManager
 
         var tokenCounter = new ContextTokenCounter(modelName, config.MaxContextTokens);
 
-        ICompactionTrigger compactionTrigger;
-        IHistoryCompactor historyCompactor;
+        (ICompactionTrigger Trigger, IHistoryCompactor Compactor) WindowSized(int maxContextTokens)
+        {
+            if (config.UseAnchoredCompaction)
+            {
+                var (effectiveProtect, effectivePrune) = ClampToContext(
+                    config.ProtectRecentTokens, config.MinimumPruneTokens, maxContextTokens);
+                return (new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune),
+                    new AnchoredHistoryCompactor(tokenCounter, CloneWithClampedProtect(config, effectiveProtect, effectivePrune), summarizer));
+            }
 
-        if (config.UseAnchoredCompaction)
-        {
-            var (effectiveProtect, effectivePrune) = ClampToContext(
-                config.ProtectRecentTokens, config.MinimumPruneTokens, tokenCounter.MaxContextTokens);
-            compactionTrigger = new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune);
-            var anchoredConfig = CloneWithClampedProtect(config, effectiveProtect, effectivePrune);
-            historyCompactor = new AnchoredHistoryCompactor(tokenCounter, anchoredConfig, summarizer);
+            if (config.UseTokenBasedCompaction)
+            {
+                var (effectiveProtect, effectivePrune) = ClampToContext(
+                    config.ProtectRecentTokens, config.MinimumPruneTokens, maxContextTokens);
+                return (new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune),
+                    new TokenBasedHistoryCompactor(tokenCounter, CloneWithClampedProtect(config, effectiveProtect, effectivePrune), summarizer));
+            }
+
+            return (new ThresholdCompactionTrigger(config.ThresholdPercentage), new HistoryCompactor(tokenCounter, summarizer));
         }
-        else if (config.UseTokenBasedCompaction)
-        {
-            var (effectiveProtect, effectivePrune) = ClampToContext(
-                config.ProtectRecentTokens, config.MinimumPruneTokens, tokenCounter.MaxContextTokens);
-            compactionTrigger = new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune);
-            var tokenConfig = CloneWithClampedProtect(config, effectiveProtect, effectivePrune);
-            historyCompactor = new TokenBasedHistoryCompactor(tokenCounter, tokenConfig, summarizer);
-        }
-        else
-        {
-            compactionTrigger = new ThresholdCompactionTrigger(config.ThresholdPercentage);
-            historyCompactor = new HistoryCompactor(tokenCounter, summarizer);
-        }
+
+        var (compactionTrigger, historyCompactor) = WindowSized(tokenCounter.MaxContextTokens);
 
         ToolResultCompactor? toolResultCompactor = config.EnableToolResultCompaction
             ? new ToolResultCompactor(
@@ -489,6 +556,11 @@ public class ContextManager
             tokenCounter, compactionTrigger, historyCompactor,
             goalReminderOptions: config.GoalReminder,
             toolResultCompactor: toolResultCompactor,
-            observationMasker: observationMasker);
+            observationMasker: observationMasker)
+        {
+            CompactOnOverflow = config.CompactOnOverflow,
+            TargetRatio = config.TargetRatio,
+            RebuildForWindow = WindowSized,
+        };
     }
 }

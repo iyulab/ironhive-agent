@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using IronHive.Abstractions.Exceptions;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -23,10 +25,21 @@ namespace IronHive.Agent.Context;
 /// binds its own <see cref="ContextManager"/> when it is constructed (<see cref="Bind"/>, found through
 /// <see cref="IChatClient.GetService"/>).
 /// </para>
+/// <para>
+/// With <see cref="Context.ContextManager.CompactOnOverflow"/> on, this is also where an overflow is caught: a call that
+/// fails with <see cref="ContextOverflowException"/> is compacted once by the manager (a summarizing compaction, the one
+/// LLM call this client may cause), the window is learned from the error, and the call is retried once; a second overflow
+/// propagates. A streaming call is retried only if the failure came before its first update. The compacted prefix is
+/// reused for the turn's later tool rounds, which re-send the same messages plus the new ones, so one turn compacts once.
+/// </para>
 /// </remarks>
 public sealed class ToolRoundContextChatClient : DelegatingChatClient
 {
     private ContextManager? _contextManager;
+
+    // The messages an overflow compaction replaced, and what replaced them. A later call whose messages start with the
+    // same instances (the next tool round of the turn) sends the replacement plus its new tail instead.
+    private (ChatMessage[] Original, IReadOnlyList<ChatMessage> Compacted)? _overflowCompaction;
 
     /// <summary>Creates the client unbound: requests pass through unchanged until <see cref="Bind"/>.</summary>
     public ToolRoundContextChatClient(IChatClient innerClient)
@@ -38,6 +51,7 @@ public sealed class ToolRoundContextChatClient : DelegatingChatClient
         : base(innerClient)
     {
         _contextManager = contextManager ?? throw new ArgumentNullException(nameof(contextManager));
+        contextManager.AttachOverflowHandler();
     }
 
     /// <summary>The manager whose reductions are applied, or <c>null</c> while unbound.</summary>
@@ -55,7 +69,11 @@ public sealed class ToolRoundContextChatClient : DelegatingChatClient
     {
         ArgumentNullException.ThrowIfNull(contextManager);
         var previous = Interlocked.CompareExchange(ref _contextManager, contextManager, null);
-        if (previous is not null && !ReferenceEquals(previous, contextManager))
+        if (previous is null)
+        {
+            contextManager.AttachOverflowHandler();
+        }
+        else if (!ReferenceEquals(previous, contextManager))
         {
             throw new InvalidOperationException(
                 "This chat client's ToolRoundContextChatClient is already bound to another loop's ContextManager. " +
@@ -64,19 +82,105 @@ public sealed class ToolRoundContextChatClient : DelegatingChatClient
     }
 
     /// <inheritdoc />
-    public override Task<ChatResponse> GetResponseAsync(
+    public override async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        => base.GetResponseAsync(Reduce(messages), options, cancellationToken);
+    {
+        var request = Prepare(messages, out var original);
+        try
+        {
+            return await base.GetResponseAsync(request, options, cancellationToken);
+        }
+        catch (ContextOverflowException overflow) when (_contextManager is { CompactOnOverflow: true })
+        {
+            var compacted = await CompactAfterOverflowAsync(original, request, overflow, cancellationToken);
+            return await base.GetResponseAsync(compacted, options, cancellationToken);
+        }
+    }
 
     /// <inheritdoc />
-    public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        => base.GetStreamingResponseAsync(Reduce(messages), options, cancellationToken);
+    public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var request = Prepare(messages, out var original);
+        var updates = base.GetStreamingResponseAsync(request, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        try
+        {
+            bool any;
+            try
+            {
+                any = await updates.MoveNextAsync();
+            }
+            catch (ContextOverflowException overflow) when (_contextManager is { CompactOnOverflow: true })
+            {
+                // Nothing has been yielded yet, so the call can still be made again as if it were the first.
+                await updates.DisposeAsync();
+                var compacted = await CompactAfterOverflowAsync(original, request, overflow, cancellationToken);
+                updates = base.GetStreamingResponseAsync(compacted, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                any = await updates.MoveNextAsync();
+            }
 
-    private IEnumerable<ChatMessage> Reduce(IEnumerable<ChatMessage> messages)
-        => _contextManager is { } manager
-            ? manager.ReduceToolResults(messages as IReadOnlyList<ChatMessage> ?? [.. messages])
-            : messages;
+            if (!any)
+            {
+                yield break;
+            }
+
+            yield return updates.Current;
+            while (await updates.MoveNextAsync())
+            {
+                yield return updates.Current;
+            }
+        }
+        finally
+        {
+            await updates.DisposeAsync();
+        }
+    }
+
+    private IEnumerable<ChatMessage> Prepare(IEnumerable<ChatMessage> messages, out IReadOnlyList<ChatMessage> original)
+    {
+        var list = messages as IReadOnlyList<ChatMessage> ?? [.. messages];
+        original = list;
+        if (_contextManager is not { } manager)
+        {
+            return list;
+        }
+
+        if (_overflowCompaction is { } previous && StartsWith(list, previous.Original))
+        {
+            list = [.. previous.Compacted, .. list.Skip(previous.Original.Length)];
+        }
+
+        return manager.ReduceToolResults(list);
+    }
+
+    private async Task<IReadOnlyList<ChatMessage>> CompactAfterOverflowAsync(
+        IReadOnlyList<ChatMessage> original, IEnumerable<ChatMessage> sent, ContextOverflowException overflow,
+        CancellationToken cancellationToken)
+    {
+        var compacted = await _contextManager!.CompactAfterOverflowAsync(
+            sent as IReadOnlyList<ChatMessage> ?? [.. sent], overflow, cancellationToken);
+        _overflowCompaction = ([.. original], compacted);
+        return compacted;
+    }
+
+    private static bool StartsWith(IReadOnlyList<ChatMessage> messages, ChatMessage[] prefix)
+    {
+        if (messages.Count < prefix.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < prefix.Length; i++)
+        {
+            if (!ReferenceEquals(messages[i], prefix[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 /// <summary>
