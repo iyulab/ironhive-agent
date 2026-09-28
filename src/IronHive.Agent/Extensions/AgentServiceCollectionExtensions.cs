@@ -52,22 +52,18 @@ public static class AgentServiceCollectionExtensions
             new ModeToolFilter(sp.GetRequiredService<IPermissionEvaluator>()));
         services.AddSingleton<IAvailableToolsContext, AvailableToolsContext>();
 
-        // Register context management
-        services.AddSingleton<IContextTokenCounter, ContextTokenCounter>();
-        services.AddSingleton<ICompactionTrigger>(sp =>
-        {
-            var compactionConfig = sp.GetService<CompactionConfig>() ?? new CompactionConfig();
-            return new TokenBasedCompactionTrigger(
-                compactionConfig.ProtectRecentTokens,
-                compactionConfig.MinimumPruneTokens);
-        });
-        services.AddSingleton<IHistoryCompactor>(sp =>
-        {
-            var compactionConfig = sp.GetService<CompactionConfig>() ?? new CompactionConfig();
-            var tokenCounter = sp.GetRequiredService<IContextTokenCounter>();
-            return new TokenBasedHistoryCompactor(tokenCounter, compactionConfig);
-        });
-        services.AddSingleton<ContextManager>();
+        // Register context management. The container's ContextManager applies the registered CompactionConfig
+        // (AddIronHiveAgentContext) in full — trigger, compactor, tool-result compaction, observation masking, goal
+        // reminder, CompactOnOverflow, TargetRatio — the same way ContextManager.ForModel does. It is built on the
+        // container's token counter: with no model to name, the window is CompactionConfig.MaxContextTokens, or a guess
+        // that the first overflow corrects (CompactOnOverflow).
+        services.AddSingleton<IContextTokenCounter>(sp =>
+            new ContextTokenCounter(maxContextTokens: (sp.GetService<CompactionConfig>() ?? new CompactionConfig()).MaxContextTokens));
+        services.AddSingleton(sp => ContextManager.FromConfig(
+            sp.GetRequiredService<IContextTokenCounter>(),
+            sp.GetService<CompactionConfig>() ?? new CompactionConfig(),
+            summarizer: null,
+            instructionContributors: sp.GetServices<ISystemInstructionContributor>()));
 
         // Register permission evaluation (on the consumer's PermissionConfig when one is registered)
         services.TryAddSingleton<IPermissionEvaluator>(sp =>
@@ -156,7 +152,9 @@ public static class AgentServiceCollectionExtensions
         this IServiceCollection services,
         Action<PermissionConfig>? configure = null)
     {
-        var config = new PermissionConfig();
+        // Starts from the default rules (PermissionConfig.CreateDefault), as the container does when no configuration
+        // is registered: configuring one rule must not silently drop the rest.
+        var config = PermissionConfig.CreateDefault();
         configure?.Invoke(config);
 
         services.AddSingleton(config);

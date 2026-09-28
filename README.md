@@ -5,22 +5,22 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 ## Features
 
 - **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs))
-- **Context Management**: Auto-compaction (92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
+- **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Agent Skills (`SKILL.md`)**: `SkillsLoader.Create(new SkillsConfig { Roots = [userSkillsDir, projectSkillsDir] })` discovers skills per the [Agent Skills specification](https://agentskills.io/specification) and validates them as `skills-ref validate` does (invalid ones are *reported* in `Diagnostics`, never thrown; the first root wins a name collision and the shadowed one is reported). `loader.Contributor` puts every name + description in the system instructions; `loader.LoadTool` (`load_skill`) returns a skill's body — or a file inside its directory, and nothing outside it — on demand. `Enabled`/`Exclude`/`Filter` narrow the set per session; `MaxMetadataCharacters` bounds the section and what does not fit is in `Dropped`/`DroppedCount` (still loadable by name). `SkillDiscovery.Discover(config)` is the same discovery as a plain call, for a UI that lists skills before a session exists. Frontmatter keys the specification does not define reject the skill by default (as `skills-ref validate` does); `UnknownFields = UnknownFieldPolicy.Accept` loads such skills and reports the keys as a warning — skill trees written for one client's extensions (e.g. `argument-hint`) need this. A name in `Enabled` that matches nothing is reported (`EnabledNotFound`), not dropped silently. DI: `services.AddAgentSkills(config)` registers the loader and its contributor; add `LoadTool` to the loop's tools yourself. Text only — `scripts/` are never executed; `allowed-tools` is parsed, not enforced
 - **System instruction sections**: add to the system instructions without replacing the prompt — implement `ISystemInstructionContributor` and register it in the container (or `ContextManager.AddInstructionContributor`); needs a `ContextManager` on the loop
-- **Built-in Tools**: Read, Write, Shell, Glob, Grep, Todo — `BuiltInTools.GetAll(workingDirectory)`. A host decides where they reach and what runs around a write with `FileToolOptions`: `BuiltInTools.GetAll(workingDirectory, new FileToolOptions { AllowedRoots = ["."], WriteInterceptor = ... })`. The working directory alone is not a boundary — `AllowedRoots` is (default: none, opt-in)
+- **Built-in Tools**: Read, Write, ListDirectory, Shell, Glob, Grep, Todo — `BuiltInTools.GetAll(workingDirectory)`. A host decides where they reach and what runs around a write with `FileToolOptions`: `BuiltInTools.GetAll(workingDirectory, new FileToolOptions { AllowedRoots = ["."], WriteInterceptor = ... })`. The working directory alone is not a boundary — `AllowedRoots` is (default: none, opt-in)
 - **Delegation (agent as a tool, `IronHive.Agent.Ironbees` package)**: `DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research", Model = ..., MaxToolTurns = ... })` turns an Ironbees named agent into an `AIFunction` the model calls to hand off a sub-task. Each call is an isolated run of that agent — its `agent.yaml` tools (an agent that lists `tools` gets exactly those), prompt and model, with per-delegation model, reasoning level, output cap and tool-turn limit. `DelegationOptions` bounds nesting depth (across agents), concurrency, and feeds the delegated usage into the parent's `IUsageLimiter`/`IUsageTracker`. A run that stops at its turn limit comes back marked partial. Not registered by `AddIronHiveAgent`: create the tools where the orchestrator is available and add them to the loop's `Tools`. To call a named agent from application code instead, use `IAgentOrchestrator.ProcessStructuredAsync(input, new ProcessOptions { AgentName = ... })`
 - **Advisor (consult a stronger model)**: `AdvisorTool.Create(strongerClient, new AdvisorOptions { ModelId = ..., MaxCalls = 5 })` gives the working model a no-argument tool that sends the conversation so far — its requests, tool calls and results — to a stronger model and returns that model's review. The working model decides when to consult (the default description says: before committing to an approach, when stuck, before declaring done), so the strong model is paid for only where judgment matters. Works under `FunctionInvokingChatClient` and inside Ironbees agents (`ChatClientFrameworkAdapter`); elsewhere pass `AdvisorOptions.Conversation`. The advisor is never given tools; `MaxCalls`, `UsageLimiter` and `UsageTracker` bound and account for it. Not registered by `AddIronHiveAgent`: add the tool to the loop's `Tools`
 - **Long-term session memory (`IronHive.Agent.Memory` package)**: `new SessionMemoryService(memoryService, userId)` implements `ISessionMemoryService` over a MemoryIndexer `IMemoryService`; `EmbeddingServiceAdapter` (over an `IAgentEmbeddingProvider`) and `TextCompletionServiceAdapter` (over an `IChatClient`) supply the MemoryIndexer services it needs. The interfaces (`ISessionMemoryService`, `IAgentEmbeddingProvider`) live in `IronHive.Agent`, so a host that does not use memory ships no MemoryIndexer.
-- **Deep research (`IronHive.DeepResearch` package)**: `AddDeepResearch(...)` registers an iterative research pipeline — query planning, web search, content extraction, sufficiency analysis, then a cited report — over one text-generation service (`ChatClientTextGenerationAdapter` for an `IChatClient`). Results report the run's token usage; the cost is left null because the run does not know which model priced its calls. Tune it through the options callback: `services.AddDeepResearch(chatClient, o => { o.SufficiencyThreshold = 0.7m; o.MinSourcesBeforeReport = 5; o.MaxSearchRetriesPerIteration = 2; })`. `SufficiencyThreshold` is the score at which research stops. `MinSourcesBeforeReport` keeps it iterating while fewer sources were collected and a gap remains. The per-query iteration limit is `ResearchRequest.MaxIterations`, capped by `Depth`
+- **Deep research (`IronHive.DeepResearch` package)**: `AddDeepResearch(...)` registers an iterative research pipeline — query planning, web search, content extraction, sufficiency analysis, then a cited report — over one text-generation service (`ChatClientTextGenerationAdapter` for an `IChatClient`). Results report the run's token usage; the cost is left null because the run does not know which model priced its calls. Tune it through the options callback: `services.AddDeepResearch(chatClient, o => { o.SufficiencyThreshold = 0.7m; o.MinSourcesBeforeReport = 5; o.MaxSearchRetriesPerIteration = 2; })`. `SufficiencyThreshold` is the score at which research stops. `MinSourcesBeforeReport` keeps it iterating while fewer sources were collected and a gap remains. The per-query iteration limit is `ResearchRequest.MaxIterations`, capped by `Depth`. Run it through the registered `IDeepResearcher`: `await sp.GetRequiredService<IDeepResearcher>().ResearchAsync(new ResearchRequest { Query = "..." })` (`ResearchStreamAsync` yields progress as it goes). Tavily web search needs its API key in `DeepResearchOptions.SearchApiKeys["tavily"]` (e.g. `o.SearchApiKeys["tavily"] = tavilyKey` in the options callback)
+- **Checkpoint contract**: `ICheckpointService` / `CheckpointInfo` — the shape of a host's pre-destructive-operation snapshot store. There is no built-in implementation and the loop does not call it; a host that wants checkpoints implements and invokes it
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
-- **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`
-- **Checkpoint Service**: `ICheckpointService` abstraction for pre-destructive-operation state snapshots and rollback
+- **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`. Not registered by `AddIronHiveAgent` — construct them where an `IChatClient` and the tools are available (or register them yourself)
 - **Usage Tracking**: Token/cost tracking (`IUsageTracker`) and session limits (`IUsageLimiter`, registered by `AddIronHiveAgent` when `UsageLimits` is set). Pass the limiter to `AgentLoop` or `ThinkingAgentLoop` (`usageLimiter:`) and a turn past the limit is refused with `UsageLimitExceededException`
 - **Error Recovery**: Categorized error handling with recovery strategies (`IErrorRecoveryService`). Passed to either loop (`errorRecovery:`), a buffered turn that fails transiently is retried once
-- **Webhook System**: Event notifications with HMAC signing
+- **Webhook System**: Event notifications with HMAC signing. Turn it on with `services.AddIronHiveAgent(o => o.Webhook = new WebhookConfig { Endpoints = [new WebhookEndpoint { Url = "...", Secret = "..." }] })` (per endpoint: `EventFilter`, `Headers`, `TimeoutSeconds`, `RetryCount`). The built-in sender is the usage limiter, which posts `TokenLimitWarning` / `CostLimitWarning` events — so it also needs `UsageLimits` set; other events are sent through `IWebhookService` by your own code
 
 ## Packages
 
@@ -28,7 +28,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 |---|---|
 | `IronHive.Agent` | Agent loop, context management, modes, approvals, MCP plugins, built-in tools, advisor tool, and the guard/memory seams |
 | `IronHive.DeepResearch` | Iterative web research pipeline with cited reports (`AddDeepResearch`) |
-| `IronHive.Agent.Ironbees` | Ironbees integration: `ChatClientFrameworkAdapter`, `AddIronbees`, `OrchestratedAgentLoop`, `DelegationTools` (a named agent as a tool), `IronbeesEmbeddingProviderAdapter` |
+| `IronHive.Agent.Ironbees` | Ironbees integration: `ChatClientFrameworkAdapter`, `AddIronbees`, `OrchestratedAgentLoop`, `DelegationTools` (a named agent as a tool), `IronbeesEmbeddingProviderAdapter`. `services.AddIronbees(o => ...)` takes an `Action<IronbeesOptions>` and needs a model client: set `IronbeesOptions.ChatClientFactory` (`Func<ModelConfig, IChatClient>`) or register an `IChatClient`. Options: `AgentsDirectory` (default `./agents`), `DefaultAgentName`, `SelectorType`, `EmbeddingProvider`, `HybridKeywordWeight`, `EnableToolExecution`, `WorkingDirectory`, `MaxToolTurns`, `ConversationsDirectory` |
 | `IronHive.Agent.FluxGuard` | FluxGuard-backed tool guards: `FluxGuardMcpToolCallGuard` (`IMcpToolCallGuard`), `McpGuardrailToolResultGuard` (`IToolResultGuard`), `AddIronHiveAgentFluxGuard()` |
 | `IronHive.Agent.Memory` | Long-term session memory over [MemoryIndexer](https://github.com/iyulab/memory-indexer): `SessionMemoryService` (`ISessionMemoryService`), `EmbeddingServiceAdapter` and `TextCompletionServiceAdapter` |
 
@@ -80,7 +80,10 @@ backends at runtime (e.g. a CLI that switches between a cloud and a local model)
 
 ```csharp
 using IronHive.Agent.Context;
+using IronHive.Agent.Loop;
 using IronHive.Agent.Providers;
+using Microsoft.Extensions.AI;
+using OpenAI;
 
 // One IChatClientProvider per backend
 public class OpenAiChatClientProvider : IChatClientProvider
@@ -135,7 +138,6 @@ IronHive.Agent/
 ├── Tools/          # Built-in tools (BuiltInTools, TodoTool)
 ├── Delegation/     # The advisor tool (AdvisorTool) and ToolInvocationScope
 ├── Planning/       # Plan-and-execute orchestration (DefaultTaskPlanner, DefaultPlanExecutor, HeuristicPlanEvaluator, PlannerTriggerDetector)
-├── Services/       # Cross-cutting services (ICheckpointService for pre-destructive-op snapshots)
 ├── Permissions/    # Permission evaluation and configuration
 ├── Tracking/       # Usage tracking and limits
 ├── Providers/      # Chat client, embedding, rerank provider abstractions
@@ -236,6 +238,13 @@ plugins:
       X-Session-Id: abc123
 ```
 
+`McpPluginsConfigLoader.LoadFromDefault(baseDirectory)` reads the first of `.ironhive/plugins.yaml`, `.ironhive/plugins.yml`,
+`.ironhive/plugins.json` (then `plugins.yaml|yml|json`) under the directory (default: the current directory), or returns an
+empty configuration. For hot reload, hand it to `new McpPluginHotReloader(pluginManager, config, watchDirectory)` and call
+`InitializeAsync()`: it connects the configured plugins (when `AutoConnect` is on) and, while the file watcher is on
+(`enableFileWatcher`, default `true`), re-reads the config when the file changes — connecting added plugins, disconnecting
+removed or excluded ones and reconnecting changed ones. `ReloadAsync(newConfig)` applies a configuration on demand.
+
 ## MCP Tool-Call Guardrail (opt-in)
 
 `McpPluginManager` accepts an optional `IMcpToolCallGuard` — when supplied, every `CallToolAsync` checks the request
@@ -249,6 +258,7 @@ detection, indirect-injection and sensitive-data checks on tool results):
 ```csharp
 using FluxGuard.Remote.MCP;
 using IronHive.Agent.FluxGuard;
+using IronHive.Agent.Mcp;
 
 var guardrail = new MCPToolValidator();
 guardrail.RegisterServer(new MCPServerInfo { Name = "filesystem", IsTrusted = true });
@@ -293,7 +303,7 @@ After the agent loop factory filters tools via `IModeToolFilter.FilterTools()`, 
 `IAvailableToolsContext` so that tool implementations can generate context-aware error messages.
 
 ```csharp
-// In your agent loop factory (e.g. FilerAgentLoopFactory.CreateAsync):
+// In your host's own agent loop factory (its IAgentLoopFactory.CreateAsync):
 var filteredTools = modeToolFilter.FilterTools(allTools, modeManager.CurrentMode);
 
 // Expose filtered tool names to tool implementations via DI
@@ -306,7 +316,7 @@ Tool implementations can then inject `IAvailableToolsContext` to produce accurat
 ```csharp
 public class FileSystemTools(IAvailableToolsContext availableTools)
 {
-    [AIFunction]
+    [Description("Write content to a file.")]
     public string WriteFile(string path, string content)
     {
         if (content.Length == 0)
@@ -319,6 +329,10 @@ public class FileSystemTools(IAvailableToolsContext availableTools)
         // ...
     }
 }
+
+// Register it like any other in-process tool (see Native (In-Process) Tools)
+var fileSystemTools = new FileSystemTools(availableToolsContext);
+AITool[] tools = [AIFunctionFactory.Create(fileSystemTools.WriteFile)];
 ```
 
 `IAvailableToolsContext` is registered as a singleton by `AddIronHiveAgent()`. Returns empty list
@@ -400,23 +414,30 @@ tool is asked about rather than run
 permits them next to the built-in read-only file tools; without a declaration a host tool never runs in Planning.
 This is a side-effect class, not a permission: `Tools` still decides `Allow` / `Ask` / `Deny`.
 
-```csharp
-services.Configure<PermissionConfig>(config => config.ReadOnlyTools.AddRange(["read_current_tab", "list_saved_*"]));
-```
-
-Override any category in your config:
+`AddIronHiveAgent()` reads a plain `PermissionConfig` registered in the container (not `IOptions<PermissionConfig>` —
+`services.Configure<PermissionConfig>(...)` has no effect); with none registered, `PermissionConfig.CreateDefault()` applies.
+To keep the defaults and add to them, register an edited copy:
 
 ```csharp
-services.Configure<PermissionConfig>(config =>
+var permissions = PermissionConfig.CreateDefault();
+permissions.ReadOnlyTools.AddRange(["read_current_tab", "list_saved_*"]);
+
+// Override any category
+permissions.McpTools.Add(new PermissionRule
 {
-    config.McpTools.Add(new PermissionRule
-    {
-        Pattern = "my_plugin_*",
-        Action = PermissionAction.Allow,
-        Priority = 5
-    });
+    Pattern = "my_plugin_*",
+    Action = PermissionAction.Allow,
+    Priority = 5
 });
+
+services.AddSingleton(permissions);
 ```
+
+`services.AddIronHiveAgentPermissions(config => ...)` registers the same way: it starts from
+`PermissionConfig.CreateDefault()` and applies your changes on top (before 0.25.0 it started from an empty config and
+dropped the default rules).
+Its counterpart for compaction is `services.AddIronHiveAgentContext(config => ...)`, which registers the
+`CompactionConfig` the container's compaction services read.
 
 ## Human Approval Gate
 
@@ -614,7 +635,7 @@ check needs the outcome too, confirm your client wraps function invocation.
 ## Related Projects
 
 - [ironhive](https://github.com/iyulab/ironhive) - LLM abstraction layer
-- [ironhive-cli](https://github.com/iyulab/ironhive-cli) - CLI application using this agent engine
+- [ironhive-host](https://github.com/iyulab/ironhive-host) - Agent host (CLI, server, embedding) using this agent engine
 - [ironbees](https://github.com/iyulab/ironbees) - Multi-agent management
 
 ## License

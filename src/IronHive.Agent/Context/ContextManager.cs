@@ -512,7 +512,27 @@ public class ContextManager
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var tokenCounter = new ContextTokenCounter(modelName, config.MaxContextTokens);
+        return FromConfig(new ContextTokenCounter(modelName, config.MaxContextTokens), config, summarizer);
+    }
+
+    /// <summary>
+    /// Creates a context manager that applies every <see cref="CompactionConfig"/> setting — compaction trigger and
+    /// compactor, tool-result compaction, observation masking, the goal reminder, <see cref="CompactOnOverflow"/> and
+    /// <see cref="TargetRatio"/> — on the given token counter. <see cref="ForModel(string, CompactionConfig, IChatClient?)"/>
+    /// and the container registration (<c>AddIronHiveAgent</c>) both build through this.
+    /// </summary>
+    /// <param name="tokenCounter">Token counter; its <see cref="IContextTokenCounter.MaxContextTokens"/> sizes the trigger.</param>
+    /// <param name="config">Compaction configuration.</param>
+    /// <param name="summarizer">Optional chat client for LLM-based summarization.</param>
+    /// <param name="instructionContributors">System instruction sections added to every prepared history.</param>
+    public static ContextManager FromConfig(
+        IContextTokenCounter tokenCounter,
+        CompactionConfig config,
+        IChatClient? summarizer = null,
+        IEnumerable<ISystemInstructionContributor>? instructionContributors = null)
+    {
+        ArgumentNullException.ThrowIfNull(tokenCounter);
+        ArgumentNullException.ThrowIfNull(config);
 
         (ICompactionTrigger Trigger, IHistoryCompactor Compactor) WindowSized(int maxContextTokens)
         {
@@ -555,7 +575,8 @@ public class ContextManager
             tokenCounter, compactionTrigger, historyCompactor,
             goalReminderOptions: config.GoalReminder,
             toolResultCompactor: toolResultCompactor,
-            observationMasker: observationMasker)
+            observationMasker: observationMasker,
+            instructionContributors: instructionContributors)
         {
             CompactOnOverflow = config.CompactOnOverflow,
             TargetRatio = config.TargetRatio,

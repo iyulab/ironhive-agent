@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.25.0] - Unreleased
+
+### Added
+- **`ContextManager.FromConfig(tokenCounter, config, summarizer, contributors)`** builds a context manager that applies every
+  `CompactionConfig` setting on a token counter you supply. `ForModel(name, config)` and the container registration both use it.
+- **`PermissionConfigLoader.TryLoadFromDefaultLocations(dir, out config)`** loads the project permission file and says whether
+  there was one, so a host with its own source of rules can fall back to it instead of to the built-in default.
+
+### Fixed
+- **The container's `ContextManager` applies the registered `CompactionConfig` in full.** `AddIronHiveAgent` built it with the bare
+  constructor: of the config registered with `AddIronHiveAgentContext` only the trigger and compactor settings applied. Observation
+  masking, tool-result compaction, the goal-reminder settings, `CompactOnOverflow` (now on by default, as documented) and
+  `TargetRatio` never did, and `MaxContextTokens` did not reach the container's token counter.
+- **`AddIronHiveAgentPermissions(configure)` starts from the default rules** (`PermissionConfig.CreateDefault()`). It started from an
+  empty config, so configuring one rule silently dropped every default rule. **Behaviour change** for code that relied on the
+  empty start: clear the lists in `configure` to get it back.
+- **README:** the permissions example (`Configure<PermissionConfig>` had no effect), deep-research entry point and Tavily key,
+  `[AIFunction]` (no such attribute), missing `using`s, MCP config file locations and hot reload, webhooks, planning, `AddIronbees`
+  options, and the compaction default (token-based, not a 92% threshold) are now accurate.
+
 ## [0.24.1] - 2026-09-28
 
 ### Changed

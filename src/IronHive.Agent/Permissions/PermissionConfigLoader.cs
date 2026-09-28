@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using YamlDotNet.Core;
@@ -148,12 +149,25 @@ public static class PermissionConfigLoader
     /// <exception cref="PermissionConfigException">The file found is not a readable permission configuration.</exception>
     public static PermissionConfig LoadFromDefaultLocations(string workingDirectory)
     {
-        var config = LoadFromDefaultLocationsCore(workingDirectory);
-        config.WorkingDirectory ??= workingDirectory;
+        if (!TryLoadFromDefaultLocations(workingDirectory, out var config))
+        {
+            config = PermissionConfig.CreateDefault();
+            config.WorkingDirectory = workingDirectory;
+        }
+
         return config;
     }
 
-    private static PermissionConfig LoadFromDefaultLocationsCore(string workingDirectory)
+    /// <summary>
+    /// Loads the permission file from the default locations, as <see cref="LoadFromDefaultLocations"/> does, and says
+    /// whether there was one — so a host with another source of rules (its own configuration) can fall back to that
+    /// source instead of to the built-in default.
+    /// </summary>
+    /// <param name="workingDirectory">Working directory to search from.</param>
+    /// <param name="config">The loaded rules, with <see cref="PermissionConfig.WorkingDirectory"/> set; null when no file exists.</param>
+    /// <returns>True when a permission file was found and loaded.</returns>
+    /// <exception cref="PermissionConfigException">The file found is not a readable permission configuration.</exception>
+    public static bool TryLoadFromDefaultLocations(string workingDirectory, [NotNullWhen(true)] out PermissionConfig? config)
     {
         var searchPaths = new[]
         {
@@ -166,11 +180,14 @@ public static class PermissionConfigLoader
         {
             if (File.Exists(path))
             {
-                return Load(path);
+                config = Load(path);
+                config.WorkingDirectory ??= workingDirectory;
+                return true;
             }
         }
 
-        return PermissionConfig.CreateDefault();
+        config = null;
+        return false;
     }
 
     /// <summary>
