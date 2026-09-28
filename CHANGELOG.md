@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.24.1] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.44.0 -> 0.45.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+
 ### Fixed
 - **The packages carry the README**, so their nuget.org page shows it.
 
