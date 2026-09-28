@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.24.1] - Unreleased
+
+### Fixed
+- **The packages carry the README**, so their nuget.org page shows it.
+
 ## [0.24.0] - 2026-09-28
 
 ### Changed
