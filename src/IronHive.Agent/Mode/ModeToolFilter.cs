@@ -379,14 +379,8 @@ public class ModeToolFilter : IModeToolFilter
         return RiskLevel.Medium;
     }
 
-    private static string GetToolName(AITool tool)
-    {
-        if (tool is AIFunction func)
-        {
-            return func.Name;
-        }
-        return tool.GetType().Name;
-    }
+    // AITool.Name, not AIFunction.Name: a declaration-only tool (the host runs it) is matched by its name too.
+    private static string GetToolName(AITool tool) => tool.Name;
 
     private static string? GetStringArgument(IDictionary<string, object?>? arguments, string key)
     {

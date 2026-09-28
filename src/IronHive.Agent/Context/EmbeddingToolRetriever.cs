@@ -240,15 +240,13 @@ public class EmbeddingToolRetriever : IToolRetriever
         return denom == 0f ? 0f : dot / denom;
     }
 
-    private static string GetToolName(AITool tool)
-    {
-        return tool is AIFunction func ? func.Name : tool.GetType().Name;
-    }
+    // AITool.Name, not AIFunction.Name: a declaration-only tool (the host runs it) has a name and description too.
+    private static string GetToolName(AITool tool) => tool.Name;
 
     private static string GetToolText(AITool tool)
     {
         var name = GetToolName(tool);
-        var desc = tool is AIFunction func ? func.Description ?? string.Empty : string.Empty;
+        var desc = tool.Description ?? string.Empty;
         return $"{name}: {desc}";
     }
 

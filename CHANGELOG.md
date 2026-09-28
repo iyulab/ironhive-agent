@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.20.0] - Unreleased
+
+### Fixed
+
+- **Declaration-only tools (the host runs them) are known by their own name and description throughout the loop.**
+  Planning mode matched a tool against `PermissionConfig.ReadOnlyTools` by name, but a tool created with
+  `AIFunctionFactory.CreateDeclaration` was known by its CLR type name, so a host tool declared read-only was refused in
+  Planning. Keyword and embedding tool retrieval scored such a tool without its name or description, and tool schema
+  compression left it uncompressed. All of these now read `AITool.Name` / `Description`, and compression returns a
+  compressed declaration (still nothing to invoke).
+
 ## [0.19.13] - 2026-09-28
 
 ### Changed

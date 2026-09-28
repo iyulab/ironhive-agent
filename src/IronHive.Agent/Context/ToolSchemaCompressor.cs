@@ -44,6 +44,15 @@ public static class ToolSchemaCompressor
             {
                 compressed.Add(new CompressedAIFunction(func, level));
             }
+            else if (tool is AIFunctionDeclaration declaration)
+            {
+                // Declaration-only (the host runs it): nothing to delegate to, so a compressed declaration.
+                compressed.Add(AIFunctionFactory.CreateDeclaration(
+                    declaration.Name,
+                    CompressDescription(declaration.Description, level),
+                    CompressJsonSchema(declaration.JsonSchema, level),
+                    declaration.ReturnJsonSchema));
+            }
             else
             {
                 compressed.Add(tool);

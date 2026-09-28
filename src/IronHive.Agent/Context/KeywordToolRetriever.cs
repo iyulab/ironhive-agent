@@ -50,7 +50,7 @@ public class KeywordToolRetriever : IToolRetriever
         foreach (var tool in availableTools)
         {
             var name = GetToolName(tool);
-            var description = tool is AIFunction func ? func.Description ?? string.Empty : string.Empty;
+            var description = tool.Description ?? string.Empty;
             var score = CalculateRelevance(queryTokens, name, description);
             scored.Add((tool, name, score));
             scores[name] = score;
@@ -232,10 +232,8 @@ public class KeywordToolRetriever : IToolRetriever
         return parts;
     }
 
-    private static string GetToolName(AITool tool)
-    {
-        return tool is AIFunction func ? func.Name : tool.GetType().Name;
-    }
+    // AITool.Name, not AIFunction.Name: a declaration-only tool (the host runs it) has a name and description too.
+    private static string GetToolName(AITool tool) => tool.Name;
 
     private static ToolRetrievalResult SelectAlwaysIncludeOnly(
         IList<AITool> availableTools, ToolRetrievalOptions options)
