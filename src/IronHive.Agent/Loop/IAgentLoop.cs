@@ -53,6 +53,36 @@ public interface IAgentLoop
     IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Continues the conversation from the current <see cref="History"/> without adding a user message:
+    /// the second half of a host-executed tool round trip. A tool declared without an implementation
+    /// (<c>AIFunctionFactory.CreateDeclaration</c>) stops the turn with its call pending in <see cref="History"/>
+    /// and in <see cref="AgentResponse.ToolCalls"/>. The host runs it, appends a <see cref="ChatRole.Tool"/> message
+    /// with a <see cref="FunctionResultContent"/> per pending call (to this loop's history through
+    /// <see cref="InitializeHistory"/>, or to a fresh loop's for a stateless host), and calls this.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The history does not end with results for every call of the last assistant message, or with a user message.
+    /// </exception>
+    Task<AgentResponse> ContinueAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="ContinueAsync(CancellationToken)"/> with per-turn <see cref="ChatOptions"/> overrides: same merge
+    /// semantics as <see cref="RunAsync(string, ChatOptions?, CancellationToken)"/>.
+    /// </summary>
+    Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Streaming counterpart of <see cref="ContinueAsync(CancellationToken)"/>. The history is checked when
+    /// enumeration starts.
+    /// </summary>
+    IAsyncEnumerable<AgentResponseChunk> ContinueStreamingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Streaming counterpart of <see cref="ContinueAsync(ChatOptions?, CancellationToken)"/>.
+    /// </summary>
+    IAsyncEnumerable<AgentResponseChunk> ContinueStreamingAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Initializes the conversation history with existing messages.
     /// Used for session restoration/resumption.
     /// </summary>

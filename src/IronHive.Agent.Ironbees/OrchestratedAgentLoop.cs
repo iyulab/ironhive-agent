@@ -81,6 +81,30 @@ public class OrchestratedAgentLoop : IAgentLoop
         };
     }
 
+    private const string ContinueNotSupported =
+        "OrchestratedAgentLoop delegates to IAgentOrchestrator, which takes a prompt per turn and has no host-executed " +
+        "tool calls to continue from. Use AgentLoop or ThinkingAgentLoop for a host tool round trip.";
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">Always: the orchestrator has no pending tool calls to continue from.</exception>
+    public Task<AgentResponse> ContinueAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(ContinueNotSupported);
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">Always: the orchestrator has no pending tool calls to continue from.</exception>
+    public Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(ContinueNotSupported);
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">Always: the orchestrator has no pending tool calls to continue from.</exception>
+    public IAsyncEnumerable<AgentResponseChunk> ContinueStreamingAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(ContinueNotSupported);
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">Always: the orchestrator has no pending tool calls to continue from.</exception>
+    public IAsyncEnumerable<AgentResponseChunk> ContinueStreamingAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(ContinueNotSupported);
+
     /// <inheritdoc />
     public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, CancellationToken cancellationToken = default)
         => RunStreamingAsync(prompt, overrideOptions: null, cancellationToken);

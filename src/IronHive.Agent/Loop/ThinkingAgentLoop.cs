@@ -81,12 +81,31 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         => RunAsync(prompt, overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
-    public async Task<AgentResponse> RunAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+    public Task<AgentResponse> RunAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
         _history.Add(new ChatMessage(ChatRole.User, prompt));
+        return RunTurnAsync(overrideOptions, cancellationToken);
+    }
 
+    /// <inheritdoc />
+    public Task<AgentResponse> ContinueAsync(CancellationToken cancellationToken = default)
+        => ContinueAsync(overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+    {
+        ContinuationGuard.EnsureContinuable(_history);
+        return RunTurnAsync(overrideOptions, cancellationToken);
+    }
+
+    /// <summary>
+    /// One turn over the current history. The caller has already put the message that starts it
+    /// (a user prompt, or the host's tool results) at its end.
+    /// </summary>
+    private async Task<AgentResponse> RunTurnAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
+    {
         // Set goal from first user message if context manager is present
         _contextManager?.SetGoalFromHistory(_history);
 
@@ -149,7 +168,33 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
         _history.Add(new ChatMessage(ChatRole.User, prompt));
+        await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
+        {
+            yield return chunk;
+        }
+    }
 
+    /// <inheritdoc />
+    public IAsyncEnumerable<AgentResponseChunk> ContinueStreamingAsync(CancellationToken cancellationToken = default)
+        => ContinueStreamingAsync(overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<AgentResponseChunk> ContinueStreamingAsync(
+        ChatOptions? overrideOptions,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ContinuationGuard.EnsureContinuable(_history);
+        await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
+        {
+            yield return chunk;
+        }
+    }
+
+    /// <summary>Streaming counterpart of <see cref="RunTurnAsync"/>.</summary>
+    private async IAsyncEnumerable<AgentResponseChunk> RunTurnStreamingAsync(
+        ChatOptions? overrideOptions,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         // Set goal from first user message if context manager is present
         _contextManager?.SetGoalFromHistory(_history);
 

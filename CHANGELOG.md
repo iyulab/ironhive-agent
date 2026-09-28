@@ -6,6 +6,17 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.20.0] - Unreleased
 
+### Added
+
+- **`IAgentLoop.ContinueAsync` / `ContinueStreamingAsync`: continue a conversation after the host has run a tool.**
+  A tool declared without an implementation (`AIFunctionFactory.CreateDeclaration`) stops the turn with its call
+  pending; the host runs it, appends a `Tool` message with the `FunctionResultContent`, and continues from that history
+  without inventing a user message. Both have an overload with per-turn `ChatOptions` overrides (same merge as
+  `RunAsync`). A history that does not end with a result for every pending call (or with a user message) is refused
+  before the model is called, naming the calls still missing. Implemented by `AgentLoop` and `ThinkingAgentLoop`;
+  `OrchestratedAgentLoop` throws `NotSupportedException` (the orchestrator has no host tools to continue from).
+  **Breaking for your own `IAgentLoop` implementations:** add the four members.
+
 ### Fixed
 
 - **Declaration-only tools (the host runs them) are known by their own name and description throughout the loop.**

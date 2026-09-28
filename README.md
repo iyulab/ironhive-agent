@@ -4,7 +4,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 
 ## Features
 
-- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn
+- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs))
 - **Context Management**: Auto-compaction (92% threshold), goal reminders, prompt caching
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
@@ -494,6 +494,33 @@ context would be worse than the claim it corrects.
 
 `ThinkingAgentLoop` implements the same seam — it is a peer implementation of `IAgentLoop`, not a
 wrapper around `AgentLoop`.
+
+### Tools the host runs
+
+Some tools can only run on the host — reading a browser tab, applying an edit in an IDE, asking the user to confirm.
+Declare them without an implementation (`AIFunctionFactory.CreateDeclaration`). With `UseFunctionInvocation()` on the
+chat client, the loop stops at such a call: `AgentResponse.ToolCalls` names it and `History` ends with the pending
+call. Run it, append the result, and continue:
+
+```csharp
+var options = new AgentOptions { Tools = [AIFunctionFactory.CreateDeclaration("read_page", "Reads one open tab's text.", schema)] };
+var loop = new AgentLoop(chatClient.AsBuilder().UseFunctionInvocation().Build(), options);
+
+var response = await loop.RunAsync("What is on tab web-1?", ct);
+foreach (var call in response.ToolCalls)          // pending host tools
+{
+    var result = await host.RunAsync(call, ct);
+    var history = loop.History.ToList();
+    history.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(call.CallId!, result)]));
+    loop.InitializeHistory(history);             // or a fresh loop, for a host that keeps the conversation itself
+}
+response = await loop.ContinueAsync(ct);         // no invented user message
+```
+
+`ContinueAsync` refuses a history that does not end with a result for every call of the last assistant message (or
+with a user message, for a restored conversation) before calling the model. Declarations keep their own name and
+description everywhere the loop reads tools — Planning mode's `ReadOnlyTools`, tool retrieval, schema compression.
+`OrchestratedAgentLoop` has no host tools to continue from and throws `NotSupportedException`.
 
 ### Reading the record without an observer
 

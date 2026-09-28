@@ -63,6 +63,32 @@ public class ThinkingAgentLoopTests
     }
 
     [Fact]
+    public async Task ContinueAsync_AfterHostToolResult_RunsTheTurnWithoutAUserMessage()
+    {
+        var response = new ChatResponse([new ChatMessage(ChatRole.Assistant, "answer")]);
+        var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(response));
+        loop.InitializeHistory([
+            new ChatMessage(ChatRole.User, "q"),
+            new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("c1", "read_page")]),
+            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "page")]),
+        ]);
+
+        var result = await loop.ContinueAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("answer", result.Content);
+        Assert.Single(loop.History, m => m.Role == ChatRole.User);
+    }
+
+    [Fact]
+    public async Task ContinueAsync_WhenHistoryEndsWithTheModelsAnswer_IsRefused()
+    {
+        var loop = new ThinkingAgentLoop(new MockChatClient(), BuildTurnManager(new ChatResponse()));
+        loop.InitializeHistory([new ChatMessage(ChatRole.User, "q"), new ChatMessage(ChatRole.Assistant, "done")]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => loop.ContinueAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task RunAsync_ResponseWithTextReasoningContent_PopulatesThinkingContent()
     {
         // Non-streaming: provider returns reasoning as M.E.AI TextReasoningContent with no
