@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.24.0] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.17 -> 0.20.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+
 ### Fixed
 - **The anchored compaction state block stays within `CompactionConfig.MaxAnchorStateChars`.** Anchors are merged across
   compaction rounds, and the block grew for the whole session whatever the setting said. Over the limit, the oldest entries
