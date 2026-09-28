@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.23.0] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.43.1 -> 0.44.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+
 ### Added
 - **Compaction waits for the server when the context window is not known (`CompactionConfig.CompactOnOverflow`, default
   on).** When `MaxContextTokens` is unset and the model is not in the catalog, the counter guesses 8192, and the loop
