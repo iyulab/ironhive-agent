@@ -84,12 +84,6 @@ public class CompactionConfig
     public GoalReminderOptions? GoalReminder { get; set; }
 
     /// <summary>
-    /// Compression level for tool schemas.
-    /// Reduces token usage by shortening descriptions and removing verbose schema elements.
-    /// </summary>
-    public ToolSchemaCompressionLevel ToolSchemaCompression { get; set; } = ToolSchemaCompressionLevel.None;
-
-    /// <summary>
     /// Whether to compact large tool results via head+tail truncation.
     /// When enabled, tool results exceeding <see cref="MaxToolResultChars"/> are compacted
     /// before other context management steps.
@@ -123,9 +117,10 @@ public class CompactionConfig
     public bool UseAnchoredCompaction { get; set; }
 
     /// <summary>
-    /// Maximum character count for the anchor state block.
-    /// Limits how much structured state information is preserved across compaction rounds.
-    /// Default: 2000.
+    /// Maximum character count for the anchor state block (<see cref="UseAnchoredCompaction"/>). Anchors are merged
+    /// across compaction rounds, so without a limit the block grows for the whole session. Over the limit, the oldest
+    /// entries are left out first: completed steps, then errors, modified files and key decisions; failed approaches
+    /// (which keep the model from repeating them) go last. Zero or less means no limit. Default: 2000.
     /// </summary>
     public int MaxAnchorStateChars { get; set; } = 2000;
 

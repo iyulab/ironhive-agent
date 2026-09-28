@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.24.0] - Unreleased
+
+### Fixed
+- **The anchored compaction state block stays within `CompactionConfig.MaxAnchorStateChars`.** Anchors are merged across
+  compaction rounds, and the block grew for the whole session whatever the setting said. Over the limit, the oldest entries
+  are now left out first: completed steps, then errors, modified files and key decisions, with failed approaches last.
+  `ConversationAnchors.FormatStateBlock(maxChars)` does the same for a caller.
+
+### Removed
+- **Breaking: `CompactionConfig.ToolSchemaCompression`.** Nothing read it. Tool schemas are compressed by
+  `AgentOptions.ToolSchemaCompression`, the one the loops apply. Delete the `CompactionConfig` assignment; set the level on
+  the loop's options if you have not already.
+
 ## [0.23.0] - 2026-09-28
 
 ### Changed

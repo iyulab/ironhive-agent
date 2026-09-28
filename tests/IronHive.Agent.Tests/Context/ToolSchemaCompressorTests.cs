@@ -285,13 +285,6 @@ public class ToolSchemaCompressorTests
     #region CompactionConfig Integration
 
     [Fact]
-    public void CompactionConfig_DefaultToolSchemaCompression_IsNone()
-    {
-        var config = new CompactionConfig();
-        Assert.Equal(ToolSchemaCompressionLevel.None, config.ToolSchemaCompression);
-    }
-
-    [Fact]
     public void CompressTools_RealisticFilerTools_MeasuresCompressionRatio()
     {
         // Simulate realistic filer-ai tool schemas (5 tools with verbose descriptions)

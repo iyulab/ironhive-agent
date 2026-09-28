@@ -366,7 +366,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         int targetTokens,
         CancellationToken cancellationToken)
     {
-        var stateBlock = anchors.HasContent ? anchors.FormatStateBlock() : string.Empty;
+        var stateBlock = anchors.HasContent ? anchors.FormatStateBlock(_config.MaxAnchorStateChars) : string.Empty;
         var stateBlockTokens = stateBlock.Length > 0 ? TokenCounter.CountTokens(stateBlock) : 0;
         var summaryTargetTokens = Math.Max(100, targetTokens - stateBlockTokens);
 
@@ -430,7 +430,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         // Add anchor state block first
         if (anchors.HasContent)
         {
-            result.Add(new ChatMessage(ChatRole.System, anchors.FormatStateBlock()));
+            result.Add(new ChatMessage(ChatRole.System, anchors.FormatStateBlock(_config.MaxAnchorStateChars)));
         }
 
         // Calculate remaining budget for truncated messages
@@ -490,62 +490,82 @@ public sealed class ConversationAnchors
     /// Formats the anchors as a structured state block for insertion into conversation history.
     /// </summary>
     public string FormatStateBlock()
+        => Format(SessionGoal, CompletedSteps, FilesModified.Order(), FailedApproaches, KeyDecisions, ErrorsEncountered);
+
+    /// <summary>
+    /// Formats the anchors within <paramref name="maxChars"/> characters, leaving out the oldest entries first: completed
+    /// steps, then errors, modified files and key decisions, and failed approaches last. Zero or less means no limit.
+    /// </summary>
+    public string FormatStateBlock(int maxChars)
+    {
+        var block = FormatStateBlock();
+        if (maxChars <= 0 || block.Length <= maxChars)
+        {
+            return block;
+        }
+
+        List<string> completed = [.. CompletedSteps];
+        List<string> errors = [.. ErrorsEncountered];
+        List<string> files = [.. FilesModified.Order()];
+        List<string> decisions = [.. KeyDecisions];
+        List<string> failed = [.. FailedApproaches];
+        var goal = SessionGoal;
+        List<string>[] dropOrder = [completed, errors, files, decisions, failed];
+        while (block.Length > maxChars && dropOrder.FirstOrDefault(entries => entries.Count > 0) is { } oldest)
+        {
+            oldest.RemoveAt(0);
+            block = Format(goal, completed, files, failed, decisions, errors);
+        }
+
+        if (block.Length > maxChars && goal is not null)
+        {
+            var keep = goal.Length - (block.Length - maxChars) - 3;
+            goal = keep > 0 ? goal[..keep] + "..." : null;
+            block = Format(goal, completed, files, failed, decisions, errors);
+        }
+
+        return block;
+    }
+
+    private static string Format(
+        string? sessionGoal,
+        IEnumerable<string> completedSteps,
+        IEnumerable<string> filesModified,
+        IEnumerable<string> failedApproaches,
+        IEnumerable<string> keyDecisions,
+        IEnumerable<string> errorsEncountered)
     {
         var sb = new StringBuilder();
         sb.AppendLine(AnchoredHistoryCompactor.StateBlockStart);
 
-        if (SessionGoal is not null)
+        if (sessionGoal is not null)
         {
-            sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"Goal: {SessionGoal}");
+            sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"Goal: {sessionGoal}");
         }
 
-        if (CompletedSteps.Count > 0)
-        {
-            sb.AppendLine("Completed:");
-            foreach (var step in CompletedSteps)
-            {
-                sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  - {step}");
-            }
-        }
-
-        if (FilesModified.Count > 0)
-        {
-            sb.AppendLine("Files modified:");
-            foreach (var file in FilesModified.Order())
-            {
-                sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  - {file}");
-            }
-        }
-
-        if (FailedApproaches.Count > 0)
-        {
-            sb.AppendLine("Failed approaches:");
-            foreach (var approach in FailedApproaches)
-            {
-                sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  - {approach}");
-            }
-        }
-
-        if (KeyDecisions.Count > 0)
-        {
-            sb.AppendLine("Key decisions:");
-            foreach (var decision in KeyDecisions)
-            {
-                sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  - {decision}");
-            }
-        }
-
-        if (ErrorsEncountered.Count > 0)
-        {
-            sb.AppendLine("Errors:");
-            foreach (var error in ErrorsEncountered)
-            {
-                sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  - {error}");
-            }
-        }
+        AppendSection(sb, "Completed:", completedSteps);
+        AppendSection(sb, "Files modified:", filesModified);
+        AppendSection(sb, "Failed approaches:", failedApproaches);
+        AppendSection(sb, "Key decisions:", keyDecisions);
+        AppendSection(sb, "Errors:", errorsEncountered);
 
         sb.Append(AnchoredHistoryCompactor.StateBlockEnd);
         return sb.ToString();
+    }
+
+    private static void AppendSection(StringBuilder sb, string heading, IEnumerable<string> entries)
+    {
+        var first = true;
+        foreach (var entry in entries)
+        {
+            if (first)
+            {
+                sb.AppendLine(heading);
+                first = false;
+            }
+
+            sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  - {entry}");
+        }
     }
 
     /// <summary>

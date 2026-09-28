@@ -571,6 +571,63 @@ public class AnchoredHistoryCompactorTests
         Assert.False(config.UseAnchoredCompaction);
     }
 
+    private static ConversationAnchors ManyAnchors(int each)
+    {
+        var anchors = new ConversationAnchors { SessionGoal = "Refactor the auth module" };
+        for (var i = 0; i < each; i++)
+        {
+            anchors.CompletedSteps.Add($"step {i:D3} done after reading several files");
+            anchors.FilesModified.Add($"src/Module{i:D3}.cs");
+            anchors.ErrorsEncountered.Add($"CS{8600 + i}");
+            anchors.KeyDecisions.Add($"decision {i:D3}");
+            anchors.FailedApproaches.Add($"approach {i:D3} failed");
+        }
+        return anchors;
+    }
+
+    [Fact]
+    public void FormatStateBlock_WithinTheLimit_IsTheFullBlock()
+    {
+        var anchors = ManyAnchors(2);
+
+        Assert.Equal(anchors.FormatStateBlock(), anchors.FormatStateBlock(maxChars: 10_000));
+        Assert.Equal(anchors.FormatStateBlock(), anchors.FormatStateBlock(maxChars: 0));
+    }
+
+    [Fact]
+    public void FormatStateBlock_OverTheLimit_DropsOldestCompletedStepsFirstAndKeepsFailedApproaches()
+    {
+        var anchors = ManyAnchors(40);
+
+        var block = anchors.FormatStateBlock(maxChars: 1_500);
+
+        Assert.True(block.Length <= 1_500, $"{block.Length} chars");
+        Assert.DoesNotContain("step 000", block);
+        var parsed = ConversationAnchors.Parse(block);
+        Assert.Equal("Refactor the auth module", parsed.SessionGoal);
+        Assert.Equal(40, parsed.FailedApproaches.Count);
+        Assert.Contains("approach 039 failed", parsed.FailedApproaches);
+    }
+
+    [Fact]
+    public async Task CompactAsync_KeepsTheMergedStateBlockWithinMaxAnchorStateChars()
+    {
+        // Anchors merge across rounds; before MaxAnchorStateChars was applied the block grew for the whole session.
+        var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
+        var config = new CompactionConfig
+        {
+            UseAnchoredCompaction = true, ProtectRecentTokens = 200, MinimumPruneTokens = 0, MaxAnchorStateChars = 800,
+        };
+        var compactor = new AnchoredHistoryCompactor(tokenCounter, config);
+        var history = new List<ChatMessage> { new(ChatRole.System, ManyAnchors(40).FormatStateBlock()) };
+        history.AddRange(CreateHistory(20));
+
+        var result = await compactor.CompactAsync(history, targetTokens: 1_000, cancellationToken: TestContext.Current.CancellationToken);
+
+        var stateBlock = result.CompactedHistory.Single(m => m.Text?.Contains(AnchoredHistoryCompactor.StateBlockStart, StringComparison.Ordinal) == true);
+        Assert.True(stateBlock.Text!.Length <= 800, $"{stateBlock.Text!.Length} chars");
+    }
+
     [Fact]
     public void CompactionConfig_DefaultMaxAnchorStateChars_Is2000()
     {

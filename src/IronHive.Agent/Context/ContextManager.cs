@@ -477,7 +477,6 @@ public class ContextManager
             ObservationMaskingMinResultLength = source.ObservationMaskingMinResultLength,
             ObservationMaskingProtectedRounds = source.ObservationMaskingProtectedRounds,
             GoalReminder = source.GoalReminder,
-            ToolSchemaCompression = source.ToolSchemaCompression,
             EnableToolResultCompaction = source.EnableToolResultCompaction,
             MaxToolResultChars = source.MaxToolResultChars,
             ToolResultKeepHeadLines = source.ToolResultKeepHeadLines,
