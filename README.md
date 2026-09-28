@@ -513,6 +513,10 @@ var client = chatClient.AsBuilder()
 var loop = new AgentLoop(client, options, contextManager: contextManager);
 ```
 
+Building the pipeline before the manager exists (a `ChatClientFactory` decorator shared by every client it creates)?
+Add `.UseToolRoundContext()` with no argument after `UseFunctionInvocation()`; the loop binds its own `ContextManager`
+when it is constructed over that client.
+
 The tool calls stay, so the model still knows what it read; only results longer than
 `ObservationMaskingMinResultLength` are replaced, and only in the request — `History` keeps them in full.
 `ToolRoundContextChatClient` also applies tool-result compaction (`EnableToolResultCompaction`) per round. It makes no LLM

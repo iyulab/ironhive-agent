@@ -114,6 +114,52 @@ public class ToolRoundMaskingTests
             r => Assert.StartsWith("section", r.Result!.ToString()));
     }
 
+    [Fact]
+    public async Task A_Factory_Built_Pipeline_Is_Bound_By_The_Loop()
+    {
+        // The pipeline exists before the loop's manager (a chat client factory's decorator): unbound, then the loop binds
+        // its own manager when it is constructed.
+        var manager = ContextManager.ForModel("gpt-4o", new CompactionConfig
+        {
+            EnableObservationMasking = true,
+            ObservationMaskingProtectedTurns = 2,
+            ObservationMaskingProtectedRounds = 2,
+            EnableToolResultCompaction = false,
+        });
+        var model = new ReadingModel(sections: 5);
+        var client = new ChatClientBuilder(model).UseFunctionInvocation().UseToolRoundContext().Build();
+        var readSection = AIFunctionFactory.Create((int n) => $"section {n}: {LongResult}", "read_section");
+        var loop = new AgentLoop(client, new AgentOptions { Tools = [readSection] }, contextManager: manager);
+
+        await loop.RunAsync("Read every section and take notes.", TestContext.Current.CancellationToken);
+
+        Assert.Same(manager, client.GetService<ToolRoundContextChatClient>()!.ContextManager);
+        var results = model.Requests[^1].SelectMany(m => m.Contents).OfType<FunctionResultContent>().Select(r => r.Result!.ToString()!).ToList();
+        Assert.All(results.Take(3), r => Assert.StartsWith("[Masked:", r));
+        Assert.All(results.Skip(3), r => Assert.StartsWith("section", r));
+    }
+
+    [Fact]
+    public async Task An_Unbound_Client_Passes_Requests_Through()
+    {
+        var model = new ReadingModel(sections: 1);
+        var client = new ChatClientBuilder(model).UseToolRoundContext().Build();
+        var history = OneTurnWithRounds(3);
+
+        await client.GetResponseAsync(history, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(history, model.Requests[^1]);
+    }
+
+    [Fact]
+    public void A_Pipeline_Bound_To_One_Loop_Refuses_A_Second_Loops_Manager()
+    {
+        var client = new ChatClientBuilder(new ReadingModel(sections: 1)).UseFunctionInvocation().UseToolRoundContext().Build();
+        _ = new AgentLoop(client, contextManager: ContextManager.ForModel("gpt-4o"));
+
+        Assert.Throws<InvalidOperationException>(() => new AgentLoop(client, contextManager: ContextManager.ForModel("gpt-4o")));
+    }
+
     /// <summary>Calls read_section once per round until it has read them all, then answers.</summary>
     private sealed class ReadingModel(int sections) : IChatClient
     {

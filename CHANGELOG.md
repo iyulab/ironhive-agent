@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.22.0] - Unreleased
+
+### Added
+
+- **A pipeline built before the loop's `ContextManager` exists can still mask per tool round.** `UseToolRoundContext()`
+  (no argument) adds an unbound `ToolRoundContextChatClient`, which passes requests through until it is bound. `AgentLoop`
+  and `ThinkingAgentLoop` bind their own manager when they are constructed over a client that contains one (found through
+  `GetService`). This is the shape of a `ChatClientFactory` decorator, which is shared by every client the factory creates,
+  while the manager is made per loop. `ToolRoundContextChatClient.Bind` / `.ContextManager` are public. Binding a second
+  loop's manager to a client already bound to another throws: one pipeline serves one loop's context.
+- `CompactionConfig.GoalReminder` (`GoalReminderOptions?`) reaches `ContextManager.ForModel`. Before, turning the reminder
+  off meant not using `ForModel`.
+- `ContextManager.IsInjected(message)`: whether a message was composed by the manager for one preparation.
+
+### Fixed
+
+- **The goal reminder no longer piles up or points at an old question.** It was appended as a user message on every model
+  call and kept (three calls → three reminders), it named the session's *first* question as the "current goal", and tool
+  retrieval read it as the user's request (a turn asking for `GrepFiles` retrieved tools for turn 1's question). The
+  reminder is now marked as injected and recomposed on each preparation (at most one), it names the latest user request,
+  and the loops skip it when they read the request.
+
 ## [0.21.0] - 2026-09-28
 
 ### Added

@@ -77,6 +77,13 @@ public class CompactionConfig
     public int? ObservationMaskingProtectedRounds { get; set; }
 
     /// <summary>
+    /// Goal reminder options for a context manager built from this config (<see cref="ContextManager.ForModel(string, CompactionConfig, Microsoft.Extensions.AI.IChatClient?)"/>).
+    /// <c>null</c> (default): the reminder's own defaults (on, after 6 messages). Set <c>new GoalReminderOptions { Enabled = false }</c>
+    /// to turn it off.
+    /// </summary>
+    public GoalReminderOptions? GoalReminder { get; set; }
+
+    /// <summary>
     /// Compression level for tool schemas.
     /// Reduces token usage by shortening descriptions and removing verbose schema elements.
     /// </summary>

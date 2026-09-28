@@ -81,6 +81,14 @@ public class ContextManager
     /// </summary>
     internal const string InjectedBlockKey = "ironhive.injected_instruction";
 
+    /// <summary>
+    /// Whether <paramref name="message"/> was composed by a context manager for one preparation (an instruction block,
+    /// the scratchpad, the goal reminder) rather than written by the user or the model. Such a message is removed and
+    /// recomposed on every preparation, and is not the user's request.
+    /// </summary>
+    public static bool IsInjected(ChatMessage message)
+        => message.AdditionalProperties?.ContainsKey(InjectedBlockKey) == true;
+
     public ContextManager(
         IContextTokenCounter tokenCounter,
         ICompactionTrigger? compactionTrigger = null,
@@ -219,7 +227,9 @@ public class ContextManager
     /// </summary>
     public void SetGoalFromHistory(IReadOnlyList<ChatMessage> history)
     {
-        _goalReminder.SetGoalFromFirstUserMessage(history);
+        // The latest request, not the first: in a conversation every turn has its own, and the reminder must not point
+        // the model back at turn 1's question.
+        _goalReminder.SetGoalFromLatestUserMessage(history);
     }
 
     /// <summary>
@@ -398,6 +408,7 @@ public class ContextManager
             ObservationMaskingProtectedTurns = source.ObservationMaskingProtectedTurns,
             ObservationMaskingMinResultLength = source.ObservationMaskingMinResultLength,
             ObservationMaskingProtectedRounds = source.ObservationMaskingProtectedRounds,
+            GoalReminder = source.GoalReminder,
             ToolSchemaCompression = source.ToolSchemaCompression,
             EnableToolResultCompaction = source.EnableToolResultCompaction,
             MaxToolResultChars = source.MaxToolResultChars,
@@ -476,6 +487,7 @@ public class ContextManager
 
         return new ContextManager(
             tokenCounter, compactionTrigger, historyCompactor,
+            goalReminderOptions: config.GoalReminder,
             toolResultCompactor: toolResultCompactor,
             observationMasker: observationMasker);
     }

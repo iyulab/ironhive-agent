@@ -52,13 +52,29 @@ public class GoalReminder
     /// <summary>
     /// Sets the current goal from the first user message.
     /// </summary>
+    /// <remarks>
+    /// Right for a single-request run only. In a conversation every turn has its own request — use
+    /// <see cref="SetGoalFromLatestUserMessage"/>, which is what <see cref="ContextManager.SetGoalFromHistory"/> does.
+    /// </remarks>
     public void SetGoalFromFirstUserMessage(IReadOnlyList<ChatMessage> history)
+        => SetGoal(history.FirstOrDefault(IsUserRequest));
+
+    /// <summary>
+    /// Sets the current goal from the latest user request — the request the current turn serves. Messages a context
+    /// manager injected (this reminder among them) are not requests and are skipped.
+    /// </summary>
+    public void SetGoalFromLatestUserMessage(IReadOnlyList<ChatMessage> history)
+        => SetGoal(history.LastOrDefault(IsUserRequest));
+
+    private static bool IsUserRequest(ChatMessage message)
+        => message.Role == ChatRole.User && !ContextManager.IsInjected(message);
+
+    private void SetGoal(ChatMessage? userMessage)
     {
-        var firstUserMessage = history.FirstOrDefault(m => m.Role == ChatRole.User);
-        if (firstUserMessage is not null && !string.IsNullOrWhiteSpace(firstUserMessage.Text))
+        if (userMessage is not null && !string.IsNullOrWhiteSpace(userMessage.Text))
         {
             // Truncate long goals to a reasonable length
-            var goalText = firstUserMessage.Text;
+            var goalText = userMessage.Text;
             if (goalText.Length > 500)
             {
                 goalText = goalText[..497] + "...";
@@ -93,7 +109,9 @@ public class GoalReminder
     /// <remarks>
     /// Uses <see cref="ChatRole.User"/>, not <see cref="ChatRole.System"/> — this message is
     /// appended mid-conversation, and many chat templates reject a system-role message that
-    /// isn't the first message in the array.
+    /// isn't the first message in the array. It is marked as injected, so a context manager
+    /// removes it before the next preparation (at most one reminder, never a pile of them) and it
+    /// is never read as the user's request.
     /// </remarks>
     public ChatMessage CreateReminderMessage()
     {
@@ -103,7 +121,10 @@ public class GoalReminder
         }
 
         var reminderText = _options.ReminderTemplate.Replace("{goal}", _currentGoal);
-        return new ChatMessage(ChatRole.User, reminderText);
+        return new ChatMessage(ChatRole.User, reminderText)
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { [ContextManager.InjectedBlockKey] = "goal_reminder" },
+        };
     }
 
     /// <summary>

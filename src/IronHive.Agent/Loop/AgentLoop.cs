@@ -37,6 +37,12 @@ public class AgentLoop : IAgentLoop
         _options = options ?? new AgentOptions();
         _usageTracker = usageTracker;
         _contextManager = contextManager;
+        // A pipeline built before this loop's manager existed (a chat client factory's decorator) can carry an unbound
+        // ToolRoundContextChatClient inside function invocation; it reduces each tool round with this loop's manager.
+        if (contextManager is not null)
+        {
+            chatClient.GetService<ToolRoundContextChatClient>()?.Bind(contextManager);
+        }
         _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
         _toolRetriever = toolRetriever;
         _turnObservers = turnObservers?.ToArray() ?? [];
@@ -332,7 +338,8 @@ public class AgentLoop : IAgentLoop
     {
         for (var i = _history.Count - 1; i >= 0; i--)
         {
-            if (_history[i].Role == ChatRole.User)
+            // An injected message (the goal reminder) is not the user's request.
+            if (_history[i].Role == ChatRole.User && !ContextManager.IsInjected(_history[i]))
             {
                 return _history[i].Text ?? string.Empty;
             }
