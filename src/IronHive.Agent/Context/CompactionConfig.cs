@@ -66,6 +66,17 @@ public class CompactionConfig
     public int ObservationMaskingMinResultLength { get; set; } = 200;
 
     /// <summary>
+    /// Number of recent tool rounds to protect from observation masking, counted across turn boundaries — a round is
+    /// an assistant message that calls tools plus the results that answer it. <c>null</c> (default): off, only user
+    /// turns protect. When set, tool results older than the last N rounds are masked even inside a protected turn, so
+    /// a long single-message task (read a document section by section, walk a folder) keeps only its recent results at
+    /// full size. Masking inside one turn needs the model calls of that turn to pass through the context manager —
+    /// add <see cref="ToolRoundContextChatClient"/> inside function invocation
+    /// (<c>.UseFunctionInvocation().UseToolRoundContext(contextManager)</c>).
+    /// </summary>
+    public int? ObservationMaskingProtectedRounds { get; set; }
+
+    /// <summary>
     /// Compression level for tool schemas.
     /// Reduces token usage by shortening descriptions and removing verbose schema elements.
     /// </summary>

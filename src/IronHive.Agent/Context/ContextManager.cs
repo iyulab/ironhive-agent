@@ -231,6 +231,19 @@ public class ContextManager
     }
 
     /// <summary>
+    /// The cheap per-request reductions: compacts large tool results and masks old observations, when enabled. No LLM
+    /// call, no injected blocks — safe to run before every model call, which is what
+    /// <see cref="ToolRoundContextChatClient"/> does for the tool rounds inside a turn. Returns
+    /// <paramref name="history"/> itself when nothing changed.
+    /// </summary>
+    public IReadOnlyList<ChatMessage> ReduceToolResults(IReadOnlyList<ChatMessage> history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        var compactedResults = _toolResultCompactor?.CompactToolResults(history) ?? history;
+        return _observationMasker?.MaskObservations(compactedResults) ?? compactedResults;
+    }
+
+    /// <summary>
     /// Prepares the history for sending to the model.
     /// Applies observation masking, compaction if needed, and injects goal reminder.
     /// </summary>
@@ -242,11 +255,8 @@ public class ContextManager
         // (the agent loops do), and without this every turn would add another copy of each block.
         history = RemoveInjectedBlocks(history);
 
-        // Step 0a: Compact large tool results (cheap, always runs if enabled)
-        var compactedResults = _toolResultCompactor?.CompactToolResults(history) ?? history;
-
-        // Step 0b: Mask old observations (cheap, always runs if enabled)
-        var maskedHistory = _observationMasker?.MaskObservations(compactedResults) ?? compactedResults;
+        // Step 0a/0b: Compact large tool results, then mask old observations (cheap, always run if enabled)
+        var maskedHistory = ReduceToolResults(history);
 
         // Step 1: Compact if needed
         var compactionResult = await CompactIfNeededAsync(maskedHistory, cancellationToken);
@@ -387,6 +397,7 @@ public class ContextManager
             EnableObservationMasking = source.EnableObservationMasking,
             ObservationMaskingProtectedTurns = source.ObservationMaskingProtectedTurns,
             ObservationMaskingMinResultLength = source.ObservationMaskingMinResultLength,
+            ObservationMaskingProtectedRounds = source.ObservationMaskingProtectedRounds,
             ToolSchemaCompression = source.ToolSchemaCompression,
             EnableToolResultCompaction = source.EnableToolResultCompaction,
             MaxToolResultChars = source.MaxToolResultChars,
@@ -459,7 +470,8 @@ public class ContextManager
         ObservationMasker? observationMasker = config.EnableObservationMasking
             ? new ObservationMasker(
                 config.ObservationMaskingProtectedTurns,
-                config.ObservationMaskingMinResultLength)
+                config.ObservationMaskingMinResultLength,
+                config.ObservationMaskingProtectedRounds)
             : null;
 
         return new ContextManager(

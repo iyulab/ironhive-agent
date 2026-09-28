@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.21.0] - Unreleased
+
+### Added
+
+- **Observation masking inside one turn: `CompactionConfig.ObservationMaskingProtectedRounds` and
+  `ToolRoundContextChatClient` (`.UseToolRoundContext(contextManager)`).** A task that is one user message followed by
+  many tool rounds (reading a long document, walking a folder) is a single user turn, so
+  `ObservationMaskingProtectedTurns` protected all of its results and every earlier result was re-sent at full size on
+  every round until the model's window overflowed. With `ObservationMaskingProtectedRounds = N`, tool results older than
+  the last N rounds are masked even inside the protected turn (the calls stay). Those rounds run inside
+  `FunctionInvokingChatClient`, out of the loop's reach, so `UseToolRoundContext(contextManager)` placed after
+  `UseFunctionInvocation()` applies the context manager's cheap reductions (tool-result compaction, masking — no LLM
+  call) to each round's request. The loop's `History` keeps the full results. Default off: behaviour unchanged.
+- `ContextManager.ReduceToolResults(history)`: those reductions as one call (also used by `PrepareHistoryAsync`).
+
 ## [0.20.0] - 2026-09-28
 
 ### Changed

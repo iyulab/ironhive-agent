@@ -5,7 +5,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 ## Features
 
 - **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs))
-- **Context Management**: Auto-compaction (92% threshold), goal reminders, prompt caching
+- **Context Management**: Auto-compaction (92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Agent Skills (`SKILL.md`)**: `SkillsLoader.Create(new SkillsConfig { Roots = [userSkillsDir, projectSkillsDir] })` discovers skills per the [Agent Skills specification](https://agentskills.io/specification) and validates them as `skills-ref validate` does (invalid ones are *reported* in `Diagnostics`, never thrown; the first root wins a name collision and the shadowed one is reported). `loader.Contributor` puts every name + description in the system instructions; `loader.LoadTool` (`load_skill`) returns a skill's body — or a file inside its directory, and nothing outside it — on demand. `Enabled`/`Exclude`/`Filter` narrow the set per session; `MaxMetadataCharacters` bounds the section and what does not fit is in `Dropped`/`DroppedCount` (still loadable by name). `SkillDiscovery.Discover(config)` is the same discovery as a plain call, for a UI that lists skills before a session exists. Frontmatter keys the specification does not define reject the skill by default (as `skills-ref validate` does); `UnknownFields = UnknownFieldPolicy.Accept` loads such skills and reports the keys as a warning — skill trees written for one client's extensions (e.g. `argument-hint`) need this. A name in `Enabled` that matches nothing is reported (`EnabledNotFound`), not dropped silently. DI: `services.AddAgentSkills(config)` registers the loader and its contributor; add `LoadTool` to the loop's tools yourself. Text only — `scripts/` are never executed; `allowed-tools` is parsed, not enforced
@@ -494,6 +494,29 @@ context would be worse than the claim it corrects.
 
 `ThinkingAgentLoop` implements the same seam — it is a peer implementation of `IAgentLoop`, not a
 wrapper around `AgentLoop`.
+
+### Long single-message tasks
+
+One user message followed by many tool rounds — read a document section by section, walk a folder — is one user turn,
+so masking by user turns keeps every result of it at full size until the window overflows. Protect recent **rounds**
+instead, and let every model call of the turn pass through the context manager:
+
+```csharp
+var contextManager = ContextManager.ForModel("gpt-4o", new CompactionConfig
+{
+    ObservationMaskingProtectedRounds = 3,   // older rounds' results become "[Masked: read_section result, …]"
+});
+var client = chatClient.AsBuilder()
+    .UseFunctionInvocation()
+    .UseToolRoundContext(contextManager)      // inside function invocation: sees each round
+    .Build();
+var loop = new AgentLoop(client, options, contextManager: contextManager);
+```
+
+The tool calls stay, so the model still knows what it read; only results longer than
+`ObservationMaskingMinResultLength` are replaced, and only in the request — `History` keeps them in full.
+`ToolRoundContextChatClient` also applies tool-result compaction (`EnableToolResultCompaction`) per round. It makes no LLM
+call; summarizing compaction still runs once per turn in the loop.
 
 ### Tools the host runs
 

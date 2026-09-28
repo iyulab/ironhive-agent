@@ -4,12 +4,14 @@ namespace IronHive.Agent.Context;
 
 /// <summary>
 /// Masks old tool observation results with compact placeholders to reduce context window usage.
-/// Protects recent user turns from masking, only replacing older tool results.
+/// Protects recent user turns from masking, only replacing older tool results — and, when
+/// <c>protectedRounds</c> is set, also the tool results of older tool rounds inside those turns.
 /// </summary>
 public class ObservationMasker
 {
     private readonly int _protectedTurns;
     private readonly int _minimumResultLength;
+    private readonly int? _protectedRounds;
 
     /// <summary>
     /// Creates a new observation masker.
@@ -23,13 +25,26 @@ public class ObservationMasker
     /// Minimum result character length to trigger masking. Results shorter than this are kept as-is.
     /// Default: 200.
     /// </param>
-    public ObservationMasker(int protectedTurns = 3, int minimumResultLength = 200)
+    /// <param name="protectedRounds">
+    /// Number of recent tool rounds to protect, counted from the end of the history across turn boundaries.
+    /// A "round" is an assistant message that calls tools plus the tool results that answer it. When set, a tool
+    /// result older than the last <paramref name="protectedRounds"/> rounds is masked even inside a protected turn —
+    /// so one user message followed by many tool rounds (reading a long document, walking a folder) keeps only its
+    /// recent results at full size. The calls themselves stay, so the model still knows what it read. Default:
+    /// <c>null</c> (off — only user turns protect).
+    /// </param>
+    public ObservationMasker(int protectedTurns = 3, int minimumResultLength = 200, int? protectedRounds = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(protectedTurns);
         ArgumentOutOfRangeException.ThrowIfNegative(minimumResultLength);
+        if (protectedRounds is { } rounds)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(rounds, nameof(protectedRounds));
+        }
 
         _protectedTurns = protectedTurns;
         _minimumResultLength = minimumResultLength;
+        _protectedRounds = protectedRounds;
     }
 
     /// <summary>
@@ -49,8 +64,13 @@ public class ObservationMasker
         // Build callId → tool name mapping from FunctionCallContent in assistant messages
         var toolNameMap = BuildToolNameMap(history);
 
-        // Find the boundary index where protection starts
+        // Find the boundary index where protection starts: the later of the user-turn boundary and, when set,
+        // the tool-round boundary (a round inside a protected turn is still masked once it is old enough).
         var protectedStartIndex = FindProtectedStartIndex(history);
+        if (_protectedRounds is { } rounds)
+        {
+            protectedStartIndex = Math.Max(protectedStartIndex, FindProtectedRoundStartIndex(history, rounds));
+        }
 
         // If everything is protected, return as-is
         if (protectedStartIndex <= 0)
@@ -134,6 +154,33 @@ public class ObservationMasker
         }
 
         // Fewer turns than threshold — protect everything
+        return 0;
+    }
+
+    /// <summary>
+    /// Finds the index of the assistant message that opens the oldest protected tool round (counting rounds —
+    /// assistant messages that call tools — from the end). Fewer rounds than <paramref name="rounds"/>: 0.
+    /// </summary>
+    private static int FindProtectedRoundStartIndex(IReadOnlyList<ChatMessage> history, int rounds)
+    {
+        if (rounds <= 0)
+        {
+            return history.Count;
+        }
+
+        var roundsFound = 0;
+        for (var i = history.Count - 1; i >= 0; i--)
+        {
+            if (history[i].Role == ChatRole.Assistant && history[i].Contents.OfType<FunctionCallContent>().Any())
+            {
+                roundsFound++;
+                if (roundsFound >= rounds)
+                {
+                    return i;
+                }
+            }
+        }
+
         return 0;
     }
 
