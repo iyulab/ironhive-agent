@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.22.0] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.43.0 -> 0.43.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+
 ### Added
 
 - **A pipeline built before the loop's `ContextManager` exists can still mask per tool round.** `UseToolRoundContext()`
