@@ -3,6 +3,7 @@ using System.Text;
 using IronHive.Agent.Mode;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using IronHive.Agent.Context;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -113,7 +114,7 @@ public class McpPluginManager : IMcpPluginManager
             {
                 // McpClientTool inherits from AIFunction which inherits from AITool
                 var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
-                allTools.AddRange(tools);
+                allTools.AddRange(tools.Select(WithDeclaredRetrievalHints));
             }
             catch (Exception ex)
             {
@@ -138,7 +139,39 @@ public class McpPluginManager : IMcpPluginManager
         }
 
         var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
-        return tools.Cast<AITool>().ToList().AsReadOnly();
+        return tools.Select(WithDeclaredRetrievalHints).ToList().AsReadOnly();
+    }
+
+    /// <summary>
+    /// Carries the retrieval hints an MCP server declares in a tool's <c>_meta</c> — under
+    /// <see cref="ToolRetrievalHints.AliasesKey"/> and <see cref="ToolRetrievalHints.CompanionsKey"/>, as a string
+    /// array or one comma-separated string — into the tool's <see cref="AITool.AdditionalProperties"/>, where the
+    /// tool retrievers read them. A tool without them is returned unchanged.
+    /// </summary>
+    internal static AITool WithDeclaredRetrievalHints(McpClientTool tool)
+    {
+        var meta = tool.ProtocolTool.Meta;
+        if (meta is null)
+        {
+            return tool;
+        }
+
+        var aliases = ReadHint(meta, ToolRetrievalHints.AliasesKey);
+        var companions = ReadHint(meta, ToolRetrievalHints.CompanionsKey);
+        return aliases is null && companions is null
+            ? tool
+            : tool.WithRetrievalHints(aliases, companions);
+    }
+
+    private static string[]? ReadHint(System.Text.Json.Nodes.JsonObject meta, string key)
+    {
+        if (!meta.TryGetPropertyValue(key, out var node) || node is null)
+        {
+            return null;
+        }
+
+        var values = ToolRetrievalHints.ParseValue(System.Text.Json.JsonElement.Parse(node.ToJsonString()));
+        return values.Length == 0 ? null : values;
     }
 
     /// <summary>

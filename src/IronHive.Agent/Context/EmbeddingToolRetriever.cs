@@ -44,7 +44,7 @@ public class EmbeddingToolRetriever : IToolRetriever
 
         if (string.IsNullOrWhiteSpace(query))
         {
-            return SelectAlwaysIncludeOnly(availableTools, options);
+            return SelectAlwaysIncludeOnly(query ?? string.Empty, availableTools, options);
         }
 
         // Ensure index is built (lazy, rebuild if tool list changed)
@@ -55,80 +55,23 @@ public class EmbeddingToolRetriever : IToolRetriever
 
         // Score all tools via cosine similarity
         var scores = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        var scored = new List<(AITool Tool, string Name, float Score)>(availableTools.Count);
+        var candidates = new List<ToolSelector.Candidate>(availableTools.Count);
 
         foreach (var tool in availableTools)
         {
             var name = GetToolName(tool);
+            var normalizedScore = 0f;
             if (_toolEmbeddings!.TryGetValue(name, out var toolEmb))
             {
-                var score = CosineSimilarity(queryEmbedding, toolEmb);
                 // Normalize from [-1, 1] to [0, 1]
-                var normalizedScore = (score + 1f) / 2f;
-                scores[name] = normalizedScore;
-                scored.Add((tool, name, normalizedScore));
+                normalizedScore = (CosineSimilarity(queryEmbedding, toolEmb) + 1f) / 2f;
             }
-            else
-            {
-                scores[name] = 0f;
-                scored.Add((tool, name, 0f));
-            }
+
+            scores[name] = normalizedScore;
+            candidates.Add(new ToolSelector.Candidate(tool, name, normalizedScore));
         }
 
-        // Build always-include set
-        var alwaysIncludeSet = options.AlwaysInclude is { Count: > 0 }
-            ? new HashSet<string>(options.AlwaysInclude, StringComparer.OrdinalIgnoreCase)
-            : null;
-
-        // Select tools
-        var selected = new List<AITool>();
-        var selectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // 1. Always-include tools
-        if (alwaysIncludeSet is not null)
-        {
-            foreach (var (tool, name, _) in scored)
-            {
-                if (alwaysIncludeSet.Contains(name) && selectedNames.Add(name))
-                {
-                    selected.Add(tool);
-                }
-            }
-        }
-
-        // 2. Top-scored tools above threshold. The scored tail reserves at least MinScoredSlots
-        // regardless of how many pins already consumed the nominal MaxTools budget — pins no longer
-        // count against this budget. Do NOT go back to breaking on `selected.Count >= options.MaxTools`;
-        // that recouples the two floors. See ToolSelectionBudget.
-        var scoredBudget = ToolSelectionBudget.ScoredBudget(options, selected.Count);
-        var scoredCount = 0;
-
-        foreach (var (tool, name, score) in scored.OrderByDescending(x => x.Score))
-        {
-            if (scoredCount >= scoredBudget)
-            {
-                break;
-            }
-
-            if (!selectedNames.Add(name))
-            {
-                continue;
-            }
-
-            if (score < options.MinRelevanceScore)
-            {
-                break;
-            }
-
-            selected.Add(tool);
-            scoredCount++;
-        }
-
-        return new ToolRetrievalResult
-        {
-            SelectedTools = selected,
-            RelevanceScores = scores
-        };
+        return ToolSelector.Select(query, candidates, availableTools, options, scores);
     }
 
     /// <summary>
@@ -247,11 +190,15 @@ public class EmbeddingToolRetriever : IToolRetriever
     {
         var name = GetToolName(tool);
         var desc = tool.Description ?? string.Empty;
-        return $"{name}: {desc}";
+
+        // Declared aliases are the words people use for the tool; embedding them with the description puts
+        // those words in the tool's neighbourhood.
+        var aliases = ToolRetrievalHints.GetAliases(tool);
+        return aliases.Count == 0 ? $"{name}: {desc}" : $"{name}: {desc} Also: {string.Join(", ", aliases)}.";
     }
 
     private static ToolRetrievalResult SelectAlwaysIncludeOnly(
-        IList<AITool> availableTools, ToolRetrievalOptions options)
+        string query, IList<AITool> availableTools, ToolRetrievalOptions options)
     {
         if (options.AlwaysInclude is not { Count: > 0 })
         {
@@ -262,14 +209,13 @@ public class EmbeddingToolRetriever : IToolRetriever
             };
         }
 
+        // Only pins are candidates: with nothing to score, the scored tail stays empty.
         var set = new HashSet<string>(options.AlwaysInclude, StringComparer.OrdinalIgnoreCase);
-        var selected = availableTools.Where(t => set.Contains(GetToolName(t))).ToList();
-        var scores = selected.ToDictionary(GetToolName, _ => 1.0f, StringComparer.OrdinalIgnoreCase);
+        var pinned = availableTools.Where(t => set.Contains(GetToolName(t)))
+            .Select(t => new ToolSelector.Candidate(t, GetToolName(t), 1.0f))
+            .ToList();
+        var scores = pinned.ToDictionary(c => c.Name, c => c.Score, StringComparer.OrdinalIgnoreCase);
 
-        return new ToolRetrievalResult
-        {
-            SelectedTools = selected,
-            RelevanceScores = scores
-        };
+        return ToolSelector.Select(query, pinned, availableTools, options, scores);
     }
 }

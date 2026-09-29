@@ -55,6 +55,44 @@ public record ToolRetrievalResult
     /// Relevance scores per tool name (0.0–1.0). Null if scoring is not applicable.
     /// </summary>
     public IReadOnlyDictionary<string, float>? RelevanceScores { get; init; }
+
+    /// <summary>
+    /// Why each selected tool was selected, in selection order — what a request was actually sent and on
+    /// what grounds. Empty when the retriever does not report it.
+    /// </summary>
+    public IReadOnlyList<ToolSelection> Selections { get; init; } = [];
+}
+
+/// <summary>
+/// One selected tool and the reason it was selected.
+/// </summary>
+/// <param name="Name">The tool name.</param>
+/// <param name="Reason">Why the tool was selected.</param>
+/// <param name="Score">The tool's relevance score, when it was scored.</param>
+public sealed record ToolSelection(string Name, ToolSelectionReason Reason, float? Score = null);
+
+/// <summary>
+/// Why a tool was selected.
+/// </summary>
+public enum ToolSelectionReason
+{
+    /// <summary>Listed in <see cref="ToolRetrievalOptions.AlwaysInclude"/>.</summary>
+    Pinned = 1,
+
+    /// <summary>The query names the tool by its exact name. Takes the first scored slots, regardless of score.</summary>
+    ExactName = 2,
+
+    /// <summary>The query holds one of the tool's declared aliases (<see cref="ToolRetrievalHints.AliasesKey"/>).</summary>
+    Alias = 3,
+
+    /// <summary>Selected on relevance score.</summary>
+    Scored = 4,
+
+    /// <summary>
+    /// Declared as a companion (<see cref="ToolRetrievalHints.CompanionsKey"/>) of a selected tool; added outside
+    /// the scored budget.
+    /// </summary>
+    Companion = 5,
 }
 
 /// <summary>

@@ -44,4 +44,8 @@
     <PackageReference Include="IronHive.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="IronHive.Agent.Tests" />
+  </ItemGroup>
+
 </Project>

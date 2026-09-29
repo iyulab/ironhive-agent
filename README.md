@@ -380,6 +380,53 @@ scoredBudget = max(floor, MaxTools - pinnedCount)
 - Default: `0` — reproduces the pre-existing behavior exactly (pins can shrink the scored tail to
   zero). Set it explicitly to opt into the reserved floor.
 
+### Selection order, retrieval hints and the selection trace
+
+Both retrievers select in this order:
+
+1. **Pins** — `AlwaysInclude`, regardless of score.
+2. **Exact names** — a tool the query names by its exact name (a whole word, case-insensitive, surrounding
+   punctuation and backticks ignored: "use `GrepFiles`.") takes the first scored slots regardless of score or
+   `MinRelevanceScore`, and is kept even past the scored budget.
+3. **Scored tail** — the top-scored tools above `MinRelevanceScore`, within the budget above.
+4. **Companions** — tools a selected tool declares it is used with, added outside the budget.
+
+A tool declares **retrieval hints** in `AITool.AdditionalProperties`, so they travel with the tool however it
+was created:
+
+```csharp
+var restore = AIFunctionFactory.Create(RestoreFileVersion, "restore_file_version", "Restore a file to an earlier saved version.")
+    .WithRetrievalHints(
+        aliases: ["undo", "revert", "roll back", "put back"], // words people use instead of the name
+        companions: ["list_file_versions"]);                   // selected along with it
+```
+
+- **Aliases** (`ToolRetrievalHints.AliasesKey`, `"ironhive.retrieval.aliases"`): a query holding an alias —
+  every word of a multi-word alias, each as a whole word, no substring matching — scores the tool as if it
+  named it (full name coverage). A lexical scorer cannot otherwise get from "undo that" to `restore_file_version`.
+  `EmbeddingToolRetriever` embeds the aliases with the description.
+- **Companions** (`ToolRetrievalHints.CompanionsKey`, `"ironhive.retrieval.companions"`): the first
+  `ToolRetrievalHints.MaxCompanionsPerTool` (3) declared names that are available, one level deep.
+- A value is a sequence of strings or one comma-separated string (the form a string-only transport such as
+  MCP `_meta` carries). `WithRetrievalHints` wraps an `AIFunction` or a declaration-only
+  `AIFunctionDeclaration` without changing how it is described or invoked, and merges with hints already there.
+
+`ToolRetrievalResult.Selections` records every selected tool with its reason (`Pinned`, `ExactName`, `Alias`,
+`Scored`, `Companion`) and score, in selection order. To log what each request was sent, wrap the retriever:
+
+```csharp
+sealed class TracingRetriever(IToolRetriever inner, ILogger log) : IToolRetriever
+{
+    public async Task<ToolRetrievalResult> RetrieveAsync(string query, IList<AITool> tools,
+        ToolRetrievalOptions? options = null, CancellationToken ct = default)
+    {
+        var result = await inner.RetrieveAsync(query, tools, options, ct);
+        log.LogDebug("Tools: {Selections}", string.Join(", ", result.Selections.Select(s => $"{s.Name}={s.Reason}")));
+        return result;
+    }
+}
+```
+
 ## Permission Defaults
 
 `PermissionConfigLoader` reads `.ironhive/permissions.yaml` (or `.yml`, `.json`). With no file, the defaults below apply. A file that exists but is not a permission configuration (malformed, no `permissions` section, a misspelled section or key, an action other than `allow`/`deny`/`ask`) throws `PermissionConfigException` rather than falling back to the defaults, which allow more than a restrictive file would.

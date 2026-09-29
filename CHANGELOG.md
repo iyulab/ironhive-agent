@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.26.0] - Unreleased
+
+### Added
+- **A tool can declare retrieval aliases and companion tools.** `tool.WithRetrievalHints(aliases:, companions:)`
+  (or the `ToolRetrievalHints.AliasesKey` / `CompanionsKey` entries in `AITool.AdditionalProperties`, as a string
+  sequence or one comma-separated string). A query holding an alias scores the tool as if it named it, so "undo
+  that" reaches `restore_file_version`. A selected tool brings up to three declared companions along, outside the
+  scored budget. `EmbeddingToolRetriever` embeds the aliases with the description.
+- **A tool the query names exactly takes the first scored slots**, regardless of score and even when pins have
+  used up the budget.
+- **`ToolRetrievalResult.Selections`** lists every selected tool with its reason (`Pinned`, `ExactName`, `Alias`,
+  `Scored`, `Companion`) and score. It is empty by default for other `IToolRetriever` implementations.
+
 ## [0.25.6] - 2026-09-30
 
 ### Changed

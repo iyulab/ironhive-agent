@@ -37,79 +37,27 @@ public class KeywordToolRetriever : IToolRetriever
 
         var queryTokens = Tokenize(query);
 
-        // No query tokens → return AlwaysInclude tools only
+        // No query tokens → return AlwaysInclude tools (and their companions) only
         if (queryTokens.Count == 0)
         {
-            return Task.FromResult(SelectAlwaysIncludeOnly(availableTools, options));
+            return Task.FromResult(SelectAlwaysIncludeOnly(query, availableTools, options));
         }
 
         // Score all tools
-        var scored = new List<(AITool Tool, string Name, float Score)>(availableTools.Count);
+        var candidates = new List<ToolSelector.Candidate>(availableTools.Count);
         var scores = new Dictionary<string, float>(availableTools.Count, StringComparer.OrdinalIgnoreCase);
 
         foreach (var tool in availableTools)
         {
             var name = GetToolName(tool);
             var description = tool.Description ?? string.Empty;
-            var score = CalculateRelevance(queryTokens, name, description);
-            scored.Add((tool, name, score));
+            var aliasMatched = MatchesAnyAlias(queryTokens, ToolRetrievalHints.GetAliases(tool));
+            var score = CalculateRelevance(queryTokens, name, description, aliasMatched);
+            candidates.Add(new ToolSelector.Candidate(tool, name, score, aliasMatched));
             scores[name] = score;
         }
 
-        // Build always-include set
-        var alwaysIncludeSet = options.AlwaysInclude is { Count: > 0 }
-            ? new HashSet<string>(options.AlwaysInclude, StringComparer.OrdinalIgnoreCase)
-            : null;
-
-        // Select tools: AlwaysInclude first, then top-scored
-        var selected = new List<AITool>();
-        var selectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // 1. Always-include tools (regardless of score)
-        if (alwaysIncludeSet is not null)
-        {
-            foreach (var (tool, name, _) in scored)
-            {
-                if (alwaysIncludeSet.Contains(name) && selectedNames.Add(name))
-                {
-                    selected.Add(tool);
-                }
-            }
-        }
-
-        // 2. Top-scored tools above threshold. The scored tail reserves at least MinScoredSlots
-        // regardless of how many pins already consumed the nominal MaxTools budget — pins no longer
-        // count against this budget. Do NOT go back to breaking on `selected.Count >= options.MaxTools`;
-        // that recouples the two floors. See ToolSelectionBudget.
-        var scoredBudget = ToolSelectionBudget.ScoredBudget(options, selected.Count);
-        var scoredCount = 0;
-
-        foreach (var (tool, name, score) in scored.OrderByDescending(x => x.Score))
-        {
-            if (scoredCount >= scoredBudget)
-            {
-                break;
-            }
-
-            if (!selectedNames.Add(name))
-            {
-                continue;
-            }
-
-            if (score < options.MinRelevanceScore)
-            {
-                break;
-            }
-
-            selected.Add(tool);
-            scoredCount++;
-        }
-
-        return Task.FromResult(new ToolRetrievalResult
-        {
-            SelectedTools = selected,
-            RelevanceScores = scores
-        });
+        return Task.FromResult(ToolSelector.Select(query, candidates, availableTools, options, scores));
     }
 
     /// <summary>
@@ -123,14 +71,15 @@ public class KeywordToolRetriever : IToolRetriever
     /// selection exactly when the prompt carries the most instruction.
     /// </remarks>
     internal static float CalculateRelevance(
-        HashSet<string> queryTokens, string toolName, string toolDescription)
+        HashSet<string> queryTokens, string toolName, string toolDescription, bool aliasMatched = false)
     {
         if (queryTokens.Count == 0)
         {
             return 0f;
         }
 
-        var nameCoverage = Coverage(Tokenize(toolName), queryTokens, allowSubstring: true);
+        // A query holding one of the tool's declared aliases names the tool as surely as its name would.
+        var nameCoverage = aliasMatched ? 1f : Coverage(Tokenize(toolName), queryTokens, allowSubstring: true);
         var descCoverage = Coverage(Tokenize(toolDescription), queryTokens, allowSubstring: false);
 
         // Name and description are normalised separately on purpose: a single shared denominator
@@ -140,6 +89,27 @@ public class KeywordToolRetriever : IToolRetriever
 
         return Math.Min(score, 1.0f);
     }
+
+    /// <summary>
+    /// True when the query holds one of <paramref name="aliases"/>: every word of the alias, each as a whole
+    /// word. No substring matching — an alias is a word a person chose, and a substring match is what makes
+    /// "put" hit "compute".
+    /// </summary>
+    internal static bool MatchesAnyAlias(HashSet<string> queryTokens, IReadOnlyList<string> aliases)
+    {
+        foreach (var alias in aliases)
+        {
+            var words = alias.Split(AliasWordSeparators, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length > 0 && words.All(queryTokens.Contains))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static readonly char[] AliasWordSeparators = [' ', '\t', '-', '_'];
 
     /// <summary>
     /// Fraction of a tool's own tokens that the query covers.
@@ -236,7 +206,7 @@ public class KeywordToolRetriever : IToolRetriever
     private static string GetToolName(AITool tool) => tool.Name;
 
     private static ToolRetrievalResult SelectAlwaysIncludeOnly(
-        IList<AITool> availableTools, ToolRetrievalOptions options)
+        string query, IList<AITool> availableTools, ToolRetrievalOptions options)
     {
         if (options.AlwaysInclude is not { Count: > 0 })
         {
@@ -247,14 +217,13 @@ public class KeywordToolRetriever : IToolRetriever
             };
         }
 
+        // Only pins are candidates: with nothing to score, the scored tail stays empty.
         var set = new HashSet<string>(options.AlwaysInclude, StringComparer.OrdinalIgnoreCase);
-        var selected = availableTools.Where(t => set.Contains(GetToolName(t))).ToList();
-        var scores = selected.ToDictionary(GetToolName, _ => 1.0f, StringComparer.OrdinalIgnoreCase);
+        var pinned = availableTools.Where(t => set.Contains(GetToolName(t)))
+            .Select(t => new ToolSelector.Candidate(t, GetToolName(t), 1.0f))
+            .ToList();
+        var scores = pinned.ToDictionary(c => c.Name, c => c.Score, StringComparer.OrdinalIgnoreCase);
 
-        return new ToolRetrievalResult
-        {
-            SelectedTools = selected,
-            RelevanceScores = scores
-        };
+        return ToolSelector.Select(query, pinned, availableTools, options, scores);
     }
 }
