@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.25.2] - 2026-09-29
+
+### Changed
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.4 -> 0.21.5, `Ironbees.Core` 0.21.4 -> 0.21.5, `IronHive.Abstractions` 0.45.0 -> 0.45.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+
 ## [0.25.1] - 2026-09-29
 
 ### Changed
