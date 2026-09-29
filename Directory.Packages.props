@@ -53,6 +53,6 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
       <!-- Convention checks (options reachability) — iyulab conventions kit -->
-    <PackageVersion Include="Iyu.Conventions.Testing" Version="0.2.0" />
+    <PackageVersion Include="Iyu.Conventions.Testing" Version="0.3.0" />
   </ItemGroup>
 </Project>
