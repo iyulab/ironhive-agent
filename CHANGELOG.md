@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `MemoryIndexer` 0.20.0 -> 0.20.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.5 -> 0.21.6, `Ironbees.Core` 0.21.5 -> 0.21.6 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
 
 ## [0.25.4] - 2026-09-29
 
