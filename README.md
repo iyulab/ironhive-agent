@@ -364,7 +364,9 @@ public class FileSystemTools(IAvailableToolsContext availableTools)
                 : "To delete a file, use a dedicated delete operation.";
             return $"Error: empty content is not allowed. {hint}";
         }
-        // ...
+
+        File.WriteAllText(path, content);
+        return $"Wrote {content.Length} characters to {path}.";
     }
 }
 
@@ -439,15 +441,23 @@ var restore = AIFunctionFactory.Create(RestoreFileVersion, "restore_file_version
         companions: ["list_file_versions"]);                   // selected along with it
 ```
 
-- **Aliases** (`ToolRetrievalHints.AliasesKey`, `"ironhive.retrieval.aliases"`): a query holding an alias —
-  every word of a multi-word alias, each as a whole word, no substring matching — scores the tool as if it
-  named it (full name coverage). A lexical scorer cannot otherwise get from "undo that" to `restore_file_version`.
-  `EmbeddingToolRetriever` embeds the aliases with the description.
+- **Aliases** (`ToolRetrievalHints.AliasesKey`, `"ironhive.retrieval.aliases"`): a query holding an alias scores the
+  tool as if it named it (full name coverage). A lexical scorer cannot otherwise get from "undo that" to
+  `restore_file_version`. `EmbeddingToolRetriever` embeds the aliases with the description. The query must hold every
+  word of a multi-word alias:
+  - In most scripts, each word must appear as a whole word, with no substring matching.
+  - A Hangul word of two or more syllables matches a query word it begins, since particles and endings attach to the
+    word: `전사` matches `전사해줘`.
+  - A Han, Hiragana or Katakana word matches anywhere in a query word, since those scripts write words without
+    spaces: `文字起こし` matches `この動画を文字起こししてください`.
 - **Companions** (`ToolRetrievalHints.CompanionsKey`, `"ironhive.retrieval.companions"`): the first
   `ToolRetrievalHints.MaxCompanionsPerTool` (3) declared names that are available, one level deep.
 - A value is a sequence of strings or one comma-separated string (the form a string-only transport such as
   MCP `_meta` carries). `WithRetrievalHints` wraps an `AIFunction` or a declaration-only
   `AIFunctionDeclaration` without changing how it is described or invoked, and merges with hints already there.
+- Hints an MCP server declares in a tool's `_meta` reach the retrievers through `McpPluginManager`. A host that lists
+  tools with its own MCP clients uses the same bridge: `McpPluginManager.WithDeclaredRetrievalHints(mcpClientTool)`.
+  `ToolRetrievalHints.ParseValue(value)` reads a hint value the way the retrievers do.
 
 `ToolRetrievalResult.Selections` records every selected tool with its reason (`Pinned`, `ExactName`, `Alias`,
 `Scored`, `Companion`) and score, in selection order. To log what each request was sent, wrap the retriever:

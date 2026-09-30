@@ -102,10 +102,12 @@ public static class ToolRetrievalHints
         properties is not null && properties.TryGetValue(key, out var value) ? ParseValue(value) : [];
 
     /// <summary>
-    /// Reads a hint value: a sequence of strings, one comma-separated string, or the JSON form of either.
-    /// Anything else reads as no hints.
+    /// Reads a hint value as the retrievers do: a sequence of strings, one comma-separated string, or the JSON form of
+    /// either (a <see cref="JsonElement"/> string or string array). Entries are trimmed; anything else reads as no hints.
+    /// For a host that carries hints from its own tool source (e.g. an MCP client of its own) into
+    /// <see cref="WithRetrievalHints"/>.
     /// </summary>
-    internal static string[] ParseValue(object? value) => value switch
+    public static string[] ParseValue(object? value) => value switch
     {
         string text => Normalize(text.Split(',')),
         IEnumerable<string> items => Normalize(items),

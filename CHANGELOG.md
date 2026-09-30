@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.28.0] - Unreleased
+
+### Added
+- **`McpPluginManager.WithDeclaredRetrievalHints(McpClientTool)` and `ToolRetrievalHints.ParseValue(object?)` are public**,
+  so a host that lists MCP tools through its own clients carries `_meta` retrieval hints with one call.
+
+### Fixed
+- **Retrieval aliases match Korean, Japanese and Chinese requests.** An alias word had to be a whole word of the query.
+  In Korean, particles and endings are written attached to the word (`전사` appears as `전사해줘`), and Han and Kana
+  write words without spaces, so an alias in those scripts never matched a real request. Now:
+  - A Hangul alias word of two or more syllables matches a query word it begins.
+  - A Han or Kana alias word matches anywhere in a query word.
+  - Other scripts keep the whole-word rule.
+
 ## [0.27.0] - 2026-09-30
 
 ### Added

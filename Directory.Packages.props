@@ -52,6 +52,8 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.HangDump" Version="2.3.3" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <!-- README snippet compilation (tests only) -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
       <!-- Convention checks (options reachability) — iyulab conventions kit -->
     <PackageVersion Include="Iyu.Conventions.Testing" Version="0.3.0" />
   </ItemGroup>

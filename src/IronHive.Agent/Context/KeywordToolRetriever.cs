@@ -91,16 +91,31 @@ public class KeywordToolRetriever : IToolRetriever
     }
 
     /// <summary>
-    /// True when the query holds one of <paramref name="aliases"/>: every word of the alias, each as a whole
-    /// word. No substring matching — an alias is a word a person chose, and a substring match is what makes
-    /// "put" hit "compute".
+    /// True when the query holds one of <paramref name="aliases"/>: every word of the alias is in the query.
     /// </summary>
+    /// <remarks>
+    /// A word in most scripts must be a whole word of the query. There is no substring matching, because an alias is a
+    /// word a person chose, and a substring match is what makes "put" hit "compute".
+    /// Two kinds of scripts are exceptions, because a whole-word rule can never match real requests written in them:
+    /// <list type="bullet">
+    /// <item><description>
+    /// <b>Hangul:</b> particles and verb endings are written attached to the word. "전사" is written "전사해줘", and
+    /// "자막" is written "자막을". So a Hangul alias word matches a query word that it <i>begins</i>.
+    /// </description></item>
+    /// <item><description>
+    /// <b>Han, Hiragana and Katakana:</b> words are written without spaces between them, so an alias word in these
+    /// scripts matches <i>anywhere</i> in a query word.
+    /// </description></item>
+    /// </list>
+    /// Both exceptions apply only to alias words of two or more characters. A single syllable or character is too
+    /// common to stand for a tool.
+    /// </remarks>
     internal static bool MatchesAnyAlias(HashSet<string> queryTokens, IReadOnlyList<string> aliases)
     {
         foreach (var alias in aliases)
         {
             var words = alias.Split(AliasWordSeparators, StringSplitOptions.RemoveEmptyEntries);
-            if (words.Length > 0 && words.All(queryTokens.Contains))
+            if (words.Length > 0 && words.All(word => queryTokens.Contains(word) || MatchesAttached(word, queryTokens)))
             {
                 return true;
             }
@@ -108,6 +123,33 @@ public class KeywordToolRetriever : IToolRetriever
 
         return false;
     }
+
+    private static bool MatchesAttached(string aliasWord, HashSet<string> queryTokens)
+    {
+        if (aliasWord.Length < 2)
+        {
+            return false;
+        }
+
+        if (aliasWord.All(IsHangul))
+        {
+            return queryTokens.Any(token => token.StartsWith(aliasWord, StringComparison.Ordinal));
+        }
+
+        if (aliasWord.All(IsUnspacedCjk))
+        {
+            return queryTokens.Any(token => token.Contains(aliasWord, StringComparison.Ordinal));
+        }
+
+        return false;
+    }
+
+    private static bool IsHangul(char c) =>
+        c is (>= '\uAC00' and <= '\uD7A3') or (>= '\u1100' and <= '\u11FF') or (>= '\u3130' and <= '\u318F');
+
+    private static bool IsUnspacedCjk(char c) =>
+        c is (>= '\u4E00' and <= '\u9FFF') or (>= '\u3400' and <= '\u4DBF')
+            or (>= '\u3040' and <= '\u309F') or (>= '\u30A0' and <= '\u30FF') or (>= '\u31F0' and <= '\u31FF');
 
     private static readonly char[] AliasWordSeparators = [' ', '\t', '-', '_'];
 

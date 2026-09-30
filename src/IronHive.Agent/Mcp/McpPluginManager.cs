@@ -146,9 +146,10 @@ public class McpPluginManager : IMcpPluginManager
     /// Carries the retrieval hints an MCP server declares in a tool's <c>_meta</c> — under
     /// <see cref="ToolRetrievalHints.AliasesKey"/> and <see cref="ToolRetrievalHints.CompanionsKey"/>, as a string
     /// array or one comma-separated string — into the tool's <see cref="AITool.AdditionalProperties"/>, where the
-    /// tool retrievers read them. A tool without them is returned unchanged.
+    /// tool retrievers read them. A tool without them is returned unchanged. Public for a host that lists tools through
+    /// its own <see cref="McpClientTool"/> clients rather than this manager.
     /// </summary>
-    internal static AITool WithDeclaredRetrievalHints(McpClientTool tool)
+    public static AITool WithDeclaredRetrievalHints(McpClientTool tool)
     {
         var meta = tool.ProtocolTool.Meta;
         if (meta is null)
