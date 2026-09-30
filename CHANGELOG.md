@@ -53,6 +53,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   uses the default limit (20).
 - **Documentation comments describe behaviour only.** Code comments, build-file comments and test descriptions state
   what the code does and the condition that triggers it; references to internal tracking ids and tools are removed.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.18.0 -> 0.18.1, `IronHive.Abstractions` 0.45.2 -> 0.45.3.
 
 ### Removed
 - **Breaking: `ApprovalGatedFunctionInvoker.Create`** (and the class). Migration: register the gate with
