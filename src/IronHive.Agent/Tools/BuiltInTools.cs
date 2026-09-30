@@ -61,6 +61,11 @@ public class ToolProvider
     private readonly string[] _allowedRoots;
     private const int MaxFileSize = 1024 * 1024; // 1MB
     private const int MaxOutputLength = 50000; // Characters
+
+    // A command's output is capped at MaxOutputLength per stream, kept as its beginning plus its end: the end is where a
+    // build, test run or script prints the error and the summary.
+    private const int OutputHeadChars = 20000;
+    private const int OutputTailChars = MaxOutputLength - OutputHeadChars;
     private const int DefaultCommandTimeout = 30000; // 30 seconds
 
     public ToolProvider(string workingDirectory, FileToolOptions? options = null)
@@ -395,22 +400,22 @@ public class ToolProvider
             };
 
             using var process = new Process { StartInfo = processInfo };
-            var outputBuilder = new StringBuilder();
-            var errorBuilder = new StringBuilder();
+            var outputCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
+            var errorCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
 
             process.OutputDataReceived += (_, e) =>
             {
-                if (e.Data != null && outputBuilder.Length < MaxOutputLength)
+                if (e.Data != null)
                 {
-                    outputBuilder.AppendLine(e.Data);
+                    outputCapture.AppendLine(e.Data);
                 }
             };
 
             process.ErrorDataReceived += (_, e) =>
             {
-                if (e.Data != null && errorBuilder.Length < MaxOutputLength)
+                if (e.Data != null)
                 {
-                    errorBuilder.AppendLine(e.Data);
+                    errorCapture.AppendLine(e.Data);
                 }
             };
 
@@ -427,26 +432,19 @@ public class ToolProvider
             catch (OperationCanceledException)
             {
                 process.Kill(entireProcessTree: true);
-                return $"Error: Command timed out after {timeoutMs}ms";
-            }
 
-            var output = outputBuilder.ToString();
-            var error = errorBuilder.ToString();
+                // What the command printed before it was stopped is often why it hung (a prompt, a retry loop).
+                var partial = new StringBuilder();
+                partial.AppendLine(CultureInfo.InvariantCulture, $"Error: Command timed out after {timeoutMs}ms");
+                AppendStream(partial, "Output so far:", outputCapture.ToString());
+                AppendStream(partial, "Stderr so far:", errorCapture.ToString());
+                return partial.ToString();
+            }
 
             var result = new StringBuilder();
             result.AppendLine(CultureInfo.InvariantCulture, $"Exit code: {process.ExitCode}");
-
-            if (!string.IsNullOrWhiteSpace(output))
-            {
-                result.AppendLine("Output:");
-                result.AppendLine(TruncateOutput(output));
-            }
-
-            if (!string.IsNullOrWhiteSpace(error))
-            {
-                result.AppendLine("Stderr:");
-                result.AppendLine(TruncateOutput(error));
-            }
+            AppendStream(result, "Output:", outputCapture.ToString());
+            AppendStream(result, "Stderr:", errorCapture.ToString());
 
             return result.ToString();
         }
@@ -513,12 +511,12 @@ public class ToolProvider
         return line[..maxLength] + "...";
     }
 
-    private static string TruncateOutput(string output)
+    private static void AppendStream(StringBuilder result, string label, string captured)
     {
-        if (output.Length <= MaxOutputLength)
+        if (!string.IsNullOrWhiteSpace(captured))
         {
-            return output;
+            result.AppendLine(label);
+            result.AppendLine(captured);
         }
-        return output[..MaxOutputLength] + $"\n... (truncated, total {output.Length} chars)";
     }
 }

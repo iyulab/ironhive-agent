@@ -17,6 +17,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **`ToolRetrievalResult.Selections`** lists every selected tool with its reason (`Pinned`, `ExactName`, `Alias`,
   `Scored`, `Companion`) and score. It is empty by default for other `IToolRetriever` implementations.
 
+### Fixed
+
+- **The shell tool keeps the end of long output.** Only the first 50,000 characters of each stream were kept, so
+  the end of a long build, test run or script (where the error and the summary are) never reached the model. Each
+  stream now keeps its first 20,000 and last 30,000 characters with a `[... N characters omitted ...]` marker. A
+  command that times out also returns what it printed so far instead of only the timeout message.
+
 ## [0.25.6] - 2026-09-30
 
 ### Changed
