@@ -408,9 +408,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     /// the metadata text (turn manager <c>ParseReasoning</c>, which may heuristically strip/trim and is
     /// provider-format specific) come from DIFFERENT parsers and need not be prefix-aligned. When they
     /// diverge we dedup to the live deltas, so reasoning that a continuation round added is not shown —
-    /// the same state as before live separation (no new loss vs. pre-MU-3). Emitting the full metadata
-    /// instead would duplicate the live part, which is worse. Consumer (Filer) live verification is the
-    /// backstop for whether the two parsers align in practice.
+    /// the same state as before live and metadata reasoning were separated (no new loss). Emitting the full
+    /// metadata instead would duplicate the live part, which is worse.
     /// </para>
     /// </summary>
     private static string? ComputeMetadataThinkingTail(string liveReasoning, string metadataThinking)

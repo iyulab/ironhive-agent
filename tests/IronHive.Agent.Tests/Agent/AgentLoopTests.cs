@@ -644,7 +644,7 @@ public class AgentLoopTests
         Assert.Null(mockClient.ReceivedOptions[0]!.AdditionalProperties);
     }
 
-    // Regression coverage for docket iyulab/ironhive-agent#153: AgentServicesOptions.UsageLimits
+    // Regression coverage: AgentServicesOptions.UsageLimits
     // used to register a fully working UsageLimiter in DI that AgentLoop's request path never
     // consulted, so a configured session limit silently enforced nothing.
 

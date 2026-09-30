@@ -51,6 +51,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **The adapter's single-client constructor honours tool calls.** `ChatClientFrameworkAdapter(IChatClient)` left the
   tool-turn limit at 0, so a run given tools through `AgentRunOptions.Tools` stopped before its first model call; it now
   uses the default limit (20).
+- **Documentation comments describe behaviour only.** Code comments, build-file comments and test descriptions state
+  what the code does and the condition that triggers it; references to internal tracking ids and tools are removed.
 
 ### Removed
 - **Breaking: `ApprovalGatedFunctionInvoker.Create`** (and the class). Migration: register the gate with
@@ -88,34 +90,34 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.25.6] - 2026-09-30
 
 ### Changed
-- Re-pinned sibling package(s) `FluxGuard.Remote` 0.17.0 -> 0.17.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.17.0 -> 0.17.1 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.25.5] - 2026-09-30
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.20.0 -> 0.20.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.5 -> 0.21.6, `Ironbees.Core` 0.21.5 -> 0.21.6 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
-- Re-pinned sibling package(s) `WebFlux` 0.19.0 -> 0.19.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.20.0 -> 0.20.1 — re-consumption of already-consumed iyulab packages. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.5 -> 0.21.6, `Ironbees.Core` 0.21.5 -> 0.21.6 — re-consumption of already-consumed iyulab packages.
+- Re-pinned sibling package(s) `WebFlux` 0.19.0 -> 0.19.1 — re-consumption of already-consumed iyulab packages.
 
 ## [0.25.4] - 2026-09-29
 
 ### Changed
-- Re-pinned sibling package(s) `WebFlux` 0.18.0 -> 0.19.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `WebFlux` 0.18.0 -> 0.19.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.25.3] - 2026-09-29
 
 ### Changed
-- Re-pinned sibling package(s) `WebFlux` 0.17.0 -> 0.18.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `WebFlux` 0.17.0 -> 0.18.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.25.2] - 2026-09-29
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.4 -> 0.21.5, `Ironbees.Core` 0.21.4 -> 0.21.5, `IronHive.Abstractions` 0.45.0 -> 0.45.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.4 -> 0.21.5, `Ironbees.Core` 0.21.4 -> 0.21.5, `IronHive.Abstractions` 0.45.0 -> 0.45.1 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.25.1] - 2026-09-29
 
 ### Changed
-- Re-pinned sibling package(s) `WebFlux` 0.16.0 -> 0.17.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `WebFlux` 0.16.0 -> 0.17.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.25.0] - 2026-09-29
 
@@ -140,8 +142,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.24.1] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.44.0 -> 0.45.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.3 -> 0.21.4, `Ironbees.Core` 0.21.3 -> 0.21.4 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.44.0 -> 0.45.0 — re-consumption of already-consumed iyulab packages.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.3 -> 0.21.4, `Ironbees.Core` 0.21.3 -> 0.21.4 — re-consumption of already-consumed iyulab packages.
 
 ### Fixed
 - **The packages carry the README**, so their nuget.org page shows it.
@@ -149,7 +151,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.24.0] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.17 -> 0.20.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.17 -> 0.20.0 — re-consumption of already-consumed iyulab packages.
 
 ### Fixed
 - **The anchored compaction state block stays within `CompactionConfig.MaxAnchorStateChars`.** Anchors are merged across
@@ -165,8 +167,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.23.0] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.43.1 -> 0.44.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.2 -> 0.21.3, `Ironbees.Core` 0.21.2 -> 0.21.3 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.43.1 -> 0.44.0 — re-consumption of already-consumed iyulab packages.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.2 -> 0.21.3, `Ironbees.Core` 0.21.2 -> 0.21.3 — re-consumption of already-consumed iyulab packages.
 
 ### Added
 - **Compaction waits for the server when the context window is not known (`CompactionConfig.CompactOnOverflow`, default
@@ -184,8 +186,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.22.0] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.43.0 -> 0.43.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.1 -> 0.21.2, `Ironbees.Core` 0.21.1 -> 0.21.2 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.43.0 -> 0.43.1 — re-consumption of already-consumed iyulab packages.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.1 -> 0.21.2, `Ironbees.Core` 0.21.1 -> 0.21.2 — re-consumption of already-consumed iyulab packages.
 
 ### Added
 
@@ -225,8 +227,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.20.0] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.42.0 -> 0.43.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.0 -> 0.21.1, `Ironbees.Core` 0.21.0 -> 0.21.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.42.0 -> 0.43.0 — re-consumption of already-consumed iyulab packages.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.0 -> 0.21.1, `Ironbees.Core` 0.21.0 -> 0.21.1 — re-consumption of already-consumed iyulab packages.
 
 ### Added
 
@@ -251,42 +253,42 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.19.13] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.16 -> 0.19.17 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.16 -> 0.19.17 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.12] - 2026-09-28
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.15 -> 0.19.16 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.15 -> 0.19.16 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.11] - 2026-09-27
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.14 -> 0.19.15 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.14 -> 0.19.15 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.10] - 2026-09-27
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.13 -> 0.19.14 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.13 -> 0.19.14 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.9] - 2026-09-27
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.12 -> 0.19.13 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.12 -> 0.19.13 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.8] - 2026-09-27
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.11 -> 0.19.12 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.11 -> 0.19.12 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.7] - 2026-09-27
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.4 -> 0.21.0, `Ironbees.Core` 0.20.4 -> 0.21.0, `IronHive.Abstractions` 0.41.0 -> 0.42.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.4 -> 0.21.0, `Ironbees.Core` 0.20.4 -> 0.21.0, `IronHive.Abstractions` 0.41.0 -> 0.42.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.6] - 2026-09-27
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.10 -> 0.19.11 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.10 -> 0.19.11 — re-consumption of already-consumed iyulab packages.
 
 ### Fixed
 - **`McpPluginHotReloader` can be disposed synchronously.** It implemented only `IAsyncDisposable`, so a host that
@@ -296,27 +298,27 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.19.5] - 2026-09-26
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.9 -> 0.19.10 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.9 -> 0.19.10 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.4] - 2026-09-26
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.3 -> 0.20.4, `Ironbees.Core` 0.20.3 -> 0.20.4, `IronHive.Abstractions` 0.40.0 -> 0.41.0, `MemoryIndexer` 0.19.8 -> 0.19.9 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.3 -> 0.20.4, `Ironbees.Core` 0.20.3 -> 0.20.4, `IronHive.Abstractions` 0.40.0 -> 0.41.0, `MemoryIndexer` 0.19.8 -> 0.19.9 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.3] - 2026-09-26
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.19.7 -> 0.19.8 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.19.7 -> 0.19.8 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.2] - 2026-09-26
 
 ### Changed
-- Re-pinned sibling package(s) `IndexThinking` 0.22.1 -> 0.23.0, `Ironbees.Autonomous` 0.20.2 -> 0.20.3, `Ironbees.Core` 0.20.2 -> 0.20.3, `IronHive.Abstractions` 0.39.0 -> 0.40.0, `MemoryIndexer` 0.19.6 -> 0.19.7 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `IndexThinking` 0.22.1 -> 0.23.0, `Ironbees.Autonomous` 0.20.2 -> 0.20.3, `Ironbees.Core` 0.20.2 -> 0.20.3, `IronHive.Abstractions` 0.39.0 -> 0.40.0, `MemoryIndexer` 0.19.6 -> 0.19.7 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.1] - 2026-09-26
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.1 -> 0.20.2, `Ironbees.Core` 0.20.1 -> 0.20.2, `IronHive.Abstractions` 0.38.0 -> 0.39.0, `MemoryIndexer` 0.19.5 -> 0.19.6 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.1 -> 0.20.2, `Ironbees.Core` 0.20.1 -> 0.20.2, `IronHive.Abstractions` 0.38.0 -> 0.39.0, `MemoryIndexer` 0.19.5 -> 0.19.6 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.19.0] - 2026-09-25
 
@@ -367,13 +369,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **`IronHive.Agent` no longer references `MemoryIndexer.Sdk`**, which nothing in it used. It brought SQLite,
   OpenTelemetry (with an OTLP exporter) and ModelContextProtocol server packages into every host. A host that uses the
   SDK's storage wiring references `MemoryIndexer.Sdk` itself.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.4 -> 0.20.0, `Ironbees.Core` 0.19.4 -> 0.20.0, `IronHive.Abstractions` 0.37.0 -> 0.38.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.0 -> 0.20.1, `Ironbees.Core` 0.20.0 -> 0.20.1, `MemoryIndexer` 0.19.4 -> 0.19.5 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.4 -> 0.20.0, `Ironbees.Core` 0.19.4 -> 0.20.0, `IronHive.Abstractions` 0.37.0 -> 0.38.0 — re-consumption of already-consumed iyulab packages. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.20.0 -> 0.20.1, `Ironbees.Core` 0.20.0 -> 0.20.1, `MemoryIndexer` 0.19.4 -> 0.19.5 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.17.1] - 2026-09-24
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.3 -> 0.19.4, `Ironbees.Core` 0.19.3 -> 0.19.4, `IronHive.Abstractions` 0.36.0 -> 0.37.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.3 -> 0.19.4, `Ironbees.Core` 0.19.3 -> 0.19.4, `IronHive.Abstractions` 0.36.0 -> 0.37.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.17.0] - 2026-09-24
 
@@ -391,7 +393,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.16.1] - 2026-09-24
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.2 -> 0.19.3, `Ironbees.Core` 0.19.2 -> 0.19.3, `IronHive.Abstractions` 0.35.0 -> 0.36.0, `MemoryIndexer` 0.19.3 -> 0.19.4, `MemoryIndexer.Sdk` 0.19.3 -> 0.19.4, `WebFlux` 0.15.0 -> 0.16.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.2 -> 0.19.3, `Ironbees.Core` 0.19.2 -> 0.19.3, `IronHive.Abstractions` 0.35.0 -> 0.36.0, `MemoryIndexer` 0.19.3 -> 0.19.4, `MemoryIndexer.Sdk` 0.19.3 -> 0.19.4, `WebFlux` 0.15.0 -> 0.16.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.16.0] - 2026-09-24
 
@@ -414,27 +416,27 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.15.10] - 2026-09-24
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.1 -> 0.19.2, `Ironbees.Core` 0.19.1 -> 0.19.2, `IronHive.Abstractions` 0.34.0 -> 0.35.0, `MemoryIndexer` 0.19.2 -> 0.19.3, `MemoryIndexer.Sdk` 0.19.2 -> 0.19.3, `TokenMeter` 0.7.7 -> 0.7.8 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.1 -> 0.19.2, `Ironbees.Core` 0.19.1 -> 0.19.2, `IronHive.Abstractions` 0.34.0 -> 0.35.0, `MemoryIndexer` 0.19.2 -> 0.19.3, `MemoryIndexer.Sdk` 0.19.2 -> 0.19.3, `TokenMeter` 0.7.7 -> 0.7.8 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.9] - 2026-09-24
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.0 -> 0.19.1, `Ironbees.Core` 0.19.0 -> 0.19.1, `TokenMeter` 0.7.6 -> 0.7.7, `WebFlux` 0.14.1 -> 0.15.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.19.0 -> 0.19.1, `Ironbees.Core` 0.19.0 -> 0.19.1, `TokenMeter` 0.7.6 -> 0.7.7, `WebFlux` 0.14.1 -> 0.15.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.8] - 2026-09-24
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.18.0 -> 0.19.0, `Ironbees.Core` 0.18.0 -> 0.19.0, `IronHive.Abstractions` 0.33.1 -> 0.34.0, `MemoryIndexer` 0.19.0 -> 0.19.2, `MemoryIndexer.Sdk` 0.19.0 -> 0.19.2, `TokenMeter` 0.7.5 -> 0.7.6 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.18.0 -> 0.19.0, `Ironbees.Core` 0.18.0 -> 0.19.0, `IronHive.Abstractions` 0.33.1 -> 0.34.0, `MemoryIndexer` 0.19.0 -> 0.19.2, `MemoryIndexer.Sdk` 0.19.0 -> 0.19.2, `TokenMeter` 0.7.5 -> 0.7.6 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.7] - 2026-09-23
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.3 -> 0.18.0, `Ironbees.Core` 0.17.3 -> 0.18.0, `MemoryIndexer` 0.18.5 -> 0.19.0, `MemoryIndexer.Sdk` 0.18.5 -> 0.19.0, `WebFlux` 0.14.0 -> 0.14.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.3 -> 0.18.0, `Ironbees.Core` 0.17.3 -> 0.18.0, `MemoryIndexer` 0.18.5 -> 0.19.0, `MemoryIndexer.Sdk` 0.18.5 -> 0.19.0, `WebFlux` 0.14.0 -> 0.14.1 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.6] - 2026-09-23
 
 ### Changed
-- Re-pinned sibling package(s) `IndexThinking` 0.22.0 -> 0.22.1, `MemoryIndexer` 0.18.4 -> 0.18.5, `MemoryIndexer.Sdk` 0.18.4 -> 0.18.5 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `IndexThinking` 0.22.0 -> 0.22.1, `MemoryIndexer` 0.18.4 -> 0.18.5, `MemoryIndexer.Sdk` 0.18.4 -> 0.18.5 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.5] - 2026-09-23
 
@@ -451,22 +453,22 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.15.4] - 2026-09-23
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.2 -> 0.17.3, `Ironbees.Core` 0.17.2 -> 0.17.3, `IronHive.Abstractions` 0.33.0 -> 0.33.1 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.2 -> 0.17.3, `Ironbees.Core` 0.17.2 -> 0.17.3, `IronHive.Abstractions` 0.33.0 -> 0.33.1 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.3] - 2026-09-23
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.18.3 -> 0.18.4, `MemoryIndexer.Sdk` 0.18.3 -> 0.18.4, `WebFlux` 0.13.0 -> 0.14.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.18.3 -> 0.18.4, `MemoryIndexer.Sdk` 0.18.3 -> 0.18.4, `WebFlux` 0.13.0 -> 0.14.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.2] - 2026-09-22
 
 ### Changed
-- Re-pinned sibling package(s) `WebFlux` 0.12.0 -> 0.13.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `WebFlux` 0.12.0 -> 0.13.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.1] - 2026-09-22
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.18.2 -> 0.18.3, `MemoryIndexer.Sdk` 0.18.2 -> 0.18.3 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.18.2 -> 0.18.3, `MemoryIndexer.Sdk` 0.18.2 -> 0.18.3 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.15.0] - 2026-09-21
 
@@ -542,7 +544,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.14.8] - 2026-09-22
 
 ### Changed
-- Re-pinned sibling package(s) `WebFlux` 0.11.0 -> 0.12.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `WebFlux` 0.11.0 -> 0.12.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.7] - 2026-09-21
 
@@ -556,7 +558,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   outer cancellation is still in place with the same value.
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.18.1 -> 0.18.2, `MemoryIndexer.Sdk` 0.18.1 -> 0.18.2, `WebFlux` 0.10.0 -> 0.11.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.18.1 -> 0.18.2, `MemoryIndexer.Sdk` 0.18.1 -> 0.18.2, `WebFlux` 0.10.0 -> 0.11.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.6] - 2026-09-21
 
@@ -566,7 +568,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   and only the outer cancellation enforced the configured value. It is now passed as `TimeoutMs`.
 
 ### Changed
-- Re-pinned sibling package(s) `MemoryIndexer` 0.18.0 -> 0.18.1, `MemoryIndexer.Sdk` 0.18.0 -> 0.18.1, `WebFlux` 0.9.0 -> 0.10.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.18.0 -> 0.18.1, `MemoryIndexer.Sdk` 0.18.0 -> 0.18.1, `WebFlux` 0.9.0 -> 0.10.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.5] - 2026-09-20
 
@@ -575,23 +577,23 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   MemoryIndexer never populated them, so they always arrived null, and they are removed from
   `TextCompletionOptions` in MemoryIndexer 0.18.0. `Temperature`, `MaxTokens` and `StopSequences`
   are unchanged.
-- Re-pinned sibling package(s) `FluxGuard.Remote` 0.16.0 -> 0.17.0, `MemoryIndexer` 0.17.16 -> 0.18.0, `MemoryIndexer.Sdk` 0.17.16 -> 0.18.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.16.0 -> 0.17.0, `MemoryIndexer` 0.17.16 -> 0.18.0, `MemoryIndexer.Sdk` 0.17.16 -> 0.18.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.4] - 2026-09-20
 
 ### Changed
-- Re-pinned sibling package(s) `WebFlux` 0.8.0 -> 0.9.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `WebFlux` 0.8.0 -> 0.9.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.3] - 2026-09-20
 
 ### Changed
-- Re-pinned sibling package(s) `FluxGuard.Remote` 0.15.1 -> 0.16.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.15.1 -> 0.16.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.2] - 2026-09-20
 
 ### Changed
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.32.0 -> 0.33.0, `WebFlux` 0.7.4 -> 0.8.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.1 -> 0.17.2, `Ironbees.Core` 0.17.1 -> 0.17.2 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.32.0 -> 0.33.0, `WebFlux` 0.7.4 -> 0.8.0 — re-consumption of already-consumed iyulab packages. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.17.1 -> 0.17.2, `Ironbees.Core` 0.17.1 -> 0.17.2 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ### Fixed
 - **DeepResearch with `UseWebFluxPackage = true` extracted a placeholder sentence instead of the
@@ -604,13 +606,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [0.14.1] - 2026-09-19
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.16.0 -> 0.17.1, `Ironbees.Core` 0.16.0 -> 0.17.1, `IronHive.Abstractions` 0.31.0 -> 0.32.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.16.0 -> 0.17.1, `Ironbees.Core` 0.16.0 -> 0.17.1, `IronHive.Abstractions` 0.31.0 -> 0.32.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ## [0.14.0] - 2026-09-19
 
 ### Changed
-- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.15.0 -> 0.16.0, `Ironbees.Core` 0.15.0 -> 0.16.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.30.0 -> 0.31.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.15.0 -> 0.16.0, `Ironbees.Core` 0.15.0 -> 0.16.0 — re-consumption of already-consumed iyulab packages. No source changes.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.30.0 -> 0.31.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 ### Fixed
 
@@ -692,9 +694,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `IAgentOrchestrator.ProcessStructuredAsync(task, new ProcessOptions { AgentName = "explore" })`.
 
 ### Changed
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.29.1 -> 0.29.2 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
-- Re-pinned sibling package(s) `IndexThinking` 0.21.2 -> 0.22.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
-- Re-pinned sibling package(s) `IronHive.Abstractions` 0.29.2 -> 0.30.0 — re-consumption of already-consumed iyulab packages via `check-pin-drift.ps1 -Fix`. No source changes.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.29.1 -> 0.29.2 — re-consumption of already-consumed iyulab packages. No source changes.
+- Re-pinned sibling package(s) `IndexThinking` 0.21.2 -> 0.22.0 — re-consumption of already-consumed iyulab packages. No source changes.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.29.2 -> 0.30.0 — re-consumption of already-consumed iyulab packages. No source changes.
 
 - Re-pinned `Ironbees.Core` and `Ironbees.Autonomous` 0.14.12 -> 0.15.0.
 

@@ -147,7 +147,7 @@ public class GoalReminderTests
     [Fact]
     public void InjectReminderIfNeeded_NeverAddsASecondSystemMessage()
     {
-        // Regression for docket iyulab/ironhive-agent#154: a chat template that requires
+        // Regression: a chat template that requires
         // exactly one system message, and that it be first, must still see exactly that
         // shape after a reminder is injected mid-conversation.
         var options = new GoalReminderOptions { MinMessagesBeforeReminder = 4 };

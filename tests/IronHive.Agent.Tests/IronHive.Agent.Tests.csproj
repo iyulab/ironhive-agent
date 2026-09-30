@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <!-- xUnit v3 test projects are stand-alone executables (BD-20260829-xunit-v3-pilot) -->
+    <!-- xUnit v3 test projects are stand-alone executables -->
     <OutputType>Exe</OutputType>
     <IsTestProject>true</IsTestProject>
 
@@ -19,7 +19,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <!-- MTP equivalent of the ecosystem's VSTest blame-hang convention (BD-20260828-07) -->
+    <!-- MTP equivalent of VSTest's blame-hang: dump and stop a test run that hangs -->
     <PackageReference Include="Microsoft.Testing.Extensions.HangDump" />
     <!-- Required for the report-trx flag (MTP equivalent of VSTest's logger trx) -->
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />

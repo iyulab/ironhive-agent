@@ -7,8 +7,8 @@ namespace IronHive.Agent.Tests.Skills;
 /// <summary>
 /// The specification's three disclosure levels, as the agent's own machinery applies them: the
 /// metadata is in every prepared turn and the body is not, whatever the body's size; a compaction keeps
-/// the metadata (a system message) and trims the body (a tool result). The <c>#371</c> triage claimed
-/// the second half needed no work — this is the fact that says so.
+/// the metadata (a system message) and trims the body (a tool result). These facts pin that the
+/// existing compaction already gives the second half without skill-specific handling.
 /// </summary>
 public class SkillsProgressiveDisclosureTests : IDisposable
 {

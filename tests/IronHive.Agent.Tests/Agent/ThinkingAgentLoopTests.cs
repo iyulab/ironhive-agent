@@ -109,8 +109,8 @@ public class ThinkingAgentLoopTests
     {
         // Provider streams reasoning as the M.E.AI-standard TextReasoningContent (not <think> tags,
         // not AdditionalProperties). ThinkingChatClient passes it through; the loop must bridge it to
-        // ThinkingDelta so consumers (Filer) stop hand-splitting. RED today: ExtractStreamingThinking
-        // only reads AdditionalProperties.
+        // ThinkingDelta so consumers do not have to split it out of the text themselves; reading only
+        // AdditionalProperties would miss it.
         var client = new FixedStreamClient(
             new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new TextReasoningContent("thinking aloud")] },
             new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new TextContent("the answer")] });
