@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using IronHive.Agent.Invocation;
 using Microsoft.Extensions.AI;
 
@@ -12,12 +13,15 @@ namespace IronHive.Agent.Loop;
 internal sealed class HostToolResultStage
 {
     private readonly ToolInvocationPipeline? _pipeline;
-    private readonly HashSet<FunctionResultContent> _processed = new(ReferenceEqualityComparer.Instance);
+    // By identity, and without keeping a result alive once the history no longer holds it.
+    private readonly ConditionalWeakTable<FunctionResultContent, object> _processed = [];
 
     public HostToolResultStage(IChatClient chatClient)
     {
         _pipeline = chatClient.GetService<ToolInvocationPipeline>();
     }
+
+    private static readonly object Processed = new();
 
     private bool Active => _pipeline is { ResultMiddleware.Count: > 0 };
 
@@ -31,7 +35,7 @@ internal sealed class HostToolResultStage
 
         foreach (var result in messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()))
         {
-            _processed.Add(result);
+            _processed.AddOrUpdate(result, Processed);
         }
     }
 
@@ -65,7 +69,7 @@ internal sealed class HostToolResultStage
         {
             foreach (var result in history[i].Contents.OfType<FunctionResultContent>())
             {
-                if (_processed.Contains(result))
+                if (_processed.TryGetValue(result, out _))
                 {
                     continue;
                 }
@@ -80,7 +84,7 @@ internal sealed class HostToolResultStage
                     Messages = history,
                     IsHostResult = true,
                 }, cancellationToken);
-                _processed.Add(result);
+                _processed.AddOrUpdate(result, Processed);
             }
         }
     }

@@ -155,6 +155,25 @@ public class HostToolResultStageTests
     }
 
     [Fact]
+    public async Task A_result_a_streamed_turn_produced_is_not_processed_again_when_the_loop_continues_after_Terminate()
+    {
+        var mock = new MockChatClient()
+            .EnqueueToolCallResponse("Lookup", """{"query":"q"}""")
+            .EnqueueResponse("done");
+        var recording = new Recording();
+        var client = mock.AsBuilder().UseToolInvocationPipeline(new ToolInvocationPipeline([new Terminating()], [recording])).Build();
+        var loop = new AgentLoop(client, new AgentOptions { Tools = [AIFunctionFactory.Create((string query) => $"found {query}", "Lookup")] });
+
+        await foreach (var _ in loop.RunStreamingAsync("look", Ct))
+        {
+        }
+        loop.History[^1].Role.Should().Be(ChatRole.Tool);
+        await loop.ContinueAsync(Ct);
+
+        recording.Seen.Should().ContainSingle().Which.IsHostResult.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task The_tool_result_guard_withholds_an_injected_host_result()
     {
         var model = new ScriptedModel(rounds: 1);
