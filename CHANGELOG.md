@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.17.1 -> 0.18.0, `IronHive.Abstractions` 0.45.1 -> 0.45.2.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.6 -> 0.21.7, `Ironbees.Core` 0.21.6 -> 0.21.7, `WebFlux` 0.19.1 -> 0.19.2.
 
 ### Added
 - **A tool can declare retrieval aliases and companion tools.** `tool.WithRetrievalHints(aliases:, companions:)`
