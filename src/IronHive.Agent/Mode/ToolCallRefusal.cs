@@ -1,7 +1,7 @@
 namespace IronHive.Agent.Mode;
 
 /// <summary>
-/// Why a gated tool call was not run.
+/// Why a tool call was not run (or, for <see cref="ToolCallRefusalKind.ResultWithheld"/>, why its result was not passed on).
 /// </summary>
 public enum ToolCallRefusalKind
 {
@@ -15,7 +15,16 @@ public enum ToolCallRefusalKind
     Rejected,
 
     /// <summary>The tool ran, and an <see cref="IToolResultGuard"/> withheld its result from the model.</summary>
-    ResultWithheld
+    ResultWithheld,
+
+    /// <summary>The call's arguments could not be parsed from the model's response, so the tool was not run.</summary>
+    InvalidArguments,
+
+    /// <summary>The same call already succeeded several times in a row, so it was not run again.</summary>
+    RepeatedCall,
+
+    /// <summary>The tool failed with the same error several times in a row, and the request was ended.</summary>
+    RepeatedError
 }
 
 /// <summary>
@@ -37,6 +46,9 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.ApprovalUnavailable => $"Approval required but no approval service is configured: {Reason}",
         ToolCallRefusalKind.Rejected => $"Approval rejected: {Reason}",
         ToolCallRefusalKind.ResultWithheld => $"Tool result withheld by guard: {Reason}",
+        ToolCallRefusalKind.InvalidArguments => $"Tool call not run: its arguments could not be parsed ({Reason})",
+        ToolCallRefusalKind.RepeatedCall => $"Tool call not run: {Reason}",
+        ToolCallRefusalKind.RepeatedError => $"Tool call stopped: {Reason}",
         _ => $"Tool call refused: {Reason}"
     };
 

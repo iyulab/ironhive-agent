@@ -1,3 +1,4 @@
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Loop;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
@@ -13,7 +14,7 @@ namespace IronHive.Agent.Tests.Agent.Mode;
 /// client with) through an <see cref="AgentLoop"/>, so "the tool did not run" is observed where a
 /// consumer would observe it — on the function result the model receives — not on a mock's call count.
 /// </summary>
-public class ApprovalGatedFunctionInvokerTests
+public class ApprovalGateMiddlewareTests
 {
     private sealed class Probe
     {
@@ -55,8 +56,7 @@ public class ApprovalGatedFunctionInvokerTests
 
         var filter = new ModeToolFilter(config);
         var client = mock.AsBuilder()
-            .UseFunctionInvocation(configure: c =>
-                c.FunctionInvoker = ApprovalGatedFunctionInvoker.Create(filter, approval))
+            .UseToolInvocationPipeline(new ToolInvocationPipeline([new ApprovalGateMiddleware(filter, approval)]))
             .Build();
 
         var loop = new AgentLoop(client, new AgentOptions { Tools = tools });
@@ -212,24 +212,32 @@ public class ApprovalGatedFunctionInvokerTests
         await approval2.DidNotReceive().RequestApprovalAsync(Arg.Any<ApprovalRequest>(), Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task InnerInvoker_RunsApprovedCalls()
+    private sealed class Answering(string answer) : IToolInvocationMiddleware
     {
-        var inner = 0;
-        var filter = new ModeToolFilter(ConfigWith(c => c.Tools.Add(new PermissionRule { Pattern = "Lookup", Action = PermissionAction.Allow })));
-        var invoker = ApprovalGatedFunctionInvoker.Create(filter, approvalService: null, inner: (ctx, ct) =>
+        public int Calls;
+
+        public ValueTask<object?> InvokeAsync(FunctionInvocationContext context, ToolInvocationNext next, CancellationToken cancellationToken)
         {
-            inner++;
-            return new ValueTask<object?>("from inner");
-        });
+            Calls++;
+            return new ValueTask<object?>(answer);
+        }
+    }
+
+    [Fact]
+    public async Task A_middleware_after_the_gate_runs_approved_calls()
+    {
+        var filter = new ModeToolFilter(ConfigWith(c => c.Tools.Add(new PermissionRule { Pattern = "Lookup", Action = PermissionAction.Allow })));
+        var answering = new Answering("from inner");
         var probe = new Probe();
         var mock = new MockChatClient().EnqueueToolCallResponse("Lookup", """{"query":"q"}""").EnqueueResponse("done");
-        var client = mock.AsBuilder().UseFunctionInvocation(configure: c => c.FunctionInvoker = invoker).Build();
+        var client = mock.AsBuilder()
+            .UseToolInvocationPipeline(new ToolInvocationPipeline([new ApprovalGateMiddleware(filter), answering]))
+            .Build();
         var loop = new AgentLoop(client, new AgentOptions { Tools = [AIFunctionFactory.Create(probe.Lookup, "Lookup")] });
 
         var response = await loop.RunAsync("look", TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, inner);
+        Assert.Equal(1, answering.Calls);
         Assert.Equal(0, probe.Invocations);
         Assert.Equal("from inner", response.ToolCalls[0].Result);
     }

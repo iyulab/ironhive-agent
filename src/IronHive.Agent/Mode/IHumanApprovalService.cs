@@ -4,11 +4,11 @@ namespace IronHive.Agent.Mode;
 /// Service for requesting human approval for risky operations.
 /// </summary>
 /// <remarks>
-/// Consulted by <see cref="ApprovalGatedFunctionInvoker"/> — installed as the <c>FunctionInvoker</c> of
-/// Microsoft.Extensions.AI's <c>UseFunctionInvocation()</c> middleware — and by the Ironbees adapter,
+/// Consulted by <see cref="ApprovalGateMiddleware"/> — a step of the tool invocation pipeline that a
+/// function-invoking client (<c>UseToolInvocationPipeline()</c>) and the Ironbees adapter run every call through —
 /// whenever <see cref="IModeToolFilter.AssessRisk"/> returns an <c>Ask</c> verdict for a call. An
 /// <c>IAgentLoop</c> itself never invokes tools, so registering an implementation is not enough on its
-/// own: the consumer's chat client must carry the gated invoker. Remembering an
+/// own: the pipeline must carry the gate (<c>services.AddIronHiveAgentApprovalGate()</c>). Remembering an
 /// <see cref="ApprovalResult.AlwaysApprove"/> answer is the implementation's job — the gate asks every
 /// time and does not keep its own list, since only the service knows what "this type of operation"
 /// means for its users.

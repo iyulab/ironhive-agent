@@ -1,9 +1,9 @@
 using Ironbees.Core;
 using Ironbees.Core.Conversation;
 using Ironbees.Core.Embeddings;
+using IronHive.Agent.Extensions;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Mcp;
-using IronHive.Agent.Mode;
-using IronHive.Agent.Permissions;
 using IronHive.Agent.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +16,10 @@ namespace IronHive.Agent.Ironbees;
 public static class IronbeesServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds Ironbees multi-agent orchestration services.
+    /// Adds Ironbees multi-agent orchestration services. The framework adapter runs every tool call through the
+    /// container's <see cref="ToolInvocationPipeline"/>; this call turns the permission gate on for that pipeline
+    /// (<c>AddIronHiveAgentApprovalGate</c>), so agents' tool calls are judged by the container's permission rules as
+    /// before, and a registered <c>IToolResultGuard</c> inspects their results.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Action to configure Ironbees options.</param>
@@ -29,6 +32,8 @@ public static class IronbeesServiceCollectionExtensions
 
         var options = new IronbeesOptions();
         configure(options);
+
+        services.AddIronHiveAgentApprovalGate();
 
         // Register agent loader
         services.AddSingleton<IAgentLoader>(sp =>
@@ -64,8 +69,6 @@ public static class IronbeesServiceCollectionExtensions
                 clientFactory = _ => chatClient;
             }
 
-            var permissionEvaluator = sp.GetService<IPermissionEvaluator>();
-
             // Dynamic tool factory: resolves tools at invocation time (supports MCP hot reload)
             Func<IList<AITool>>? toolsFactory = null;
             if (options.EnableToolExecution)
@@ -87,11 +90,8 @@ public static class IronbeesServiceCollectionExtensions
             return new ChatClientFrameworkAdapter(
                 clientFactory,
                 toolsFactory,
-                permissionEvaluator,
-                options.MaxToolTurns,
-                sp.GetService<IModeToolFilter>(),
-                sp.GetService<IHumanApprovalService>(),
-                sp.GetService<IToolResultGuard>());
+                sp.GetRequiredService<ToolInvocationPipeline>(),
+                options.MaxToolTurns);
         });
 
         // Register orchestrator

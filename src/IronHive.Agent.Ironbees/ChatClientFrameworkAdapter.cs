@@ -2,23 +2,29 @@ using System.Runtime.CompilerServices;
 using Ironbees.Core;
 using Ironbees.Core.Streaming;
 using IronHive.Agent.Delegation;
-using IronHive.Agent.Mode;
-using IronHive.Agent.Permissions;
+using IronHive.Agent.Invocation;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IronHive.Agent.Ironbees;
 
 /// <summary>
 /// Adapter that connects Microsoft.Extensions.AI IChatClient to Ironbees ILLMFrameworkAdapter.
-/// Supports tool execution loop, permission checks, and dynamic tool provisioning.
+/// Runs its own tool loop — every call through a <see cref="ToolInvocationPipeline"/>, the same one a
+/// function-invoking client uses — and resolves tools dynamically.
 /// </summary>
 public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
 {
     private readonly Func<ModelConfig, IChatClient> _clientFactory;
+    /// <summary>
+    /// The <see cref="CompletionChunk.FinishReason"/> of a streamed run that a tool call ended
+    /// (<see cref="FunctionInvocationContext.Terminate"/>).
+    /// </summary>
+    public const string ToolTerminatedFinishReason = "tool_terminated";
+
+    private const string NotRunAfterTermination = "Tool call not run: an earlier tool call in this turn ended the request.";
+
     private readonly Func<IList<AITool>>? _toolsFactory;
-    private readonly ApprovalGate? _gate;
-    private readonly IToolResultGuard? _resultGuard;
+    private readonly ToolInvocationPipeline _pipeline;
     private readonly int _maxToolTurns;
 
     /// <summary>
@@ -26,36 +32,24 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     /// </summary>
     /// <param name="clientFactory">Factory function to create IChatClient from ModelConfig.</param>
     /// <param name="toolsFactory">Dynamic tool provider (called each invocation to support hot reload).</param>
-    /// <param name="permissionEvaluator">
-    /// Permission evaluator for tool execution. Used to build a <see cref="ModeToolFilter"/> when
-    /// <paramref name="modeToolFilter"/> is not given; with neither, tool calls are not gated at all.
+    /// <param name="toolInvocationPipeline">
+    /// What every tool call runs through — the permission gate, result guards and loop guards it carries apply here
+    /// exactly as on a function-invoking client. A call that a middleware ends
+    /// (<see cref="FunctionInvocationContext.Terminate"/>) ends the run after that tool turn. Defaults to
+    /// <see cref="ToolInvocationPipeline.CreateDefault"/> (the loop guards only, no permission gate);
+    /// <c>AddIronbees</c> passes the container's pipeline.
     /// </param>
     /// <param name="maxToolTurns">Maximum tool execution turns to prevent infinite loops.</param>
-    /// <param name="modeToolFilter">Produces the verdict for each tool call; takes precedence over the evaluator.</param>
-    /// <param name="approvalService">
-    /// Asked when a verdict is <c>Ask</c>. Without one, an <c>Ask</c> verdict is refused with a reason —
-    /// the same rule <see cref="ApprovalGatedFunctionInvoker"/> applies.
-    /// </param>
-    /// <param name="toolResultGuard">
-    /// Inspects every tool result before the model reads it — the rule <see cref="ToolResultGuardedFunctionInvoker"/>
-    /// applies on a function-invoking client. Without one, results reach the model unguarded.
-    /// </param>
     public ChatClientFrameworkAdapter(
         Func<ModelConfig, IChatClient> clientFactory,
         Func<IList<AITool>>? toolsFactory = null,
-        IPermissionEvaluator? permissionEvaluator = null,
-        int maxToolTurns = 20,
-        IModeToolFilter? modeToolFilter = null,
-        IHumanApprovalService? approvalService = null,
-        IToolResultGuard? toolResultGuard = null)
+        ToolInvocationPipeline? toolInvocationPipeline = null,
+        int maxToolTurns = 20)
     {
-        _resultGuard = toolResultGuard;
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _toolsFactory = toolsFactory;
+        _pipeline = toolInvocationPipeline ?? ToolInvocationPipeline.CreateDefault();
         _maxToolTurns = maxToolTurns;
-
-        var filter = modeToolFilter ?? (permissionEvaluator is null ? null : new ModeToolFilter(permissionEvaluator));
-        _gate = filter is null ? null : new ApprovalGate(filter, approvalService);
     }
 
     /// <summary>
@@ -63,9 +57,14 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     /// </summary>
     /// <param name="chatClient">The shared IChatClient instance.</param>
     public ChatClientFrameworkAdapter(IChatClient chatClient)
+        : this(SharedClient(chatClient))
+    {
+    }
+
+    private static Func<ModelConfig, IChatClient> SharedClient(IChatClient chatClient)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
-        _clientFactory = _ => chatClient;
+        return _ => chatClient;
     }
 
     /// <inheritdoc />
@@ -142,7 +141,15 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                 };
             }
 
-            messages.Add(await ExecuteToolCallsAsync(pendingToolCalls, tools, messages, cancellationToken));
+            var (toolMessage, terminated) = await ExecuteToolCallsAsync(pendingToolCalls, tools, messages, turnsUsed, cancellationToken);
+            messages.Add(toolMessage);
+            if (terminated)
+            {
+                return new AgentRunResult
+                {
+                    Text = ExtractLastTextFromMessages(messages), Usage = usage.Result, TurnsUsed = turnsUsed, TurnLimitReached = false
+                };
+            }
         }
 
         // The model still wanted tools when the limit ran out: say so rather than pass the partial text off as an answer.
@@ -248,7 +255,22 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
                 yield break;
             }
 
-            messages.Add(await ExecuteToolCallsAsync(pendingToolCalls, tools, messages, cancellationToken));
+            var (toolMessage, terminated) = await ExecuteToolCallsAsync(pendingToolCalls, tools, messages, turnsUsed, cancellationToken);
+            messages.Add(toolMessage);
+            if (terminated)
+            {
+                var stoppedAt = ExtractLastTextFromMessages(messages);
+                if (!string.IsNullOrEmpty(stoppedAt))
+                {
+                    yield return new TextChunk(stoppedAt);
+                }
+
+                foreach (var tail in Tail(usage, ToolTerminatedFinishReason))
+                {
+                    yield return tail;
+                }
+                yield break;
+            }
         }
 
         var partial = ExtractLastTextFromMessages(messages);
@@ -257,22 +279,26 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
             yield return new TextChunk(partial);
         }
 
-        foreach (var tail in Tail(usage, turnLimitReached: true))
+        foreach (var tail in Tail(usage, "tool_turn_limit"))
         {
             yield return tail;
         }
     }
 
     private static IEnumerable<StreamChunk> Tail(UsageAccumulator usage, bool turnLimitReached)
+        => Tail(usage, turnLimitReached ? "tool_turn_limit" : null);
+
+    /// <summary>The closing chunks: usage when observed, then completion — failed with <paramref name="failedFinishReason"/> when given.</summary>
+    private static IEnumerable<StreamChunk> Tail(UsageAccumulator usage, string? failedFinishReason)
     {
         if (usage.Result is { } observed)
         {
             yield return new UsageChunk((int)(observed.InputTokenCount ?? 0), (int)(observed.OutputTokenCount ?? 0));
         }
 
-        yield return turnLimitReached
-            ? new CompletionChunk(Success: false, FinishReason: "tool_turn_limit")
-            : new CompletionChunk();
+        yield return failedFinishReason is null
+            ? new CompletionChunk()
+            : new CompletionChunk(Success: false, FinishReason: failedFinishReason);
     }
 
     private sealed record PreparedRun(
@@ -386,78 +412,77 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
         return allTools;
     }
 
-    private async Task<ChatMessage> ExecuteToolCallsAsync(
-        IReadOnlyList<FunctionCallContent> toolCalls,
+    /// <summary>
+    /// Runs one turn's tool calls through the pipeline, in order, and answers every call: a call after one that ended
+    /// the request is answered as not run, so the conversation never holds a call without a result.
+    /// </summary>
+    private async Task<(ChatMessage Message, bool Terminated)> ExecuteToolCallsAsync(
+        List<FunctionCallContent> toolCalls,
         IList<AITool> tools,
-        IReadOnlyList<ChatMessage> conversation,
+        List<ChatMessage> conversation,
+        int iteration,
         CancellationToken cancellationToken)
     {
         var toolResults = new List<AIContent>();
+        var terminated = false;
 
-        foreach (var functionCall in toolCalls)
+        for (var index = 0; index < toolCalls.Count; index++)
         {
-            IDictionary<string, object?>? arguments = functionCall.Arguments;
-
-            // Permission check: the same gate ApprovalGatedFunctionInvoker uses, so Allow / Deny / Ask
-            // mean the same thing on this path as on a function-invoking client.
-            if (_gate is not null)
+            var functionCall = toolCalls[index];
+            if (terminated)
             {
-                var decision = await _gate.DecideAsync(functionCall.Name, arguments, cancellationToken);
-                if (!decision.ShouldProceed)
-                {
-                    toolResults.Add(new FunctionResultContent(functionCall.CallId, decision.Refusal!.Message));
-                    continue;
-                }
-
-                if (decision.ModifiedArguments is not null)
-                {
-                    arguments = new Dictionary<string, object?>(arguments ?? new Dictionary<string, object?>());
-                    foreach (var (key, value) in decision.ModifiedArguments)
-                    {
-                        arguments[key] = value;
-                    }
-                }
+                toolResults.Add(new FunctionResultContent(functionCall.CallId, NotRunAfterTermination));
+                continue;
             }
 
-            var tool = tools.FirstOrDefault(t => t is AIFunction func && func.Name == functionCall.Name);
-
-            if (tool is AIFunction function)
-            {
-                try
-                {
-                    var args = arguments is not null
-                        ? new AIFunctionArguments(arguments)
-                        : null;
-                    // This loop is not FunctionInvokingChatClient, so a tool that reads the conversation (the advisor)
-                    // gets it from here instead of FunctionInvokingChatClient.CurrentContext.
-                    object? result;
-                    using (ToolInvocationScope.Enter(conversation))
-                    {
-                        result = await function.InvokeAsync(args, cancellationToken);
-                    }
-                    if (_resultGuard is not null)
-                    {
-                        result = await ToolResultGuardedFunctionInvoker.ApplyAsync(
-                            _resultGuard, function.Name, arguments, result, NullLogger.Instance, cancellationToken);
-                    }
-                    var resultText = result?.ToString() ?? "null";
-
-                    toolResults.Add(new FunctionResultContent(functionCall.CallId, resultText));
-                }
-                catch (Exception ex)
-                {
-                    toolResults.Add(new FunctionResultContent(functionCall.CallId, $"Error: {ex.Message}"));
-                }
-            }
-            else
+            if (tools.FirstOrDefault(t => t is AIFunction func && func.Name == functionCall.Name) is not AIFunction function)
             {
                 toolResults.Add(new FunctionResultContent(
                     functionCall.CallId,
                     $"Error: Tool '{functionCall.Name}' not found"));
+                continue;
             }
+
+            var context = new FunctionInvocationContext
+            {
+                Function = function,
+                // A copy: a middleware that edits the arguments (an approver's changes) must not rewrite the call the
+                // conversation records.
+                Arguments = new AIFunctionArguments(functionCall.Arguments is null
+                    ? null
+                    : new Dictionary<string, object?>(functionCall.Arguments)),
+                CallContent = functionCall,
+                Messages = conversation,
+                Iteration = iteration,
+                FunctionCallIndex = index,
+                FunctionCount = toolCalls.Count,
+            };
+
+            try
+            {
+                // This loop is not FunctionInvokingChatClient, so a tool that reads the conversation (the advisor)
+                // gets it from here instead of FunctionInvokingChatClient.CurrentContext.
+                object? result;
+                using (ToolInvocationScope.Enter(conversation))
+                {
+                    result = await _pipeline.InvokeAsync(context, cancellationToken);
+                }
+
+                toolResults.Add(new FunctionResultContent(functionCall.CallId, result?.ToString() ?? "null"));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                toolResults.Add(new FunctionResultContent(functionCall.CallId, $"Error: {ex.Message}") { Exception = ex });
+            }
+
+            terminated = context.Terminate;
         }
 
-        return new ChatMessage(ChatRole.Tool, toolResults);
+        return (new ChatMessage(ChatRole.Tool, toolResults), terminated);
     }
 
     private static string ExtractLastAssistantText(ChatResponse response)

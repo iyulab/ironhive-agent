@@ -7,6 +7,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs))
 - **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
+- **Tool invocation pipeline**: every tool call runs through ordered `IToolInvocationMiddleware` steps and every result through `IToolResultMiddleware` steps — on a chat client and in the Ironbees adapter. Turn it on with `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)` in place of `UseFunctionInvocation()` (`AddIronHiveAgent` registers the pipeline with its default loop guards; `AddIronHiveAgentApprovalGate()` adds the permission gate; `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()` add your own). See [Tool Invocation Pipeline](#tool-invocation-pipeline)
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Agent Skills (`SKILL.md`)**: `SkillsLoader.Create(new SkillsConfig { Roots = [userSkillsDir, projectSkillsDir] })` discovers skills per the [Agent Skills specification](https://agentskills.io/specification) and validates them as `skills-ref validate` does (invalid ones are *reported* in `Diagnostics`, never thrown; the first root wins a name collision and the shadowed one is reported). `loader.Contributor` puts every name + description in the system instructions; `loader.LoadTool` (`load_skill`) returns a skill's body — or a file inside its directory, and nothing outside it — on demand. `Enabled`/`Exclude`/`Filter` narrow the set per session; `MaxMetadataCharacters` bounds the section and what does not fit is in `Dropped`/`DroppedCount` (still loadable by name). `SkillDiscovery.Discover(config)` is the same discovery as a plain call, for a UI that lists skills before a session exists. Frontmatter keys the specification does not define reject the skill by default (as `skills-ref validate` does); `UnknownFields = UnknownFieldPolicy.Accept` loads such skills and reports the keys as a warning — skill trees written for one client's extensions (e.g. `argument-hint`) need this. A name in `Enabled` that matches nothing is reported (`EnabledNotFound`), not dropped silently. DI: `services.AddAgentSkills(config)` registers the loader and its contributor; add `LoadTool` to the loop's tools yourself. Text only — `scripts/` are never executed; `allowed-tools` is parsed, not enforced
 - **System instruction sections**: add to the system instructions without replacing the prompt — implement `ISystemInstructionContributor` and register it in the container (or `ContextManager.AddInstructionContributor`); needs a `ContextManager` on the loop
@@ -274,10 +275,44 @@ await manager.ConnectAsync("filesystem", config);
 
 With DI, register FluxGuard's guardrail and then the guards: `services.AddFluxGuardMcpGuardrail();
 services.AddIronHiveAgentFluxGuard();` — the `McpPluginManager` that `AddIronHiveAgent` registers picks up the
-`IMcpToolCallGuard`, and the Ironbees adapter the `IToolResultGuard`.
+`IMcpToolCallGuard`, and the container's tool invocation pipeline the `IToolResultGuard`.
 
 A guard that itself throws is treated as fail-closed (the call is blocked, not silently
 dispatched unguarded) — see `McpPluginManager.CallToolAsync`'s XML doc remarks for the reasoning.
+
+## Tool Invocation Pipeline
+
+An `IAgentLoop` never runs tools itself; the function-invoking client it is given does. `UseToolInvocationPipeline()`
+installs that client with one `FunctionInvoker`, a `ToolInvocationPipeline` folded from ordered middleware:
+
+```csharp
+services.AddIronHiveAgent();                 // registers the pipeline with its default loop guards
+services.AddIronHiveAgentApprovalGate();     // opt-in permission gate (see Human Approval Gate)
+services.AddToolInvocationMiddleware<AuditMiddleware>();   // your own steps, in registration order
+
+var chatClient = inner.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider);
+var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
+```
+
+- **Invocation steps** (`IToolInvocationMiddleware.InvokeAsync(context, next, ct)`) run around each call, the first
+  registered outermost. Call `next` to run the call. Return a result without calling it to short-circuit (a
+  `ToolCallRefusal` is the model-readable «not run»). Set `context.Terminate` to end the request after this call. Don't
+  throw for that: an exception is reported to the model as a failed call.
+- **Result steps** (`IToolResultMiddleware.OnResultAsync(context, ct)`) see every result before the model does, right
+  after the tool returns and inside every invocation step. A registered `IToolResultGuard` is applied as one of them.
+- Without DI, build it yourself: `.UseToolInvocationPipeline(new ToolInvocationPipeline([gate, mine], [resultStep]))`.
+  `ToolInvocationPipeline.CreateDefault()` is the default loop guards alone. `UseToolInvocationPipeline()` built without
+  services that hold a pipeline throws instead of running tools unguarded.
+- The Ironbees adapter (`ChatClientFrameworkAdapter`) runs its own tool loop through the same pipeline
+  (`toolInvocationPipeline:`; `AddIronbees` passes the container's). `DefaultPlanExecutor` takes one too.
+
+Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocationOptions { ... })`):
+
+| Guard | What the model gets | Option (default) |
+|---|---|---|
+| `ArgumentParseFailureMiddleware` | a call whose arguments could not be parsed is not run; the model reads the parse error | `RefuseUnparseableArguments` (true) |
+| `RepeatedCallGuardMiddleware` | the same tool with identical arguments, after that many successful runs in a row, is not run again | `MaxRepeatedCalls` (3; 0 = off) |
+| `RepeatedErrorGuardMiddleware` | the same tool failing with the same error that many times in a row ends the request (`Terminate`) with a result, not an exception | `MaxRepeatedErrors` (3; 0 = off) |
 
 ## In-Process Tool-Result Guard (opt-in)
 
@@ -285,17 +320,18 @@ In-process tools (a web page's text, a file's contents) return text the model th
 - A withheld result becomes a `ToolCallRefusal` (`ToolCallRefusalKind.ResultWithheld`). The model reads «Tool result withheld by guard: …» and the loop reports the call with `Success = false`.
 - A guard that throws withholds the result. This is fail-closed, the same rule as the MCP guardrail.
 
-On a function-invoking client, compose it behind the permission gate. The gate decides whether a call runs, and the guard decides what its result becomes:
+It runs as a result step of the [tool invocation pipeline](#tool-invocation-pipeline). With DI, register the guard
+(`services.AddSingleton<IToolResultGuard>(...)`) and the container's pipeline applies it. Without DI, add a
+`ToolResultGuardMiddleware`. The gate decides whether a call runs, and the guard decides what its result becomes:
 
 ```csharp
-var client = inner.AsBuilder()
-    .UseFunctionInvocation(configure: c => c.FunctionInvoker = ApprovalGatedFunctionInvoker.Create(
-        modeToolFilter, approvalService,
-        inner: ToolResultGuardedFunctionInvoker.Create(guard)))
-    .Build();
+var pipeline = new ToolInvocationPipeline(
+    [new ApprovalGateMiddleware(modeToolFilter, approvalService)],
+    [new ToolResultGuardMiddleware(guard)]);
+var client = inner.AsBuilder().UseToolInvocationPipeline(pipeline).Build();
 ```
 
-The Ironbees adapter applies the same guard through its `toolResultGuard` constructor argument, and `AddIronbees` resolves `IToolResultGuard` from DI. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)` (`IronHive.Agent.FluxGuard` package). In-process tools are then reported to it under the server name `in-process`.
+The same guard covers the Ironbees adapter. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)` (`IronHive.Agent.FluxGuard` package). In-process tools are then reported to it under the server name `in-process`.
 
 ## Available Tools Context
 
@@ -489,19 +525,19 @@ Its counterpart for compaction is `services.AddIronHiveAgentContext(config => ..
 ## Human Approval Gate
 
 The permission rules decide `Allow` / `Deny` / `Ask`; `IHumanApprovalService` answers the `Ask`.
-What connects them to an actual tool call is `ApprovalGatedFunctionInvoker` — an `IAgentLoop` never
-invokes tools itself, the `UseFunctionInvocation()` middleware on its chat client does, so the gate is
-installed there:
+What connects them to an actual tool call is `ApprovalGateMiddleware`, a step of the
+[tool invocation pipeline](#tool-invocation-pipeline). The gate is opt-in: a pipeline without it has no permission
+gate. With DI:
 
 ```csharp
-var modeToolFilter = new ModeToolFilter(permissionConfig);   // or resolve IModeToolFilter from DI
-var chatClient = inner.AsBuilder()
-    .UseFunctionInvocation(configure: c =>
-        c.FunctionInvoker = ApprovalGatedFunctionInvoker.Create(modeToolFilter, approvalService))
-    .Build();
+services.AddIronHiveAgent();
+services.AddIronHiveAgentApprovalGate();     // over the container's IModeToolFilter and IHumanApprovalService
 
+var chatClient = inner.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider);
 var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
 ```
+
+Without DI: `new ToolInvocationPipeline([new ApprovalGateMiddleware(new ModeToolFilter(permissionConfig), approvalService)])`.
 
 For each call the gate runs `IModeToolFilter.AssessRisk` and acts on `RiskAssessment.Verdict`:
 
@@ -514,12 +550,12 @@ For each call the gate runs `IModeToolFilter.AssessRisk` and acts on `RiskAssess
 A refusal is always a tool *result*, never an exception, so the model can read it and change course.
 An `Ask` verdict with **no approval service registered is refused**, not passed through — a gate that
 lets "ask" through when nobody can be asked is a silent no-op. Either register an
-`IHumanApprovalService` or set the rule (or `DefaultAction`) to `Allow`. Remembering an
+`IHumanApprovalService`, set the rule (or `DefaultAction`) to `Allow`, or leave the gate out. Remembering an
 `ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time.
 
-Pass another invoker as `inner` to compose (for example one that turns marshalling errors into
-recovery directives). The Ironbees adapter (`ChatClientFrameworkAdapter`, `IronHive.Agent.Ironbees`) applies the same gate (`ApprovalGate`) on its
-own tool loop when it is given a filter or evaluator, so a verdict means the same thing on both paths.
+Steps registered after the gate run only for calls it let through. The Ironbees adapter (`ChatClientFrameworkAdapter`,
+`IronHive.Agent.Ironbees`) runs its own tool loop through the same pipeline, so a verdict means the same thing on both
+paths; `AddIronbees` turns the gate on for the container's pipeline.
 
 ## Post-Turn Seam
 

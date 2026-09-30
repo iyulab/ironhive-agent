@@ -5,10 +5,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace IronHive.Agent.Mode;
 
 /// <summary>
-/// The one place a tool call is judged before it runs. Both invocation paths the library offers —
-/// <see cref="ApprovalGatedFunctionInvoker"/> for a Microsoft.Extensions.AI function-invoking client,
-/// and the Ironbees adapter's own loop — defer to this so a permission verdict means the same thing
-/// on either path. Public so a host's own tool loop (another framework's adapter) judges calls by the same rule.
+/// The one place a tool call is judged before it runs. <see cref="ApprovalGateMiddleware"/> applies it in the tool
+/// invocation pipeline that every path running tools goes through, so a permission verdict means the same thing on
+/// each. Public so a host's own tool loop (another framework's adapter) can judge calls by the same rule.
 /// </summary>
 public sealed partial class ApprovalGate
 {

@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using FluxGuard.Remote.MCP;
 using IronHive.Agent.FluxGuard;
 using Ironbees.Core;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Ironbees;
 using IronHive.Agent.Loop;
 using IronHive.Agent.Mode;
@@ -32,14 +33,15 @@ public class ToolResultGuardTests
         }
     }
 
-    private static (AgentLoop Loop, MockChatClient Mock) BuildLoop(
-        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> invoker)
+    private static ToolInvocationPipeline Guarded(IToolResultGuard guard) => new([], [new ToolResultGuardMiddleware(guard)]);
+
+    private static (AgentLoop Loop, MockChatClient Mock) BuildLoop(ToolInvocationPipeline pipeline)
     {
         var tools = new List<AITool> { AIFunctionFactory.Create((string url) => $"page text: {Injected}", "ReadPage", "Reads a page") };
         var mock = new MockChatClient()
             .EnqueueToolCallResponse("ReadPage", """{"url":"https://example.com"}""")
             .EnqueueResponse("done");
-        var client = mock.AsBuilder().UseFunctionInvocation(configure: c => c.FunctionInvoker = invoker).Build();
+        var client = mock.AsBuilder().UseToolInvocationPipeline(pipeline).Build();
         return (new AgentLoop(client, new AgentOptions { Tools = tools }), mock);
     }
 
@@ -52,7 +54,7 @@ public class ToolResultGuardTests
         var guard = new ScriptedGuard(i => i.Result.Contains("IGNORE PREVIOUS", StringComparison.Ordinal)
             ? ToolResultVerdict.Withhold("prompt injection")
             : ToolResultVerdict.Allow());
-        var (loop, mock) = BuildLoop(ToolResultGuardedFunctionInvoker.Create(guard));
+        var (loop, mock) = BuildLoop(Guarded(guard));
 
         var response = await loop.RunAsync("read it", TestContext.Current.CancellationToken);
 
@@ -65,7 +67,7 @@ public class ToolResultGuardTests
     [Fact]
     public async Task Allowed_result_reaches_the_model_unchanged()
     {
-        var (loop, mock) = BuildLoop(ToolResultGuardedFunctionInvoker.Create(new ScriptedGuard(_ => ToolResultVerdict.Allow())));
+        var (loop, mock) = BuildLoop(Guarded(new ScriptedGuard(_ => ToolResultVerdict.Allow())));
 
         var response = await loop.RunAsync("read it", TestContext.Current.CancellationToken);
 
@@ -76,7 +78,7 @@ public class ToolResultGuardTests
     [Fact]
     public async Task Replacement_is_what_the_model_reads()
     {
-        var (loop, mock) = BuildLoop(ToolResultGuardedFunctionInvoker.Create(new ScriptedGuard(_ => ToolResultVerdict.Replace("page text: [removed]"))));
+        var (loop, mock) = BuildLoop(Guarded(new ScriptedGuard(_ => ToolResultVerdict.Replace("page text: [removed]"))));
 
         await loop.RunAsync("read it", TestContext.Current.CancellationToken);
 
@@ -86,7 +88,7 @@ public class ToolResultGuardTests
     [Fact]
     public async Task A_guard_that_throws_withholds_the_result()
     {
-        var (loop, mock) = BuildLoop(ToolResultGuardedFunctionInvoker.Create(
+        var (loop, mock) = BuildLoop(Guarded(
             new ScriptedGuard(_ => throw new InvalidOperationException("classifier offline"))));
 
         var response = await loop.RunAsync("read it", TestContext.Current.CancellationToken);
@@ -101,8 +103,8 @@ public class ToolResultGuardTests
         var guard = new ScriptedGuard(_ => ToolResultVerdict.Allow());
         var config = PermissionConfig.CreateDefault();
         config.Tools.Add(new PermissionRule { Pattern = "ReadPage", Action = PermissionAction.Deny, Priority = 100, Reason = "no browsing" });
-        var (loop, mock) = BuildLoop(ApprovalGatedFunctionInvoker.Create(
-            new ModeToolFilter(config), approvalService: null, inner: ToolResultGuardedFunctionInvoker.Create(guard)));
+        var (loop, mock) = BuildLoop(new ToolInvocationPipeline(
+            [new ApprovalGateMiddleware(new ModeToolFilter(config))], [new ToolResultGuardMiddleware(guard)]));
 
         await loop.RunAsync("read it", TestContext.Current.CancellationToken);
 
@@ -118,7 +120,7 @@ public class ToolResultGuardTests
             .EnqueueResponse("done");
         var tool = AIFunctionFactory.Create((string url) => $"page text: {Injected}", "ReadPage", "Reads a page");
         var guard = new ScriptedGuard(_ => ToolResultVerdict.Withhold("prompt injection"));
-        var adapter = new ChatClientFrameworkAdapter(_ => mock, toolsFactory: () => [tool], toolResultGuard: guard);
+        var adapter = new ChatClientFrameworkAdapter(_ => mock, toolsFactory: () => [tool], toolInvocationPipeline: Guarded(guard));
         var agent = await adapter.CreateAgentAsync(new AgentConfig
         {
             Name = "a", Description = "d", Version = "1.0.0", SystemPrompt = "s", Model = new ModelConfig { Deployment = "m" }

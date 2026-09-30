@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using IronHive.Abstractions.Agent.Planning;
+using IronHive.Agent.Invocation;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Planning;
@@ -7,8 +8,8 @@ namespace IronHive.Agent.Planning;
 /// <summary>
 /// Default <see cref="IPlanExecutor"/> implementation that executes individual
 /// plan steps using a chat client with optional tool access.
-/// When tools are provided, the chat client automatically handles
-/// the tool-call -> result -> re-send loop via FunctionInvocation middleware.
+/// When tools are provided, the chat client handles the tool-call -> result -> re-send loop,
+/// running every call through a <see cref="ToolInvocationPipeline"/>.
 /// </summary>
 public class DefaultPlanExecutor : IPlanExecutor, IDisposable
 {
@@ -16,13 +17,20 @@ public class DefaultPlanExecutor : IPlanExecutor, IDisposable
     private readonly IList<AITool>? _tools;
     private readonly bool _ownsClient;
 
-    public DefaultPlanExecutor(IChatClient chatClient, IList<AITool>? tools = null)
+    /// <summary>Creates an executor over <paramref name="chatClient"/>.</summary>
+    /// <param name="chatClient">The model that executes each step.</param>
+    /// <param name="tools">Tools a step may call; none by default.</param>
+    /// <param name="toolInvocationPipeline">
+    /// What each tool call runs through (a permission gate, result guards). Defaults to
+    /// <see cref="ToolInvocationPipeline.CreateDefault"/> — the loop guards only.
+    /// </param>
+    public DefaultPlanExecutor(IChatClient chatClient, IList<AITool>? tools = null, ToolInvocationPipeline? toolInvocationPipeline = null)
     {
-        // Wrap with FunctionInvocation middleware if tools are provided
+        // Wrap with function invocation if tools are provided
         if (tools is { Count: > 0 })
         {
             _chatClient = new ChatClientBuilder(chatClient)
-                .UseFunctionInvocation()
+                .UseToolInvocationPipeline(toolInvocationPipeline ?? ToolInvocationPipeline.CreateDefault())
                 .Build();
             _tools = tools;
             _ownsClient = true;

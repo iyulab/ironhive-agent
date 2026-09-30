@@ -13,8 +13,9 @@ public static class FluxGuardServiceCollectionExtensions
     /// Registers <see cref="IMcpToolCallGuard"/> (<see cref="FluxGuardMcpToolCallGuard"/>) and <see cref="IToolResultGuard"/>
     /// (<see cref="McpGuardrailToolResultGuard"/>) over the <see cref="IMCPGuardrail"/> in the container — register that
     /// first (FluxGuard's <c>AddFluxGuardMcpGuardrail()</c>, or your own). <c>AddIronHiveAgent</c>'s
-    /// <c>McpPluginManager</c> then guards every MCP tool call, and the Ironbees adapter every in-process tool result.
-    /// Existing registrations of either guard are kept.
+    /// <c>McpPluginManager</c> then guards every MCP tool call, and the container's tool invocation pipeline every
+    /// in-process tool result (a client built with <c>UseToolInvocationPipeline()</c>, and the Ironbees adapter) and every
+    /// result a host supplies before an agent loop continues. Existing registrations of either guard are kept.
     /// </summary>
     public static IServiceCollection AddIronHiveAgentFluxGuard(this IServiceCollection services)
     {

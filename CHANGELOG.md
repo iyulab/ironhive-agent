@@ -4,6 +4,59 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.27.0] - Unreleased
+
+### Added
+- **Every tool call can run through one ordered pipeline.** `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)`
+  replaces `UseFunctionInvocation()` and sets a single `FunctionInvoker`: a `ToolInvocationPipeline` folded from the
+  registered `IToolInvocationMiddleware` steps (around each call, first registered outermost) and
+  `IToolResultMiddleware` steps (over each result, before the model reads it). A step short-circuits by returning a
+  result without calling `next`, and ends the request with `FunctionInvocationContext.Terminate`. Register steps with
+  `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()`; `AddIronHiveAgent` registers the pipeline. Without
+  DI, use `UseToolInvocationPipeline(new ToolInvocationPipeline(...))`. Building `UseToolInvocationPipeline()` with services
+  that hold no pipeline throws rather than running tools unguarded.
+- **The permission gate is a pipeline step you turn on.** `services.AddIronHiveAgentApprovalGate()` (or
+  `new ApprovalGateMiddleware(filter, approvalService)`). Without it there is no gate; with it and no
+  `IHumanApprovalService`, an `Ask` verdict is still refused.
+- **A registered `IToolResultGuard` guards the container's pipeline.** It runs as a `ToolResultGuardMiddleware` result
+  step (usable directly without DI), so the same guard covers a function-invoking client and the Ironbees adapter.
+- **Default loop guards in the pipeline.** Registered by `AddIronHiveAgent` (and in `ToolInvocationPipeline.CreateDefault()`),
+  tuned by `AgentServicesOptions.ToolInvocation` (`ToolInvocationOptions`):
+  - a call whose arguments could not be parsed is not run, and the model reads the parse error
+    (`RefuseUnparseableArguments`, on);
+  - the same tool with identical arguments is not run again after 3 successful runs in a row (`MaxRepeatedCalls`);
+  - the same tool failing with the same error 3 times in a row ends the request with a result instead of another retry
+    (`MaxRepeatedErrors`).
+
+  They are on by default because they only act on a loop that is already stuck, and they apply only where the pipeline
+  is used: a plain `UseFunctionInvocation()` client behaves as before. Set a count to 0 to turn a guard off.
+  `ToolCallRefusalKind` gains `InvalidArguments`, `RepeatedCall` and `RepeatedError`.
+- **`DefaultPlanExecutor` takes a `ToolInvocationPipeline`** (optional; its tool calls default to the loop guards).
+- **The Ironbees adapter stops a run that a tool call terminated.** When a step sets `Terminate`, the run ends after
+  that tool turn. A streamed run ends with `FinishReason` `tool_terminated`
+  (`ChatClientFrameworkAdapter.ToolTerminatedFinishReason`). Later calls of the same turn are answered as not run.
+
+### Changed
+- **The Ironbees adapter runs every tool call through the pipeline** instead of its own copy of the gate and guard,
+  so any registered step applies there too. `AddIronbees` passes the container's pipeline and turns the permission gate
+  on for it (`AddIronHiveAgentApprovalGate`), which keeps the adapter gated as before. That gate also applies to other
+  clients built from the same container with `UseToolInvocationPipeline()`.
+- **Breaking:** `ChatClientFrameworkAdapter`'s constructor takes `toolInvocationPipeline` in place of
+  `permissionEvaluator`, `modeToolFilter`, `approvalService` and `toolResultGuard` (`maxToolTurns` moves after it).
+  Migration: pass `new ToolInvocationPipeline([new ApprovalGateMiddleware(filter, approvalService)], [new ToolResultGuardMiddleware(guard)])`.
+- **The adapter's single-client constructor honours tool calls.** `ChatClientFrameworkAdapter(IChatClient)` left the
+  tool-turn limit at 0, so a run given tools through `AgentRunOptions.Tools` stopped before its first model call; it now
+  uses the default limit (20).
+
+### Removed
+- **Breaking: `ApprovalGatedFunctionInvoker.Create`** (and the class). Migration: register the gate with
+  `services.AddIronHiveAgentApprovalGate()`, or add `new ApprovalGateMiddleware(filter, approvalService)` to a
+  `ToolInvocationPipeline`; a former `inner` invoker becomes a later `IToolInvocationMiddleware`.
+- **Breaking: `ToolResultGuardedFunctionInvoker.Create`** (and the class). Migration: register the `IToolResultGuard`
+  in the container, or add `new ToolResultGuardMiddleware(guard)` to a pipeline's result steps.
+- **Breaking: `ToolResultGuardedFunctionInvoker.ApplyAsync`.** Migration: a host's own tool loop calls
+  `pipeline.ProcessResultAsync(new ToolResultContext { ... })`, or `new ToolResultGuardMiddleware(guard).OnResultAsync(...)`.
+
 ## [0.26.0] - 2026-09-30
 
 ### Changed

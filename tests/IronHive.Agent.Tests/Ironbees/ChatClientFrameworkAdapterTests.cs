@@ -1,4 +1,5 @@
 using Ironbees.Core;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Ironbees;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
@@ -18,6 +19,9 @@ public class ChatClientFrameworkAdapterTests
         SystemPrompt = "You are a test assistant.",
         Model = new ModelConfig { Deployment = "test-model" }
     };
+
+    private static ToolInvocationPipeline Gated(IPermissionEvaluator evaluator, IHumanApprovalService? approval = null)
+        => new([new ApprovalGateMiddleware(new ModeToolFilter(evaluator), approval)]);
 
     [Fact]
     public async Task CreateAgentAsync_CreatesAgent()
@@ -158,7 +162,7 @@ public class ChatClientFrameworkAdapterTests
         var adapter = new ChatClientFrameworkAdapter(
             _ => mockClient,
             toolsFactory: () => [testTool],
-            permissionEvaluator: mockPermission);
+            toolInvocationPipeline: Gated(mockPermission));
 
         var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
@@ -190,8 +194,7 @@ public class ChatClientFrameworkAdapterTests
         var adapter = new ChatClientFrameworkAdapter(
             _ => mockClient,
             toolsFactory: () => [testTool],
-            permissionEvaluator: new PermissionEvaluator(PermissionConfig.CreateDefault()),
-            approvalService: approval);
+            toolInvocationPipeline: Gated(new PermissionEvaluator(PermissionConfig.CreateDefault()), approval));
 
         var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 
@@ -220,7 +223,7 @@ public class ChatClientFrameworkAdapterTests
         var adapter = new ChatClientFrameworkAdapter(
             _ => mockClient,
             toolsFactory: () => [testTool],
-            permissionEvaluator: new PermissionEvaluator(PermissionConfig.CreateDefault()));
+            toolInvocationPipeline: Gated(new PermissionEvaluator(PermissionConfig.CreateDefault())));
 
         var agent = await adapter.CreateAgentAsync(CreateTestConfig(), TestContext.Current.CancellationToken);
 

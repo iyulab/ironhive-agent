@@ -1,5 +1,6 @@
 using IronHive.Agent.Context;
 using IronHive.Agent.ErrorRecovery;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Mcp;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Permissions;
@@ -45,11 +46,9 @@ public static class AgentServiceCollectionExtensions
 
         // Register mode management
         services.AddSingleton<IModeManager, ModeManager>();
-        // The filter judges on the same evaluator the rest of the container uses — a consumer that
-        // registered its own IPermissionEvaluator must not find the filter quietly judging on a
-        // different one. TryAdd keeps a consumer's own registration.
-        services.TryAddSingleton<IModeToolFilter>(sp =>
-            new ModeToolFilter(sp.GetRequiredService<IPermissionEvaluator>()));
+        // Permission evaluation (on the consumer's PermissionConfig when one is registered) and the mode filter over
+        // it; a consumer's own registration of either is kept.
+        services.TryAddPermissionServices();
         services.AddSingleton<IAvailableToolsContext, AvailableToolsContext>();
 
         // Register context management. The container's ContextManager applies the registered CompactionConfig
@@ -64,10 +63,6 @@ public static class AgentServiceCollectionExtensions
             sp.GetService<CompactionConfig>() ?? new CompactionConfig(),
             summarizer: null,
             instructionContributors: sp.GetServices<ISystemInstructionContributor>()));
-
-        // Register permission evaluation (on the consumer's PermissionConfig when one is registered)
-        services.TryAddSingleton<IPermissionEvaluator>(sp =>
-            new PermissionEvaluator(sp.GetService<PermissionConfig>()));
 
         // Register error recovery
         if (options.ErrorRecovery is not null)
@@ -95,6 +90,17 @@ public static class AgentServiceCollectionExtensions
 
         // Register MCP plugin manager
         services.AddSingleton<IMcpPluginManager, McpPluginManager>();
+
+        // The tool invocation pipeline (UseToolInvocationPipeline, the Ironbees adapter) with its default loop guards,
+        // registered first so they are the outermost steps. The permission gate is not among them: it is opt-in
+        // (AddIronHiveAgentApprovalGate).
+        if (options.ToolInvocation is not null)
+        {
+            services.AddSingleton(options.ToolInvocation);
+        }
+        services.AddToolInvocationMiddleware<ArgumentParseFailureMiddleware>();
+        services.AddToolInvocationMiddleware<RepeatedCallGuardMiddleware>();
+        services.AddToolInvocationMiddleware<RepeatedErrorGuardMiddleware>();
 
         // IPlanExecutor is not registered by default — consumers should register it
         // at the application layer where IChatClient is available.
@@ -182,4 +188,9 @@ public class AgentServicesOptions
     /// Webhook configuration. If null, webhooks are disabled.
     /// </summary>
     public WebhookConfig? Webhook { get; set; }
+
+    /// <summary>
+    /// Thresholds of the loop guards in the container's tool invocation pipeline. If null, defaults are used.
+    /// </summary>
+    public ToolInvocationOptions? ToolInvocation { get; set; }
 }

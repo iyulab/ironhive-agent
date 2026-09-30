@@ -28,7 +28,7 @@ public interface IModeToolFilter
     /// Checks if a tool operation is considered risky and requires HITL approval.
     /// </summary>
     /// <remarks>
-    /// This is the verdict <see cref="ApprovalGatedFunctionInvoker"/> (and the Ironbees adapter) acts on
+    /// This is the verdict <see cref="ApprovalGateMiddleware"/> acts on
     /// before a tool runs: <see cref="RiskAssessment.Verdict"/> <c>Allow</c> invokes, <c>Deny</c> returns
     /// the reason to the model, <c>Ask</c> consults <see cref="IHumanApprovalService"/>. File, shell and
     /// MCP tools are judged on their arguments; any other tool by name against
