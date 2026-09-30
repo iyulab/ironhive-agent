@@ -23,6 +23,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly TurnGuards _guards;
     private readonly List<ChatMessage> _history = [];
+    private readonly HostToolResultStage _hostResults;
 
     /// <param name="chatClient">The client the thinking layer wraps.</param>
     /// <param name="turnManager">IndexThinking's turn manager (reasoning extraction, truncation continuation).</param>
@@ -67,6 +68,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             chatClient.GetService<ToolRoundContextChatClient>()?.Bind(contextManager);
         }
         _toolRetriever = toolRetriever;
+        _hostResults = new HostToolResultStage(chatClient);
         _turnObservers = turnObservers?.ToArray() ?? [];
         _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
 
@@ -100,10 +102,11 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         => ContinueAsync(overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
-    public Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+    public async Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
         ContinuationGuard.EnsureContinuable(_history);
-        return RunTurnAsync(overrideOptions, cancellationToken);
+        await _hostResults.ApplyAsync(_history, cancellationToken);
+        return await RunTurnAsync(overrideOptions, cancellationToken);
     }
 
     /// <summary>
@@ -126,6 +129,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         // Add assistant response to history
         _history.AddRange(response.Messages);
+        _hostResults.MarkProduced(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
         var thinkingContent = ExtractThinkingContent(response);
@@ -190,6 +194,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ContinuationGuard.EnsureContinuable(_history);
+        await _hostResults.ApplyAsync(_history, cancellationToken);
         await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
         {
             yield return chunk;
@@ -296,7 +301,9 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         }
 
         // Same rebuild as AgentLoop -- the peer implementation lost tool results in exactly the same way.
-        _history.AddRange(historyBuilder.Build());
+        var turnMessages = historyBuilder.Build();
+        _history.AddRange(turnMessages);
+        _hostResults.MarkProduced(turnMessages);
 
         // This path reported no usage at all until now -- RunAsync recorded it, the streaming twin
         // silently did not, so a session that streamed had no token accounting.

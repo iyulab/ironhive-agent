@@ -59,6 +59,9 @@ public interface IAgentLoop
     /// and in <see cref="AgentResponse.ToolCalls"/>. The host runs it, appends a <see cref="ChatRole.Tool"/> message
     /// with a <see cref="FunctionResultContent"/> per pending call (to this loop's history through
     /// <see cref="InitializeHistory"/>, or to a fresh loop's for a stateless host), and calls this.
+    /// When the loop's chat client runs tools through a <see cref="Invocation.ToolInvocationPipeline"/>
+    /// (<c>UseToolInvocationPipeline()</c>), the appended results go through its result stage first — a registered
+    /// tool-result guard included — each result once; results the loop's own turns produced are not processed again.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// The history does not end with results for every call of the last assistant message, or with a user message.

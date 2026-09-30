@@ -22,6 +22,7 @@ public class AgentLoop : IAgentLoop
     private readonly IToolRetriever? _toolRetriever;
     private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly List<ChatMessage> _history = [];
+    private readonly HostToolResultStage _hostResults;
 
     public AgentLoop(
         IChatClient chatClient,
@@ -45,6 +46,7 @@ public class AgentLoop : IAgentLoop
         }
         _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
         _toolRetriever = toolRetriever;
+        _hostResults = new HostToolResultStage(chatClient);
         _turnObservers = turnObservers?.ToArray() ?? [];
 
         // Configure usage tracker with model ID for accurate pricing
@@ -77,10 +79,11 @@ public class AgentLoop : IAgentLoop
         => ContinueAsync(overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
-    public Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+    public async Task<AgentResponse> ContinueAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
         ContinuationGuard.EnsureContinuable(_history);
-        return RunTurnAsync(overrideOptions, cancellationToken);
+        await _hostResults.ApplyAsync(_history, cancellationToken);
+        return await RunTurnAsync(overrideOptions, cancellationToken);
     }
 
     /// <summary>
@@ -103,6 +106,7 @@ public class AgentLoop : IAgentLoop
 
         // Add assistant response to history
         _history.AddRange(response.Messages);
+        _hostResults.MarkProduced(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
         var usage = MapUsage(response.Usage);
@@ -161,6 +165,7 @@ public class AgentLoop : IAgentLoop
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ContinuationGuard.EnsureContinuable(_history);
+        await _hostResults.ApplyAsync(_history, cancellationToken);
         await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
         {
             yield return chunk;
@@ -247,7 +252,9 @@ public class AgentLoop : IAgentLoop
 
         // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
         // non-streaming path leaves behind -- tool results included, and in the order they arrived.
-        _history.AddRange(historyBuilder.Build());
+        var turnMessages = historyBuilder.Build();
+        _history.AddRange(turnMessages);
+        _hostResults.MarkProduced(turnMessages);
 
         var streamedUsage = MapUsage(usageDetails);
         if (streamedUsage is not null)

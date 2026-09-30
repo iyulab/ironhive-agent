@@ -18,6 +18,10 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **The permission gate is a pipeline step you turn on.** `services.AddIronHiveAgentApprovalGate()` (or
   `new ApprovalGateMiddleware(filter, approvalService)`). Without it there is no gate; with it and no
   `IHumanApprovalService`, an `Ask` verdict is still refused.
+- **Results a host supplies are guarded like in-process ones.** When the loop's chat client uses
+  `UseToolInvocationPipeline()`, `ContinueAsync` / `ContinueStreamingAsync` (both loops) put the results appended in
+  the trailing tool messages through the pipeline's result stage before the model reads them. Each result is processed
+  once: earlier history and results the loop's own turns produced are not processed again.
 - **A registered `IToolResultGuard` guards the container's pipeline.** It runs as a `ToolResultGuardMiddleware` result
   step (usable directly without DI), so the same guard covers a function-invoking client and the Ironbees adapter.
 - **Default loop guards in the pipeline.** Registered by `AddIronHiveAgent` (and in `ToolInvocationPipeline.CreateDefault()`),

@@ -7,7 +7,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs))
 - **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
-- **Tool invocation pipeline**: every tool call runs through ordered `IToolInvocationMiddleware` steps and every result through `IToolResultMiddleware` steps — on a chat client and in the Ironbees adapter. Turn it on with `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)` in place of `UseFunctionInvocation()` (`AddIronHiveAgent` registers the pipeline with its default loop guards; `AddIronHiveAgentApprovalGate()` adds the permission gate; `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()` add your own). See [Tool Invocation Pipeline](#tool-invocation-pipeline)
+- **Tool invocation pipeline**: every tool call runs through ordered `IToolInvocationMiddleware` steps and every result through `IToolResultMiddleware` steps — on a chat client, in the Ironbees adapter, and for results a host supplies before `ContinueAsync`. Turn it on with `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)` in place of `UseFunctionInvocation()` (`AddIronHiveAgent` registers the pipeline with its default loop guards; `AddIronHiveAgentApprovalGate()` adds the permission gate; `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()` add your own). See [Tool Invocation Pipeline](#tool-invocation-pipeline)
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
 - **Agent Skills (`SKILL.md`)**: `SkillsLoader.Create(new SkillsConfig { Roots = [userSkillsDir, projectSkillsDir] })` discovers skills per the [Agent Skills specification](https://agentskills.io/specification) and validates them as `skills-ref validate` does (invalid ones are *reported* in `Diagnostics`, never thrown; the first root wins a name collision and the shadowed one is reported). `loader.Contributor` puts every name + description in the system instructions; `loader.LoadTool` (`load_skill`) returns a skill's body — or a file inside its directory, and nothing outside it — on demand. `Enabled`/`Exclude`/`Filter` narrow the set per session; `MaxMetadataCharacters` bounds the section and what does not fit is in `Dropped`/`DroppedCount` (still loadable by name). `SkillDiscovery.Discover(config)` is the same discovery as a plain call, for a UI that lists skills before a session exists. Frontmatter keys the specification does not define reject the skill by default (as `skills-ref validate` does); `UnknownFields = UnknownFieldPolicy.Accept` loads such skills and reports the keys as a warning — skill trees written for one client's extensions (e.g. `argument-hint`) need this. A name in `Enabled` that matches nothing is reported (`EnabledNotFound`), not dropped silently. DI: `services.AddAgentSkills(config)` registers the loader and its contributor; add `LoadTool` to the loop's tools yourself. Text only — `scripts/` are never executed; `allowed-tools` is parsed, not enforced
 - **System instruction sections**: add to the system instructions without replacing the prompt — implement `ISystemInstructionContributor` and register it in the container (or `ContextManager.AddInstructionContributor`); needs a `ContextManager` on the loop
@@ -298,8 +298,10 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
   registered outermost. Call `next` to run the call. Return a result without calling it to short-circuit (a
   `ToolCallRefusal` is the model-readable «not run»). Set `context.Terminate` to end the request after this call. Don't
   throw for that: an exception is reported to the model as a failed call.
-- **Result steps** (`IToolResultMiddleware.OnResultAsync(context, ct)`) see every result before the model does, right
-  after the tool returns and inside every invocation step. A registered `IToolResultGuard` is applied as one of them.
+- **Result steps** (`IToolResultMiddleware.OnResultAsync(context, ct)`) see every result before the model does: right
+  after an in-process tool returns (inside every invocation step), and, when a loop continues, each result a host
+  supplied for a tool it runs itself (`context.IsHostResult`; see [Tools the host runs](#tools-the-host-runs)). A
+  registered `IToolResultGuard` is applied as one of them.
 - Without DI, build it yourself: `.UseToolInvocationPipeline(new ToolInvocationPipeline([gate, mine], [resultStep]))`.
   `ToolInvocationPipeline.CreateDefault()` is the default loop guards alone. `UseToolInvocationPipeline()` built without
   services that hold a pipeline throws instead of running tools unguarded.
@@ -331,7 +333,7 @@ var pipeline = new ToolInvocationPipeline(
 var client = inner.AsBuilder().UseToolInvocationPipeline(pipeline).Build();
 ```
 
-The same guard covers the Ironbees adapter. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)` (`IronHive.Agent.FluxGuard` package). In-process tools are then reported to it under the server name `in-process`.
+The same guard covers the Ironbees adapter and the results a host supplies before `ContinueAsync`. To reuse the FluxGuard guardrail you already give `McpPluginManager`, wrap it: `new McpGuardrailToolResultGuard(guardrail)` (`IronHive.Agent.FluxGuard` package). In-process tools are then reported to it under the server name `in-process`.
 
 ## Available Tools Context
 
@@ -666,7 +668,10 @@ response = await loop.ContinueAsync(ct);         // no invented user message
 ```
 
 `ContinueAsync` refuses a history that does not end with a result for every call of the last assistant message (or
-with a user message, for a restored conversation) before calling the model. Declarations keep their own name and
+with a user message, for a restored conversation) before calling the model. With `UseToolInvocationPipeline()` in
+place of `UseFunctionInvocation()`, the results you appended then go through the pipeline's result stage (a registered
+`IToolResultGuard` included) before the model reads them. Each is processed once: only the trailing tool messages are
+read, and results the loop's own turns produced are skipped. Declarations keep their own name and
 description everywhere the loop reads tools — Planning mode's `ReadOnlyTools`, tool retrieval, schema compression.
 `OrchestratedAgentLoop` has no host tools to continue from and throws `NotSupportedException`.
 
