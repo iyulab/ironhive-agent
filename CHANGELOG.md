@@ -54,6 +54,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **Documentation comments describe behaviour only.** Code comments, build-file comments and test descriptions state
   what the code does and the condition that triggers it; references to internal tracking ids and tools are removed.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.18.0 -> 0.18.1, `IronHive.Abstractions` 0.45.2 -> 0.45.3.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.7 -> 0.21.8, `Ironbees.Core` 0.21.7 -> 0.21.8, `MemoryIndexer` 0.20.1 -> 0.20.2, `WebFlux` 0.19.2 -> 0.19.3.
 
 ### Removed
 - **Breaking: `ApprovalGatedFunctionInvoker.Create`** (and the class). Migration: register the gate with
