@@ -306,7 +306,9 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
   `ToolInvocationPipeline.CreateDefault()` is the default loop guards alone. `UseToolInvocationPipeline()` built without
   services that hold a pipeline throws instead of running tools unguarded.
 - The Ironbees adapter (`ChatClientFrameworkAdapter`) runs its own tool loop through the same pipeline
-  (`toolInvocationPipeline:`; `AddIronbees` passes the container's). `DefaultPlanExecutor` takes one too.
+  (`toolInvocationPipeline:`; `AddIronbees` passes the container's). `DefaultPlanExecutor` takes one too; given
+  none, it runs `ToolInvocationPipeline.CreateDefault()` — the loop guards only, **no permission gate**. Pass the
+  container's pipeline (`serviceProvider.GetRequiredService<ToolInvocationPipeline>()`) to keep the gate.
 
 Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocationOptions { ... })`):
 
@@ -315,6 +317,11 @@ Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocatio
 | `ArgumentParseFailureMiddleware` | a call whose arguments could not be parsed is not run; the model reads the parse error | `RefuseUnparseableArguments` (true) |
 | `RepeatedCallGuardMiddleware` | the same tool with identical arguments, after that many successful runs in a row, is not run again | `MaxRepeatedCalls` (3; 0 = off) |
 | `RepeatedErrorGuardMiddleware` | the same tool failing with the same error that many times in a row ends the request (`Terminate`) with a result, not an exception | `MaxRepeatedErrors` (3; 0 = off) |
+
+A failure is a call that throws **or a result that reports one**: an MCP result with `isError: true` is recognised out of
+the box (keyed by its first text content), and `ToolInvocationOptions.FailureOf` (`Func<object?, string?>`, error text or
+null) adds your own tools' convention — e.g. `FailureOf = r => r is string s && s.StartsWith("Error") ? s : null`. Both
+guards use it: such a result counts toward `MaxRepeatedErrors` and never as a successful run for `MaxRepeatedCalls`.
 
 ## In-Process Tool-Result Guard (opt-in)
 

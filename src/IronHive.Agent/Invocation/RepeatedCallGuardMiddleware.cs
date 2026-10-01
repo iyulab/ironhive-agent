@@ -10,7 +10,9 @@ namespace IronHive.Agent.Invocation;
 /// <see cref="ToolInvocationOptions.MaxRepeatedCalls"/> successful runs in a row of the same tool with identical
 /// arguments, the next identical call is not run: the model receives a <see cref="ToolCallRefusal"/>
 /// (<see cref="ToolCallRefusalKind.RepeatedCall"/>) telling it it already has that result. Identical calls keep being
-/// refused until the model calls something else; any other call, failure or refusal in between ends the streak.
+/// refused until the model calls something else; any other call, failure or refusal in between ends the streak. A
+/// result that reports a failure (<see cref="ToolInvocationOptions.FailureOf"/>, or an MCP <c>isError</c> result) is a
+/// failure, not a successful run.
 /// </summary>
 /// <remarks>
 /// The streak is read from the conversation (<see cref="FunctionInvocationContext.Messages"/>), not kept in the
@@ -61,7 +63,7 @@ public sealed partial class RepeatedCallGuardMiddleware : IToolInvocationMiddlew
                 continue; // already refused for repeating: the streak stands until the model changes course
             }
 
-            if (result.Exception is not null || result.Result is ToolCallRefusal)
+            if (result.Exception is not null || result.Result is ToolCallRefusal || ToolResultFailure.Of(result.Result, _options) is not null)
             {
                 break;
             }

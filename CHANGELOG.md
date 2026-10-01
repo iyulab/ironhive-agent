@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.30.0] - Unreleased
+
+### Added
+- **The repeated-error guard now sees a failure a tool reports as its result.** An MCP tool reports failure as an
+  `isError: true` result and never throws, so a model repeating the same failing MCP call used to run until the iteration
+  limit; it now ends after `MaxRepeatedErrors` identical failures, like a throwing tool. Recognised out of the box: MCP
+  `CallToolResult`, the `JsonElement` an MCP client tool returns for it, and `McpToolResult`.
+- **`ToolInvocationOptions.FailureOf`** (`Func<object?, string?>`): tells the loop guards how your own tools report
+  failure as a value (return the error text, or null). A JSON string result arrives as a `string`.
+
+### Fixed
+- **A failing call repeated with the same arguments is no longer refused as "already ran successfully".** The
+  repeated-call guard counted result-carried failures as successful runs.
+
 ## [0.29.0] - 2026-10-01
 
 ### Changed

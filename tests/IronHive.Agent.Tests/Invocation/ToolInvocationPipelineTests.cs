@@ -4,10 +4,12 @@ using IronHive.Agent.Extensions;
 using IronHive.Agent.Invocation;
 using IronHive.Agent.Ironbees;
 using IronHive.Agent.Loop;
+using IronHive.Agent.Mcp;
 using IronHive.Agent.Mode;
 using IronHive.Agent.Tests.Mocks;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 
 namespace IronHive.Agent.Tests.Invocation;
 
@@ -199,6 +201,172 @@ public class ToolInvocationPipelineTests
         refusal.Kind.Should().Be(ToolCallRefusalKind.RepeatedError);
         refusal.Message.Should().Contain("disk offline").And.Contain("3 times");
         response.ToolCalls.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// A real MCP client tool over a session that answers every <c>tools/call</c> with <c>isError: true</c> — the tool
+    /// returns the failure as its result and never throws.
+    /// </summary>
+    private static (ModelContextProtocol.Client.McpClientTool Tool, Func<int> Calls) FailingMcpTool(string name, Func<int, string> errorText)
+    {
+        var calls = 0;
+        var client = NSubstitute.Substitute.For<ModelContextProtocol.Client.McpClient>();
+        client.SendRequestAsync(NSubstitute.Arg.Any<ModelContextProtocol.Protocol.JsonRpcRequest>(), NSubstitute.Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var request = call.Arg<ModelContextProtocol.Protocol.JsonRpcRequest>();
+                var result = new ModelContextProtocol.Protocol.CallToolResult
+                {
+                    IsError = true,
+                    Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = errorText(++calls) }],
+                };
+                return Task.FromResult(new ModelContextProtocol.Protocol.JsonRpcResponse
+                {
+                    Id = request.Id,
+                    Result = System.Text.Json.JsonSerializer.SerializeToNode(result, ModelContextProtocol.McpJsonUtilities.DefaultOptions),
+                });
+            });
+        var tool = new ModelContextProtocol.Client.McpClientTool(client, new ModelContextProtocol.Protocol.Tool
+        {
+            Name = name,
+            InputSchema = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"type":"object","properties":{"path":{"type":"string"}}}"""),
+        });
+        return (tool, () => calls);
+    }
+
+    private static (AgentLoop Loop, MockChatClient Mock) BuildWith(ToolInvocationPipeline pipeline, AITool tool, Action<MockChatClient> script)
+    {
+        var mock = new MockChatClient();
+        script(mock);
+        var client = mock.AsBuilder().UseToolInvocationPipeline(pipeline).Build();
+        return (new AgentLoop(client, new AgentOptions { Tools = [tool] }), mock);
+    }
+
+    [Fact]
+    public async Task An_MCP_tool_that_keeps_reporting_the_same_isError_result_ends_the_request()
+    {
+        var (tool, calls) = FailingMcpTool("read_file", _ => "ENOENT: no such file");
+        var (loop, mock) = BuildWith(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedErrors = 3 }),
+            tool,
+            m => m.EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueResponse("never requested"));
+
+        await loop.RunAsync("read it", Ct);
+
+        calls().Should().Be(3);
+        mock.ReceivedMessages.Should().HaveCount(3);
+        // below the threshold the model read the MCP failure itself, not a refusal
+        mock.ReceivedMessages[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single().Result
+            .Should().BeOfType<System.Text.Json.JsonElement>();
+        var refusal = loop.History[^1].Contents.OfType<FunctionResultContent>().Single().Result
+            .Should().BeOfType<ToolCallRefusal>().Subject;
+        refusal.Kind.Should().Be(ToolCallRefusalKind.RepeatedError);
+        refusal.Message.Should().Contain("ENOENT: no such file").And.Contain("3 times");
+    }
+
+    [Fact]
+    public async Task An_MCP_tool_failing_with_different_errors_is_not_a_repeated_error()
+    {
+        var (tool, calls) = FailingMcpTool("read_file", n => $"error {n}");
+        var (loop, mock) = BuildWith(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedErrors = 3, MaxRepeatedCalls = 0 }),
+            tool,
+            m => m.EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueResponse("gave up"));
+
+        var response = await loop.RunAsync("read it", Ct);
+
+        calls().Should().Be(3);
+        response.Content.Should().Be("gave up");
+        ResultsTheModelRead(mock).Should().NotContain(r => r.Result is ToolCallRefusal);
+    }
+
+    [Fact]
+    public async Task A_failing_MCP_call_repeated_with_the_same_arguments_is_a_repeated_error_not_a_repeated_success()
+    {
+        var (tool, calls) = FailingMcpTool("read_file", _ => "ENOENT");
+        var (loop, _) = BuildWith(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedCalls = 2, MaxRepeatedErrors = 4 }),
+            tool,
+            m => m.EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueToolCallResponse("read_file", """{"path":"a.txt"}""")
+                .EnqueueResponse("never requested"));
+
+        await loop.RunAsync("read it", Ct);
+
+        // the repeated-call guard (limit 2) would have refused the third call had it counted failures as runs
+        calls().Should().Be(4);
+        loop.History[^1].Contents.OfType<FunctionResultContent>().Single().Result
+            .Should().BeOfType<ToolCallRefusal>().Which.Kind.Should().Be(ToolCallRefusalKind.RepeatedError);
+    }
+
+    [Fact]
+    public async Task A_host_tool_that_reports_failure_as_a_value_is_recognised_through_FailureOf()
+    {
+        var runs = 0;
+        var tool = AIFunctionFactory.Create((string path) => { runs++; return $"Error: cannot open {path}"; }, "open_doc");
+        var options = new ToolInvocationOptions
+        {
+            MaxRepeatedErrors = 2,
+            FailureOf = r => r is string s && s.StartsWith("Error:", StringComparison.Ordinal) ? s : null,
+        };
+        var (loop, mock) = BuildWith(
+            ToolInvocationPipeline.CreateDefault(options),
+            tool,
+            m => m.EnqueueToolCallResponse("open_doc", """{"path":"x"}""")
+                .EnqueueToolCallResponse("open_doc", """{"path":"x"}""")
+                .EnqueueResponse("never requested"));
+
+        await loop.RunAsync("open", Ct);
+
+        runs.Should().Be(2);
+        mock.ReceivedMessages.Should().HaveCount(2);
+        loop.History[^1].Contents.OfType<FunctionResultContent>().Single().Result
+            .Should().BeOfType<ToolCallRefusal>().Which.Message.Should().Contain("cannot open x");
+    }
+
+    [Fact]
+    public async Task Without_FailureOf_a_value_that_merely_reads_like_an_error_is_a_success()
+    {
+        var runs = 0;
+        var tool = AIFunctionFactory.Create((string path) => { runs++; return $"Error: cannot open {path}"; }, "open_doc");
+        var (loop, _) = BuildWith(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedErrors = 2, MaxRepeatedCalls = 0 }),
+            tool,
+            m => m.EnqueueToolCallResponse("open_doc", """{"path":"x"}""")
+                .EnqueueToolCallResponse("open_doc", """{"path":"x"}""")
+                .EnqueueResponse("done"));
+
+        var response = await loop.RunAsync("open", Ct);
+
+        runs.Should().Be(2);
+        response.Content.Should().Be("done");
+    }
+
+    [Fact]
+    public async Task An_McpToolResult_error_counts_as_a_failure()
+    {
+        var runs = 0;
+        var tool = AIFunctionFactory.Create((string path) => { runs++; return McpToolResult.Error("Plugin 'fs' is not connected."); }, "fs_read");
+        var (loop, _) = BuildWith(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedErrors = 2 }),
+            tool,
+            m => m.EnqueueToolCallResponse("fs_read", """{"path":"x"}""")
+                .EnqueueToolCallResponse("fs_read", """{"path":"x"}""")
+                .EnqueueResponse("never requested"));
+
+        await loop.RunAsync("read", Ct);
+
+        runs.Should().Be(2);
+        loop.History[^1].Contents.OfType<FunctionResultContent>().Single().Result
+            .Should().BeOfType<ToolCallRefusal>().Which.Message.Should().Contain("not connected");
     }
 
     [Fact]

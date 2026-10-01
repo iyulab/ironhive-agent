@@ -32,4 +32,15 @@ public sealed class ToolInvocationOptions
     /// limit is raised too (through the <c>configure</c> callback of <c>UseToolInvocationPipeline</c>).
     /// </remarks>
     public int MaxRepeatedErrors { get; set; } = 3;
+
+    /// <summary>
+    /// Recognises a failure a tool reports as its result instead of throwing: returns the error text when the result is
+    /// a failure, or null when it is not. The loop guards count such a result as a failure keyed by this text — the
+    /// repeated-error guard ends the request on the same text <see cref="MaxRepeatedErrors"/> times in a row, and the
+    /// repeated-call guard does not count it as a successful run. Asked first; when it returns null the built-in
+    /// recognition still applies (an MCP result with <c>isError: true</c>, keyed by its first text content). It receives
+    /// the result as the tool returned it, except that a JSON string — how a function made by <c>AIFunctionFactory</c>
+    /// returns a <c>string</c> — arrives as that <c>string</c>. Null by default.
+    /// </summary>
+    public Func<object?, string?>? FailureOf { get; set; }
 }
