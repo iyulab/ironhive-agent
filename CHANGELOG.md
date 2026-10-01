@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.34.2] - Unreleased
+## [0.34.2] - 2026-10-02
 
 ### Fixed
 - **A provider refusal is not retried as a network error.** `ErrorRecoveryService` read every `HttpRequestException` as a
