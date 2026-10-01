@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.31.0] - Unreleased
+## [0.31.0] - 2026-10-01
 
 ### Added
 - **Every agent turn is an OpenTelemetry `invoke_agent` span** (GenAI semantic conventions) on the `IronHive.Agent`
