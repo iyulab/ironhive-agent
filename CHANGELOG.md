@@ -26,6 +26,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `PermissionConfig.AskBeforeDelete` (new, default `true`) is on. Before, every allowed delete was asked about with no way to
   turn it off. A custom evaluator implements the new member (delegating to `EvaluateEdit` keeps the old edit verdict).
 - Re-pinned sibling package(s) `IndexThinking` 0.23.0 -> 0.23.1, `IronHive.Abstractions` 0.45.3 -> 0.45.4.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.8 -> 0.21.9, `Ironbees.Core` 0.21.8 -> 0.21.9.
 
 ### Added
 - **`ApprovalRequest.CallId`**: the model's call id, so an approver on a wire can pair its request with the call's events.
