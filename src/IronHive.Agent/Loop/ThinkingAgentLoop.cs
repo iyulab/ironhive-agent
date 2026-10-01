@@ -109,11 +109,62 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         return await RunTurnAsync(overrideOptions, cancellationToken);
     }
 
+    /// <summary>One turn, as an <c>invoke_agent</c> span (<see cref="AgentTelemetry"/>).</summary>
+    private async Task<AgentResponse> RunTurnAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
+    {
+        using var span = AgentTelemetry.StartTurn(_options);
+        try
+        {
+            var response = await RunTurnCoreAsync(overrideOptions, cancellationToken);
+            AgentTelemetry.Complete(span, response.Usage, response.ToolCalls.Count);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            AgentTelemetry.Fail(span, ex);
+            throw;
+        }
+    }
+
+    /// <summary>One streamed turn, as an <c>invoke_agent</c> span (<see cref="AgentTelemetry"/>).</summary>
+    private async IAsyncEnumerable<AgentResponseChunk> RunTurnStreamingAsync(
+        ChatOptions? overrideOptions,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var span = AgentTelemetry.StartTurn(_options);
+        await using var chunks = RunTurnStreamingCoreAsync(overrideOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        while (true)
+        {
+            AgentResponseChunk chunk;
+            try
+            {
+                if (!await chunks.MoveNextAsync())
+                {
+                    break;
+                }
+
+                chunk = chunks.Current;
+            }
+            catch (Exception ex)
+            {
+                AgentTelemetry.Fail(span, ex);
+                throw;
+            }
+
+            if (chunk.Turn is { } turn)
+            {
+                AgentTelemetry.Complete(span, turn.Usage, turn.ToolCalls.Count);
+            }
+
+            yield return chunk;
+        }
+    }
+
     /// <summary>
     /// One turn over the current history. The caller has already put the message that starts it
     /// (a user prompt, or the host's tool results) at its end.
     /// </summary>
-    private async Task<AgentResponse> RunTurnAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
+    private async Task<AgentResponse> RunTurnCoreAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
     {
         // Set goal from first user message if context manager is present
         _contextManager?.SetGoalFromHistory(_history);
@@ -202,7 +253,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     }
 
     /// <summary>Streaming counterpart of <see cref="RunTurnAsync"/>.</summary>
-    private async IAsyncEnumerable<AgentResponseChunk> RunTurnStreamingAsync(
+    private async IAsyncEnumerable<AgentResponseChunk> RunTurnStreamingCoreAsync(
         ChatOptions? overrideOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {

@@ -20,6 +20,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults. One `IToolCallPolicy` gives each call its verdict (`ToolCallPolicy` over the rules by default — register your own to replace it); `AddIronHiveAgentApprovalGate()` acts on it, enforces Planning mode, and asks the `IHumanApprovalService` on `Ask`. See [Human Approval Gate](#human-approval-gate)
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`. Not registered by `AddIronHiveAgent` — construct them where an `IChatClient` and the tools are available (or register them yourself)
 - **Usage Tracking**: Token/cost tracking (`IUsageTracker`) and session limits (`IUsageLimiter`, registered by `AddIronHiveAgent` when `UsageLimits` is set). Pass the limiter to `AgentLoop` or `ThinkingAgentLoop` (`usageLimiter:`) and a turn past the limit is refused with `UsageLimitExceededException`
+- **Tracing (OpenTelemetry, GenAI semantic conventions)**: every turn of `AgentLoop` / `ThinkingAgentLoop` is an `invoke_agent` span on the `AgentTelemetry.SourceName` (`"IronHive.Agent"`) source — `gen_ai.agent.name` (`AgentOptions.Name`), `gen_ai.request.model`, `gen_ai.usage.*`, tool-call count, `error.type` when the turn throws. Add `.UseOpenTelemetry()` to the chat client and its `chat` and `execute_tool` spans nest under the turn. See [Tracing](#tracing)
 - **Error Recovery**: Categorized error handling with recovery strategies (`IErrorRecoveryService`). Passed to either loop (`errorRecovery:`), a buffered turn that fails transiently is retried once
 - **Webhook System**: Event notifications with HMAC signing. Turn it on with `services.AddIronHiveAgent(o => o.Webhook = new WebhookConfig { Endpoints = [new WebhookEndpoint { Url = "...", Secret = "..." }] })` (per endpoint: `EventFilter`, `Headers`, `TimeoutSeconds`, `RetryCount`). The built-in sender is the usage limiter, which posts `TokenLimitWarning` / `CostLimitWarning` events — so it also needs `UsageLimits` set; other events are sent through `IWebhookService` by your own code
 
@@ -743,6 +744,29 @@ The loop **extracts** the calls the model requested — it does not invoke them.
 `FunctionResultContent` to correlate against and the honest answer to "did it succeed" is unknown, so
 `Success` is `null` rather than a guess. A call's presence and arguments are always populated; if your
 check needs the outcome too, confirm your client wraps function invocation.
+
+## Tracing
+
+Each turn is an `invoke_agent` span; the model calls and tool runs inside it become its children when the chat client
+carries Microsoft.Extensions.AI's `UseOpenTelemetry()` — below the tool invocation pipeline, so every round is traced:
+
+```csharp
+var chatClient = inner.AsBuilder()
+    .UseToolInvocationPipeline(ToolInvocationPipeline.CreateDefault())
+    .UseOpenTelemetry(sourceName: "MyApp.GenAI")      // chat spans
+    .Build();
+var loop = new AgentLoop(chatClient, new AgentOptions { Name = "librarian", ModelId = "gpt-4.1" });
+
+// OpenTelemetry SDK: listen to both sources.
+// tracing.AddSource(AgentTelemetry.SourceName, "MyApp.GenAI");
+```
+
+- `invoke_agent {Name}` carries `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.request.model`,
+  `gen_ai.usage.input_tokens` / `output_tokens` / `cache_read.input_tokens`, `ironhive.agent.tool_calls`, and on failure
+  `error.type` with an error status. A streamed turn is one span from the first chunk to the last.
+- Microsoft.Extensions.AI starts `execute_tool {tool}` on the current activity's source, so it is reported under
+  `AgentTelemetry.SourceName` too.
+- No span exists while nothing listens, and message content is never recorded.
 
 ## Requirements
 

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.31.0] - Unreleased
+
+### Added
+- **Every agent turn is an OpenTelemetry `invoke_agent` span** (GenAI semantic conventions) on the `IronHive.Agent`
+  source (`AgentTelemetry.SourceName`): agent name, model, token usage (incl. cache reads), tool-call count, and the
+  exception type with an error status when the turn throws. With `UseOpenTelemetry()` on the chat client, the model
+  calls (`chat`) and tool runs (`execute_tool`) of the turn nest under it. No span is created while nothing listens.
+- **`AgentOptions.Name`**: the agent's name on its spans.
+
 ## [0.30.0] - 2026-10-01
 
 ### Added
