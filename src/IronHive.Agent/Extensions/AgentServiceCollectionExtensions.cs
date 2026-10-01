@@ -72,7 +72,7 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<IErrorRecoveryService>(sp =>
         {
             var config = sp.GetService<ErrorRecoveryConfig>();
-            return new ErrorRecoveryService(config);
+            return new ErrorRecoveryService(config, sp.GetServices<IronProw.Core.IHttpFailureReader>());
         });
 
         // Register webhook service

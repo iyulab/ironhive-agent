@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.35.0] - Unreleased
+
+### Changed
+- **The loop reads a provider refusal the way the IronProw gateway does.** `ErrorRecoveryService` now uses
+  `IronProw.Core`'s `IHttpFailureReader` and `DefaultErrorClassifier` instead of its own status table, so the agent
+  retries exactly the statuses the gateway retries (408, 500, 502, 504) plus capacity (429, 503), which a single provider
+  can only wait out. Other statuses are not retried — **501 and 505 no longer are** (they were treated as transient).
+  New dependency: `IronProw.Core` (no ONNX or provider SDKs).
+
+### Fixed
+- **An OpenAI SDK refusal is classified by its status.** `ClientResultException` (System.ClientModel) was not read at
+  all, so a 401 through the OpenAI provider fell through to message matching and was retried. It is now read like an
+  `HttpRequestException` with a status.
+- **A rate limit waits as long as the provider asked.** The `Retry-After` / `retry-after-ms` hint sets the retry delay
+  (capped at `ErrorRecoveryConfig.MaxRetryDelay`); without a hint the delay is the exponential backoff as before.
+
+### Added
+- `ErrorOccurrence.HttpStatusCode` and `ErrorOccurrence.RetryAfter`.
+- `ErrorRecoveryService(config, failureReaders)`: extra `IHttpFailureReader`s for provider-specific exceptions;
+  `AddIronHiveAgent()` passes every registered `IHttpFailureReader`, the same registrations the IronProw gateway reads.
+
 ## [0.34.2] - 2026-10-02
 
 ### Fixed

@@ -123,6 +123,17 @@ public record ErrorOccurrence
     public string? ToolName { get; init; }
 
     /// <summary>
+    /// HTTP status of the failed provider response, when the error describes one.
+    /// </summary>
+    public int? HttpStatusCode { get; init; }
+
+    /// <summary>
+    /// How long the provider asked the caller to wait before trying again (<c>Retry-After</c> / <c>retry-after-ms</c>),
+    /// when it sent a hint. A rate-limit retry waits this long, capped at <see cref="ErrorRecoveryConfig.MaxRetryDelay"/>.
+    /// </summary>
+    public TimeSpan? RetryAfter { get; init; }
+
+    /// <summary>
     /// Timestamp of occurrence.
     /// </summary>
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;

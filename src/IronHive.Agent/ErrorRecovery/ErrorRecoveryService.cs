@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using IronProw.Core;
 
 namespace IronHive.Agent.ErrorRecovery;
 
@@ -36,16 +37,33 @@ public class ErrorRecoveryConfig
 /// <summary>
 /// Error recovery service implementation.
 /// </summary>
+/// <remarks>
+/// A provider refusal is read the way the IronProw gateway reads it: <see cref="IHttpFailureReader"/> gives the status and
+/// the provider's retry hint (System.ClientModel's <c>ClientResultException</c> as well as <see cref="HttpRequestException"/>),
+/// and <see cref="DefaultErrorClassifier"/> decides which statuses are transient. The two runtimes therefore agree on what
+/// is worth retrying; what differs is only what a single provider can do instead of falling back (wait out a rate limit).
+/// </remarks>
 public class ErrorRecoveryService : IErrorRecoveryService
 {
     private readonly ErrorRecoveryConfig _config;
+    private readonly IReadOnlyList<IHttpFailureReader> _failureReaders;
+    private readonly DefaultErrorClassifier _classifier;
     private readonly List<ErrorOccurrence> _errors = [];
     private readonly Dictionary<string, int> _patternCounts = [];
     private DateTimeOffset _sessionStart = DateTimeOffset.UtcNow;
 
-    public ErrorRecoveryService(ErrorRecoveryConfig? config = null)
+    /// <summary>Creates the service.</summary>
+    /// <param name="config">Thresholds and delays; defaults when null.</param>
+    /// <param name="failureReaders">
+    /// Readers that turn a provider exception into its HTTP status and retry hint, first answer wins. Null or empty uses the
+    /// built-in <see cref="HttpStatusFailureReader"/>; register extra readers the same way as for the IronProw gateway.
+    /// </param>
+    public ErrorRecoveryService(ErrorRecoveryConfig? config = null, IEnumerable<IHttpFailureReader>? failureReaders = null)
     {
         _config = config ?? new ErrorRecoveryConfig();
+        var readers = failureReaders?.ToArray() ?? [];
+        _failureReaders = readers.Length > 0 ? readers : [new HttpStatusFailureReader()];
+        _classifier = new DefaultErrorClassifier(_failureReaders);
     }
 
     /// <inheritdoc />
@@ -174,9 +192,10 @@ public class ErrorRecoveryService : IErrorRecoveryService
         return false;
     }
 
-    private static ErrorOccurrence CreateErrorFromException(Exception exception, string? toolName)
+    private ErrorOccurrence CreateErrorFromException(Exception exception, string? toolName)
     {
-        var category = CategorizeException(exception);
+        var failure = ReadHttpFailure(exception);
+        var category = failure is { } http ? CategorizeHttpFailure(exception, http.StatusCode) : CategorizeException(exception);
         var severity = DetermineSeverity(exception, category);
 
         return new ErrorOccurrence
@@ -186,6 +205,8 @@ public class ErrorRecoveryService : IErrorRecoveryService
             Category = category,
             Severity = severity,
             ToolName = toolName,
+            HttpStatusCode = failure?.StatusCode,
+            RetryAfter = failure?.RetryAfter,
             Context = new Dictionary<string, object?>
             {
                 ["StackTrace"] = exception.StackTrace,
@@ -194,13 +215,36 @@ public class ErrorRecoveryService : IErrorRecoveryService
         };
     }
 
+    private HttpFailure? ReadHttpFailure(Exception exception)
+    {
+        foreach (var reader in _failureReaders)
+        {
+            if (reader.Read(exception) is { } failure)
+            {
+                return failure;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A provider refusal, by its status: credentials (401/403) and capacity (429/503) have a recovery of their own;
+    /// otherwise the gateway's classifier decides — a status it would retry is transient, any other is a request this
+    /// provider will refuse the same way again.
+    /// </summary>
+    private ErrorCategory CategorizeHttpFailure(Exception exception, int status) => status switch
+    {
+        401 or 403 => ErrorCategory.Authentication,
+        429 or 503 => ErrorCategory.RateLimit,
+        _ when _classifier.Classify(exception) == ErrorClassification.Retryable => ErrorCategory.Network,
+        _ => ErrorCategory.InvalidInput,
+    };
+
     private static ErrorCategory CategorizeException(Exception exception)
     {
         return exception switch
         {
-            // A provider refusal carries its HTTP status (the OpenAI-compatible and other IronHive providers set it): read it
-            // before the type, so a bad key or a rejected request is not retried as if the network had blipped.
-            HttpRequestException { StatusCode: { } status } => CategorizeHttpStatus((int)status),
             HttpRequestException => ErrorCategory.Network,
             UnauthorizedAccessException => ErrorCategory.Authentication,
             TimeoutException or TaskCanceledException { InnerException: TimeoutException } => ErrorCategory.Timeout,
@@ -214,20 +258,6 @@ public class ErrorRecoveryService : IErrorRecoveryService
             _ => ErrorCategory.Unknown
         };
     }
-
-    /// <summary>
-    /// The status table iron-prow's <c>DefaultErrorClassifier</c> uses for a single provider: 408 and 5xx are transient,
-    /// 429 is a rate limit, 401/403 are credentials, any other 4xx is a request this provider rejects — retrying it the same
-    /// way gets the same answer.
-    /// </summary>
-    private static ErrorCategory CategorizeHttpStatus(int status) => status switch
-    {
-        401 or 403 => ErrorCategory.Authentication,
-        429 => ErrorCategory.RateLimit,
-        408 or >= 500 => ErrorCategory.Network,
-        >= 400 => ErrorCategory.InvalidInput,
-        _ => ErrorCategory.Network,
-    };
 
     private static ErrorSeverity DetermineSeverity(Exception exception, ErrorCategory category)
     {
@@ -263,13 +293,15 @@ public class ErrorRecoveryService : IErrorRecoveryService
         {
             ErrorCategory.RateLimit => (
                 RecoveryAction.WaitAndRetry,
-                "Rate limit exceeded. Waiting before retry.",
-                CalculateBackoffDelay(occurrenceCount)),
+                error.RetryAfter is null
+                    ? "Rate limit exceeded. Waiting before retry."
+                    : "Rate limit exceeded. Waiting as long as the provider asked before retry.",
+                RetryDelayFor(error, occurrenceCount)),
 
             ErrorCategory.Network => (
                 RecoveryAction.WaitAndRetry,
                 "Network error. Will retry after brief delay.",
-                CalculateBackoffDelay(occurrenceCount)),
+                RetryDelayFor(error, occurrenceCount)),
 
             ErrorCategory.Timeout => (
                 RecoveryAction.WaitAndRetry,
@@ -315,6 +347,12 @@ public class ErrorRecoveryService : IErrorRecoveryService
                 _config.DefaultRetryDelay)
         };
     }
+
+    /// <summary>The provider's retry hint when it sent one (capped at <see cref="ErrorRecoveryConfig.MaxRetryDelay"/>), else backoff.</summary>
+    private TimeSpan RetryDelayFor(ErrorOccurrence error, int attemptCount)
+        => error.RetryAfter is { } hint
+            ? (hint > _config.MaxRetryDelay ? _config.MaxRetryDelay : hint)
+            : CalculateBackoffDelay(attemptCount);
 
     private TimeSpan CalculateBackoffDelay(int attemptCount)
     {

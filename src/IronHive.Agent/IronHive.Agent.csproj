@@ -42,6 +42,8 @@
     <PackageReference Include="TokenMeter" />
     <!-- IronHive (LLM abstraction) -->
     <PackageReference Include="IronHive.Abstractions" />
+    <!-- Provider failure reading and the transient-status boundary, shared with the IronProw gateway (ErrorRecoveryService). -->
+    <PackageReference Include="IronProw.Core" />
   </ItemGroup>
 
   <ItemGroup>
