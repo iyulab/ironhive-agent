@@ -70,8 +70,8 @@ public static class PermissionConfigLoader
     /// <summary>
     /// Loads permission configuration from a YAML file: a <c>permissions:</c> section with <c>read</c>, <c>edit</c>,
     /// <c>bash</c>, <c>external_directory</c>, <c>mcp_tools</c> and <c>tools</c> (lists of rules — <c>pattern</c>,
-    /// <c>action</c>, <c>priority</c>, <c>reason</c>), <c>read_only_tools</c> (a list of tool names) and
-    /// <c>default_action</c>.
+    /// <c>action</c>, <c>priority</c>, <c>reason</c>), <c>read_only_tools</c> (a list of tool names),
+    /// <c>ask_before_delete</c> (true by default) and <c>default_action</c>.
     /// </summary>
     /// <param name="filePath">Path to the YAML file.</param>
     /// <returns>The file's configuration, or <see cref="PermissionConfig.CreateDefault"/> when the file does not exist.</returns>
@@ -110,6 +110,7 @@ public static class PermissionConfigLoader
             McpTools = ToRules(filePath, "mcp_tools", section.McpTools),
             Tools = ToRules(filePath, "tools", section.Tools),
             ReadOnlyTools = section.ReadOnlyTools ?? [],
+            AskBeforeDelete = section.AskBeforeDelete ?? true,
             DefaultAction = section.DefaultAction is null
                 ? PermissionAction.Ask
                 : ParseAction(filePath, "default_action", section.DefaultAction)
@@ -261,6 +262,7 @@ public static class PermissionConfigLoader
         public List<YamlPermissionRule>? McpTools { get; set; }
         public List<YamlPermissionRule>? Tools { get; set; }
         public List<string>? ReadOnlyTools { get; set; }
+        public bool? AskBeforeDelete { get; set; }
         public string? DefaultAction { get; set; }
     }
 

@@ -216,4 +216,28 @@ public class ToolCallPolicyContractTests
         Assert.Equal(0, probe.Invocations);
         Assert.Contains("host says no", call.Result, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AskBeforeDelete_IsReadFromPermissionFiles_AndDefaultsToOn()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"perm-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var json = Path.Combine(dir, "permissions.json");
+            File.WriteAllText(json, """{ "permissions": { "askBeforeDelete": false } }""");
+            var yaml = Path.Combine(dir, "permissions.yaml");
+            File.WriteAllText(yaml, "permissions:\n  ask_before_delete: false\n");
+            var unset = Path.Combine(dir, "unset.yaml");
+            File.WriteAllText(unset, "permissions:\n  read_only_tools: [x]\n");
+
+            Assert.False(PermissionConfigLoader.LoadFromJson(json).AskBeforeDelete);
+            Assert.False(PermissionConfigLoader.LoadFromYaml(yaml).AskBeforeDelete);
+            Assert.True(PermissionConfigLoader.LoadFromYaml(unset).AskBeforeDelete);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
