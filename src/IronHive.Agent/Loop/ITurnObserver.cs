@@ -72,6 +72,9 @@ public record TurnRecord
     /// Thinking/reasoning content for this turn, when the loop extracts it.
     /// </summary>
     public ThinkingContent? ThinkingContent { get; init; }
+
+    /// <summary>Why the turn ended.</summary>
+    public TurnStopReason StopReason { get; init; }
 }
 
 /// <summary>

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.32.0] - Unreleased
+
+### Added
+- **Every turn says why it ended**: `AgentResponse.StopReason` and `TurnRecord.StopReason` (`TurnStopReason`) —
+  `Completed`, `OutputLimit` (cut at the output-token limit), `ContentFilter`, `ToolTerminated` (a tool step such as
+  the repeated-error guard ended the request), `AwaitingHostTools` (declaration-only tools to run, then `ContinueAsync`)
+  and `StepLimit` (the function-invoking client's iteration limit left tool calls unrun). Read from what the turn
+  actually produced, streamed or not; also on the `invoke_agent` span as `ironhive.agent.stop_reason`.
+- **`AgentOptions.MaxTurnDuration`**: the longest one turn may run, model calls and tools together. A turn past it is
+  cancelled and throws `TimeoutException`; the caller's own cancellation still throws `OperationCanceledException`.
+
 ## [0.31.0] - 2026-10-01
 
 ### Added

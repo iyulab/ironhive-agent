@@ -113,11 +113,18 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     private async Task<AgentResponse> RunTurnAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
     {
         using var span = AgentTelemetry.StartTurn(_options);
+        using var deadline = TurnDeadline.Start(_options.MaxTurnDuration, cancellationToken);
         try
         {
-            var response = await RunTurnCoreAsync(overrideOptions, cancellationToken);
-            AgentTelemetry.Complete(span, response.Usage, response.ToolCalls.Count);
+            var response = await RunTurnCoreAsync(overrideOptions, deadline.Token);
+            AgentTelemetry.Complete(span, response.Usage, response.ToolCalls.Count, response.StopReason);
             return response;
+        }
+        catch (OperationCanceledException ex) when (deadline.Expired(ex))
+        {
+            var timeout = deadline.TimeoutException();
+            AgentTelemetry.Fail(span, timeout);
+            throw timeout;
         }
         catch (Exception ex)
         {
@@ -132,7 +139,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var span = AgentTelemetry.StartTurn(_options);
-        await using var chunks = RunTurnStreamingCoreAsync(overrideOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        using var deadline = TurnDeadline.Start(_options.MaxTurnDuration, cancellationToken);
+        await using var chunks = RunTurnStreamingCoreAsync(overrideOptions, deadline.Token).GetAsyncEnumerator(deadline.Token);
         while (true)
         {
             AgentResponseChunk chunk;
@@ -145,6 +153,12 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
                 chunk = chunks.Current;
             }
+            catch (OperationCanceledException ex) when (deadline.Expired(ex))
+            {
+                var timeout = deadline.TimeoutException();
+                AgentTelemetry.Fail(span, timeout);
+                throw timeout;
+            }
             catch (Exception ex)
             {
                 AgentTelemetry.Fail(span, ex);
@@ -153,7 +167,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
             if (chunk.Turn is { } turn)
             {
-                AgentTelemetry.Complete(span, turn.Usage, turn.ToolCalls.Count);
+                AgentTelemetry.Complete(span, turn.Usage, turn.ToolCalls.Count, turn.StopReason);
             }
 
             yield return chunk;
@@ -183,6 +197,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         _hostResults.MarkProduced(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
+        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools);
         var thinkingContent = ExtractThinkingContent(response);
         var usage = MapUsage(response.Usage);
 
@@ -201,7 +216,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                 Content = content,
                 ToolCalls = toolCalls,
                 Usage = usage,
-                ThinkingContent = thinkingContent
+                ThinkingContent = thinkingContent,
+                StopReason = stopReason
             },
             cancellationToken);
 
@@ -212,7 +228,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             ToolCalls = toolCalls,
             Usage = usage,
             ThinkingContent = thinkingContent,
-            Addendum = addendum
+            Addendum = addendum,
+            StopReason = stopReason
         };
     }
 
@@ -272,6 +289,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var historyBuilder = new StreamingTurnHistoryBuilder();
         var thinkingBuilder = new StringBuilder();
         UsageDetails? usageDetails = null;
+        ChatFinishReason? finishReason = null;
 
         // Track live reasoning streamed this turn so the turn-end metadata thinking is not emitted
         // a second time (prefer-live; see ComputeMetadataThinkingTail).
@@ -349,10 +367,12 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             }
 
             usageDetails = TurnGuards.AccumulateUsage(usageDetails, update);
+            finishReason = update.FinishReason ?? finishReason;
         }
 
         // Same rebuild as AgentLoop -- the peer implementation lost tool results in exactly the same way.
         var turnMessages = historyBuilder.Build();
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools);
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
 
@@ -374,7 +394,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             Content = responseBuilder.ToString(),
             ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
             Usage = streamedUsage,
-            ThinkingContent = thinking
+            ThinkingContent = thinking,
+            StopReason = streamedStopReason
         };
 
         yield return new AgentResponseChunk

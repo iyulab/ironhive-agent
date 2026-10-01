@@ -171,6 +171,9 @@ public record AgentResponse
     /// from what the model itself wrote; the addendum is never written into conversation history.
     /// </remarks>
     public string? Addendum { get; init; }
+
+    /// <summary>Why the turn ended (it ended without an error; a failed turn throws).</summary>
+    public TurnStopReason StopReason { get; init; }
 }
 
 /// <summary>

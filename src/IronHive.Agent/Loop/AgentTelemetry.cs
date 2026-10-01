@@ -44,7 +44,7 @@ public static class AgentTelemetry
     }
 
     /// <summary>Records what the turn used and how many tool calls it made.</summary>
-    internal static void Complete(Activity? activity, TokenUsage? usage, int toolCalls)
+    internal static void Complete(Activity? activity, TokenUsage? usage, int toolCalls, TurnStopReason stopReason)
     {
         if (activity is null)
         {
@@ -62,6 +62,7 @@ public static class AgentTelemetry
         }
 
         activity.SetTag("ironhive.agent.tool_calls", toolCalls);
+        activity.SetTag("ironhive.agent.stop_reason", stopReason.ToString());
     }
 
     /// <summary>Marks the turn failed with the exception that ended it.</summary>

@@ -4,7 +4,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 
 ## Features
 
-- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs))
+- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs)). Every turn says why it ended — `AgentResponse.StopReason` / `TurnRecord.StopReason` (`Completed` · `OutputLimit` · `ContentFilter` · `ToolTerminated` · `AwaitingHostTools` · `StepLimit`); `AgentOptions.MaxTurnDuration` caps one turn's wall-clock time (past it the turn throws `TimeoutException`)
 - **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **Tool invocation pipeline**: every tool call runs through ordered `IToolInvocationMiddleware` steps and every result through `IToolResultMiddleware` steps — on a chat client, in the Ironbees adapter, and for results a host supplies before `ContinueAsync`. Turn it on with `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)` in place of `UseFunctionInvocation()` (`AddIronHiveAgent` registers the pipeline with its default loop guards; `AddIronHiveAgentApprovalGate()` adds the permission gate; `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()` add your own). See [Tool Invocation Pipeline](#tool-invocation-pipeline)
@@ -762,7 +762,8 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Name = "librarian", Mode
 ```
 
 - `invoke_agent {Name}` carries `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.request.model`,
-  `gen_ai.usage.input_tokens` / `output_tokens` / `cache_read.input_tokens`, `ironhive.agent.tool_calls`, and on failure
+  `gen_ai.usage.input_tokens` / `output_tokens` / `cache_read.input_tokens`, `ironhive.agent.tool_calls`,
+  `ironhive.agent.stop_reason`, and on failure
   `error.type` with an error status. A streamed turn is one span from the first chunk to the last.
 - Microsoft.Extensions.AI starts `execute_tool {tool}` on the current activity's source, so it is reported under
   `AgentTelemetry.SourceName` too.

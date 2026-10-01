@@ -90,11 +90,18 @@ public class AgentLoop : IAgentLoop
     private async Task<AgentResponse> RunTurnAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
     {
         using var span = AgentTelemetry.StartTurn(_options);
+        using var deadline = TurnDeadline.Start(_options.MaxTurnDuration, cancellationToken);
         try
         {
-            var response = await RunTurnCoreAsync(overrideOptions, cancellationToken);
-            AgentTelemetry.Complete(span, response.Usage, response.ToolCalls.Count);
+            var response = await RunTurnCoreAsync(overrideOptions, deadline.Token);
+            AgentTelemetry.Complete(span, response.Usage, response.ToolCalls.Count, response.StopReason);
             return response;
+        }
+        catch (OperationCanceledException ex) when (deadline.Expired(ex))
+        {
+            var timeout = deadline.TimeoutException();
+            AgentTelemetry.Fail(span, timeout);
+            throw timeout;
         }
         catch (Exception ex)
         {
@@ -109,7 +116,8 @@ public class AgentLoop : IAgentLoop
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var span = AgentTelemetry.StartTurn(_options);
-        await using var chunks = RunTurnStreamingCoreAsync(overrideOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        using var deadline = TurnDeadline.Start(_options.MaxTurnDuration, cancellationToken);
+        await using var chunks = RunTurnStreamingCoreAsync(overrideOptions, deadline.Token).GetAsyncEnumerator(deadline.Token);
         while (true)
         {
             AgentResponseChunk chunk;
@@ -122,6 +130,12 @@ public class AgentLoop : IAgentLoop
 
                 chunk = chunks.Current;
             }
+            catch (OperationCanceledException ex) when (deadline.Expired(ex))
+            {
+                var timeout = deadline.TimeoutException();
+                AgentTelemetry.Fail(span, timeout);
+                throw timeout;
+            }
             catch (Exception ex)
             {
                 AgentTelemetry.Fail(span, ex);
@@ -130,7 +144,7 @@ public class AgentLoop : IAgentLoop
 
             if (chunk.Turn is { } turn)
             {
-                AgentTelemetry.Complete(span, turn.Usage, turn.ToolCalls.Count);
+                AgentTelemetry.Complete(span, turn.Usage, turn.ToolCalls.Count, turn.StopReason);
             }
 
             yield return chunk;
@@ -160,6 +174,7 @@ public class AgentLoop : IAgentLoop
         _hostResults.MarkProduced(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
+        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools);
         var usage = MapUsage(response.Usage);
 
         // Record usage for session tracking
@@ -172,7 +187,7 @@ public class AgentLoop : IAgentLoop
         var content = response.Text ?? string.Empty;
         var addendum = await TurnObserverNotifier.NotifyAsync(
             _turnObservers,
-            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage },
+            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, StopReason = stopReason },
             cancellationToken);
 
         return new AgentResponse
@@ -183,7 +198,8 @@ public class AgentLoop : IAgentLoop
             HasTextOutput = !string.IsNullOrEmpty(response.Text),
             ToolCalls = toolCalls,
             Usage = usage,
-            Addendum = addendum
+            Addendum = addendum,
+            StopReason = stopReason
         };
     }
 
@@ -245,6 +261,7 @@ public class AgentLoop : IAgentLoop
         var toolResults = new List<FunctionResultContent>();
         var historyBuilder = new StreamingTurnHistoryBuilder();
         UsageDetails? usageDetails = null;
+        ChatFinishReason? finishReason = null;
 
         IAsyncEnumerable<ChatResponseUpdate> stream;
         try
@@ -299,11 +316,13 @@ public class AgentLoop : IAgentLoop
             }
 
             usageDetails = TurnGuards.AccumulateUsage(usageDetails, update);
+            finishReason = update.FinishReason ?? finishReason;
         }
 
         // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
         // non-streaming path leaves behind -- tool results included, and in the order they arrived.
         var turnMessages = historyBuilder.Build();
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools);
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
 
@@ -321,7 +340,8 @@ public class AgentLoop : IAgentLoop
         {
             Content = responseBuilder.ToString(),
             ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
-            Usage = streamedUsage
+            Usage = streamedUsage,
+            StopReason = streamedStopReason
         };
 
         yield return new AgentResponseChunk
@@ -474,6 +494,13 @@ public class AgentOptions
     /// (<see cref="AgentTelemetry"/>). Optional.
     /// </summary>
     public string? Name { get; set; }
+
+    /// <summary>
+    /// Longest one turn may run — model calls and tool runs together. A turn still running then is cancelled and the
+    /// turn method throws <see cref="TimeoutException"/>; a streamed turn's chunks already delivered stay delivered.
+    /// Null (the default): no limit.
+    /// </summary>
+    public TimeSpan? MaxTurnDuration { get; set; }
 
     /// <summary>
     /// System prompt to initialize the agent.
