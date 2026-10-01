@@ -68,6 +68,12 @@ public class PermissionConfig
     public List<string> ReadOnlyTools { get; set; } = [];
 
     /// <summary>
+    /// Whether deleting a file the <see cref="Edit"/> rules allow is still asked about. <c>true</c> (the default) keeps a
+    /// confirmation in front of every delete; <c>false</c> lets the edit rules decide deletes as they decide writes.
+    /// </summary>
+    public bool AskBeforeDelete { get; set; } = true;
+
+    /// <summary>
     /// Default action when no rule matches.
     /// </summary>
     public PermissionAction DefaultAction { get; set; } = PermissionAction.Ask;
@@ -135,18 +141,8 @@ public class PermissionConfig
         DefaultAction = PermissionAction.Ask
     };
 
-    // The built-in tools that only look (directory listing, glob, grep) — the same set
-    // ModeToolFilter admits in Planning mode. Both spellings the built-ins have shipped under.
+    // The built-in tools that only look are allowed by name (read_file never reaches these rules: the path rules judge it).
     private static List<PermissionRule> ReadOnlyToolRules() =>
-    [
-        new() { Pattern = "ListDirectory", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        new() { Pattern = "list_directory", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        new() { Pattern = "GlobFiles", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        new() { Pattern = "glob*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        new() { Pattern = "GrepFiles", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        new() { Pattern = "grep*", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" },
-        // The advisor sends the conversation to a model and returns text — no side effects. (Delegation tools are
-        // not listed: what they can do depends on the delegated agent's own tools.)
-        new() { Pattern = "advisor", Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only: consults a model" }
-    ];
+        [.. BuiltInToolNames.ReadOnlyPatterns.Select(pattern =>
+            new PermissionRule { Pattern = pattern, Action = PermissionAction.Allow, Priority = 0, Reason = "Read-only" })];
 }

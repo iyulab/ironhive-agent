@@ -58,9 +58,10 @@ public static class ToolInvocationServiceCollectionExtensions
 
     /// <summary>
     /// Turns on the permission gate: adds <see cref="ApprovalGateMiddleware"/> over the container's
-    /// <see cref="IModeToolFilter"/> and, for <c>Ask</c> verdicts, its <see cref="IHumanApprovalService"/> (without one an
-    /// <c>Ask</c> verdict is refused). Registers the default filter and evaluator when none is registered. Without this
-    /// call the pipeline has no gate.
+    /// <see cref="IToolCallPolicy"/> and, for <c>Ask</c> verdicts, its <see cref="IHumanApprovalService"/> (without one an
+    /// <c>Ask</c> verdict is refused). When the container has an <see cref="IModeManager"/> (<c>AddIronHiveAgent</c>
+    /// registers one), Planning mode is enforced over its <see cref="IModeToolFilter"/>. Registers the default policy,
+    /// filter and evaluator when none is registered. Without this call the pipeline has no gate.
     /// </summary>
     public static IServiceCollection AddIronHiveAgentApprovalGate(this IServiceCollection services)
     {
@@ -92,7 +93,7 @@ public static class ToolInvocationServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>The permission evaluator and the mode filter over it, unless the consumer registered its own.</summary>
+    /// <summary>The permission evaluator, and the mode filter and tool-call policy over it, unless the consumer registered its own.</summary>
     internal static IServiceCollection TryAddPermissionServices(this IServiceCollection services)
     {
         services.TryAddSingleton<IPermissionEvaluator>(sp =>
@@ -102,6 +103,8 @@ public static class ToolInvocationServiceCollectionExtensions
         // different one. TryAdd keeps a consumer's own registration.
         services.TryAddSingleton<IModeToolFilter>(sp =>
             new ModeToolFilter(sp.GetRequiredService<IPermissionEvaluator>()));
+        services.TryAddSingleton<IToolCallPolicy>(sp =>
+            new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>()));
         return services;
     }
 }

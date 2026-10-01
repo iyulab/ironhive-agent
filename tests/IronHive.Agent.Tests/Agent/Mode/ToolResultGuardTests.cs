@@ -104,7 +104,7 @@ public class ToolResultGuardTests
         var config = PermissionConfig.CreateDefault();
         config.Tools.Add(new PermissionRule { Pattern = "ReadPage", Action = PermissionAction.Deny, Priority = 100, Reason = "no browsing" });
         var (loop, mock) = BuildLoop(new ToolInvocationPipeline(
-            [new ApprovalGateMiddleware(new ModeToolFilter(config))], [new ToolResultGuardMiddleware(guard)]));
+            [new ApprovalGateMiddleware(new ToolCallPolicy(config))], [new ToolResultGuardMiddleware(guard)]));
 
         await loop.RunAsync("read it", TestContext.Current.CancellationToken);
 

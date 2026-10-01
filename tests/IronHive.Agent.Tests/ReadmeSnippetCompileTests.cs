@@ -61,6 +61,7 @@ public class ReadmeSnippetCompileTests
         ("config", "McpPluginConfig config = new();"),
         ("manager", "McpPluginManager manager = null!;"),
         ("modeToolFilter", "IModeToolFilter modeToolFilter = null!;"),
+        ("policy", "IToolCallPolicy policy = null!;"),
         ("modeManager", "IModeManager modeManager = null!;"),
         ("approvalService", "IHumanApprovalService approvalService = null!;"),
         ("guard", "IToolResultGuard guard = null!;"),

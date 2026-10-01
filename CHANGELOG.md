@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.29.0] - Unreleased
+
+### Changed
+- **Breaking: a tool call's verdict comes from `IToolCallPolicy`, not `IModeToolFilter`.** `IModeToolFilter.AssessRisk` is
+  removed; `IToolCallPolicy.Evaluate(toolName, arguments)` returns the same `RiskAssessment` (`Allow` / `Deny` / `Ask`).
+  `ToolCallPolicy` is the default (the permission rules, as before) and `AddIronHiveAgent` /
+  `AddIronHiveAgentApprovalGate` register it unless you registered your own. `IModeToolFilter` keeps `FilterTools` and
+  `IsToolPermitted`. Migration: an `IModeToolFilter` that overrode `AssessRisk` becomes an `IToolCallPolicy` registered in
+  the container.
+- **Breaking: `ApprovalGateMiddleware` and `ApprovalGate` take the policy.** Constructors are
+  `(IToolCallPolicy policy, IHumanApprovalService? approver = null, ILogger? logger = null, IModeManager? modeManager = null,
+  IModeToolFilter? modeToolFilter = null)`. Migration: `new ApprovalGateMiddleware(new ModeToolFilter(config), approver)`
+  becomes `new ApprovalGateMiddleware(new ToolCallPolicy(config), approver)`.
+- **Planning mode is enforced at the gate.** With a mode manager (with DI, whenever `IModeManager` is registered), a tool
+  that is not read-only is denied while the mode is `Planning`, whatever the policy says. Idle and HumanInTheLoop are
+  not verdicts, so a host that never fires a mode trigger is unaffected.
+- **Read-only tools have one list.** Planning's read-only test (`IPermissionEvaluator.IsReadOnlyTool`) and the default
+  `Tools` allow rules read the same built-in list; Planning now also permits the advisor and any `glob*` / `grep*` name.
+- **Breaking: `IPermissionEvaluator.EvaluateDelete(filePath)`** (new member) — the `Edit` verdict, asked about when
+  `PermissionConfig.AskBeforeDelete` (new, default `true`) is on. Before, every allowed delete was asked about with no way to
+  turn it off. A custom evaluator implements the new member (delegating to `EvaluateEdit` keeps the old edit verdict).
+
+### Added
+- **`ApprovalRequest.CallId`**: the model's call id, so an approver on a wire can pair its request with the call's events.
+
 ## [0.28.0] - 2026-10-01
 
 ### Added

@@ -65,6 +65,15 @@ public interface IPermissionEvaluator
     PermissionResult EvaluateEdit(string filePath);
 
     /// <summary>
+    /// Evaluates permission for deleting a file: the <see cref="EvaluateEdit"/> verdict, except that a delete the edit
+    /// rules allow is asked about when <see cref="PermissionConfig.AskBeforeDelete"/> is on (the default). Such an escalated
+    /// result keeps the allowing rule (or an allow-all stand-in) as <see cref="PermissionResult.MatchedRule"/>.
+    /// </summary>
+    /// <param name="filePath">Path to the file being deleted.</param>
+    /// <returns>Permission result.</returns>
+    PermissionResult EvaluateDelete(string filePath);
+
+    /// <summary>
     /// Evaluates permission for a bash/shell command.
     /// </summary>
     /// <param name="command">The command to execute.</param>
@@ -95,8 +104,9 @@ public interface IPermissionEvaluator
     PermissionResult EvaluateTool(string toolName);
 
     /// <summary>
-    /// Whether the host declared <paramref name="toolName"/> read-only (<see cref="PermissionConfig.ReadOnlyTools"/>).
-    /// Planning mode permits such a tool alongside the built-in read-only tools.
+    /// Whether <paramref name="toolName"/> only reads: one of the built-in read-only tools (read, list, glob, grep, the
+    /// advisor) or a tool the host declared in <see cref="PermissionConfig.ReadOnlyTools"/>. Planning mode permits exactly
+    /// these.
     /// </summary>
     /// <param name="toolName">The tool's function name.</param>
     /// <returns><c>true</c> when a declared pattern matches the name.</returns>

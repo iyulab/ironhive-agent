@@ -6,7 +6,7 @@ namespace IronHive.Agent.Mode;
 /// <remarks>
 /// Consulted by <see cref="ApprovalGateMiddleware"/> — a step of the tool invocation pipeline that a
 /// function-invoking client (<c>UseToolInvocationPipeline()</c>) and the Ironbees adapter run every call through —
-/// whenever <see cref="IModeToolFilter.AssessRisk"/> returns an <c>Ask</c> verdict for a call. An
+/// whenever the <see cref="IToolCallPolicy"/> returns an <c>Ask</c> verdict for a call. An
 /// <c>IAgentLoop</c> itself never invokes tools, so registering an implementation is not enough on its
 /// own: the pipeline must carry the gate (<c>services.AddIronHiveAgentApprovalGate()</c>). Remembering an
 /// <see cref="ApprovalResult.AlwaysApprove"/> answer is the implementation's job — the gate asks every
@@ -48,6 +48,12 @@ public record ApprovalRequest
     /// Human-readable description of what will happen.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// The id of the tool call this request is about (the model's call id), when the caller knows it — lets an approver
+    /// on a wire pair the request with the call's start/end events. Null when the gate is used outside a pipeline.
+    /// </summary>
+    public string? CallId { get; init; }
 }
 
 /// <summary>

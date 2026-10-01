@@ -21,7 +21,7 @@ public class ChatClientFrameworkAdapterTests
     };
 
     private static ToolInvocationPipeline Gated(IPermissionEvaluator evaluator, IHumanApprovalService? approval = null)
-        => new([new ApprovalGateMiddleware(new ModeToolFilter(evaluator), approval)]);
+        => new([new ApprovalGateMiddleware(new ToolCallPolicy(evaluator), approval)]);
 
     [Fact]
     public async Task CreateAgentAsync_CreatesAgent()

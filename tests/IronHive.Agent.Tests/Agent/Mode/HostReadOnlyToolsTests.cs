@@ -39,13 +39,13 @@ public class HostReadOnlyToolsTests
     public void Declaring_ReadOnly_DoesNotChangeTheRiskDecision()
     {
         // Side-effect class and permission are separate: an Ask default still asks about the tool in Working mode.
-        var filter = new ModeToolFilter(new PermissionConfig
+        var policy = new ToolCallPolicy(new PermissionConfig
         {
             ReadOnlyTools = ["read_current_tab"],
             DefaultAction = PermissionAction.Ask,
         });
 
-        var risk = filter.AssessRisk("read_current_tab", arguments: null);
+        var risk = policy.Evaluate("read_current_tab", arguments: null);
 
         Assert.Equal(PermissionAction.Ask, risk.Verdict);
     }

@@ -17,7 +17,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Long-term session memory (`IronHive.Agent.Memory` package)**: `new SessionMemoryService(memoryService, userId)` implements `ISessionMemoryService` over a MemoryIndexer `IMemoryService`; `EmbeddingServiceAdapter` (over an `IAgentEmbeddingProvider`) and `TextCompletionServiceAdapter` (over an `IChatClient`) supply the MemoryIndexer services it needs. The interfaces (`ISessionMemoryService`, `IAgentEmbeddingProvider`) live in `IronHive.Agent`, so a host that does not use memory ships no MemoryIndexer.
 - **Deep research (`IronHive.DeepResearch` package)**: `AddDeepResearch(...)` registers an iterative research pipeline — query planning, web search, content extraction, sufficiency analysis, then a cited report — over one text-generation service (`ChatClientTextGenerationAdapter` for an `IChatClient`). Results report the run's token usage; the cost is left null because the run does not know which model priced its calls. Tune it through the options callback: `services.AddDeepResearch(chatClient, o => { o.SufficiencyThreshold = 0.7m; o.MinSourcesBeforeReport = 5; o.MaxSearchRetriesPerIteration = 2; })`. `SufficiencyThreshold` is the score at which research stops. `MinSourcesBeforeReport` keeps it iterating while fewer sources were collected and a gap remains. The per-query iteration limit is `ResearchRequest.MaxIterations`, capped by `Depth`. Run it through the registered `IDeepResearcher`: `await sp.GetRequiredService<IDeepResearcher>().ResearchAsync(new ResearchRequest { Query = "..." })` (`ResearchStreamAsync` yields progress as it goes). Tavily web search needs its API key in `DeepResearchOptions.SearchApiKeys["tavily"]` (e.g. `o.SearchApiKeys["tavily"] = tavilyKey` in the options callback)
 - **Checkpoint contract**: `ICheckpointService` / `CheckpointInfo` — the shape of a host's pre-destructive-operation snapshot store. There is no built-in implementation and the loop does not call it; a host that wants checkpoints implements and invokes it
-- **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults
+- **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults. One `IToolCallPolicy` gives each call its verdict (`ToolCallPolicy` over the rules by default — register your own to replace it); `AddIronHiveAgentApprovalGate()` acts on it, enforces Planning mode, and asks the `IHumanApprovalService` on `Ask`. See [Human Approval Gate](#human-approval-gate)
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`. Not registered by `AddIronHiveAgent` — construct them where an `IChatClient` and the tools are available (or register them yourself)
 - **Usage Tracking**: Token/cost tracking (`IUsageTracker`) and session limits (`IUsageLimiter`, registered by `AddIronHiveAgent` when `UsageLimits` is set). Pass the limiter to `AgentLoop` or `ThinkingAgentLoop` (`usageLimiter:`) and a turn past the limit is refused with `UsageLimitExceededException`
 - **Error Recovery**: Categorized error handling with recovery strategies (`IErrorRecoveryService`). Passed to either loop (`errorRecovery:`), a buffered turn that fails transiently is retried once
@@ -328,7 +328,7 @@ It runs as a result step of the [tool invocation pipeline](#tool-invocation-pipe
 
 ```csharp
 var pipeline = new ToolInvocationPipeline(
-    [new ApprovalGateMiddleware(modeToolFilter, approvalService)],
+    [new ApprovalGateMiddleware(policy, approvalService)],
     [new ToolResultGuardMiddleware(guard)]);
 var client = inner.AsBuilder().UseToolInvocationPipeline(pipeline).Build();
 ```
@@ -506,8 +506,11 @@ Give the permission layer the same working directory you give the tools.
 tool is asked about rather than run
 
 **ReadOnlyTools** — names (patterns, like `Tools`) of *your* tools that only read. Planning mode offers and
-permits them next to the built-in read-only file tools; without a declaration a host tool never runs in Planning.
-This is a side-effect class, not a permission: `Tools` still decides `Allow` / `Ask` / `Deny`.
+permits them next to the built-in read-only tools (read, list, glob, grep, the advisor); without a declaration a host
+tool never runs in Planning. This is a side-effect class, not a permission: `Tools` still decides `Allow` / `Ask` / `Deny`.
+
+**AskBeforeDelete** — `true` (default): deleting a file the `Edit` rules allow still asks. `false`: the `Edit` rules
+decide deletes as they decide writes.
 
 `AddIronHiveAgent()` reads a plain `PermissionConfig` registered in the container (not `IOptions<PermissionConfig>` —
 `services.Configure<PermissionConfig>(...)` has no effect); with none registered, `PermissionConfig.CreateDefault()` applies.
@@ -536,22 +539,29 @@ Its counterpart for compaction is `services.AddIronHiveAgentContext(config => ..
 
 ## Human Approval Gate
 
-The permission rules decide `Allow` / `Deny` / `Ask`; `IHumanApprovalService` answers the `Ask`.
-What connects them to an actual tool call is `ApprovalGateMiddleware`, a step of the
-[tool invocation pipeline](#tool-invocation-pipeline). The gate is opt-in: a pipeline without it has no permission
-gate. With DI:
+An `IToolCallPolicy` decides `Allow` / `Deny` / `Ask` for each call; `IHumanApprovalService` (the approver) answers
+the `Ask`. The default policy, `ToolCallPolicy`, judges calls by the permission rules above; a host with its own rules (a
+category table, trust tiers) registers its own `IToolCallPolicy` instead. What connects them to an actual tool call is
+`ApprovalGateMiddleware`, a step of the [tool invocation pipeline](#tool-invocation-pipeline). The gate is opt-in: a
+pipeline without it has no permission gate. With DI:
 
 ```csharp
 services.AddIronHiveAgent();
-services.AddIronHiveAgentApprovalGate();     // over the container's IModeToolFilter and IHumanApprovalService
+services.AddIronHiveAgentApprovalGate();     // over the container's IToolCallPolicy, IHumanApprovalService and IModeManager
 
 var chatClient = inner.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider);
 var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
 ```
 
-Without DI: `new ToolInvocationPipeline([new ApprovalGateMiddleware(new ModeToolFilter(permissionConfig), approvalService)])`.
+Without DI: `new ToolInvocationPipeline([new ApprovalGateMiddleware(new ToolCallPolicy(permissionConfig), approvalService)])`;
+pass `modeManager:` and `modeToolFilter:` too to enforce Planning mode.
 
-For each call the gate runs `IModeToolFilter.AssessRisk` and acts on `RiskAssessment.Verdict`:
+**Planning mode is enforced at the gate.** When the gate has an `IModeManager` (with DI: whenever one is registered —
+`AddIronHiveAgent` registers it) and the current mode is `Planning`, a tool `IModeToolFilter.IsToolPermitted` does not
+permit for Planning (anything but the read-only tools) is denied whatever the policy says. Only Planning: `Idle` and
+`HumanInTheLoop` are interaction states, so a host that never fires a mode trigger is not affected.
+
+Then the gate runs `IToolCallPolicy.Evaluate` and acts on `RiskAssessment.Verdict`:
 
 | Verdict | What happens |
 |---|---|
@@ -563,7 +573,8 @@ A refusal is always a tool *result*, never an exception, so the model can read i
 An `Ask` verdict with **no approval service registered is refused**, not passed through — a gate that
 lets "ask" through when nobody can be asked is a silent no-op. Either register an
 `IHumanApprovalService`, set the rule (or `DefaultAction`) to `Allow`, or leave the gate out. Remembering an
-`ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time.
+`ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time. `ApprovalRequest.CallId` carries the
+call's id, so an approver on a wire can pair its request with the call's start and end events.
 
 Steps registered after the gate run only for calls it let through. The Ironbees adapter (`ChatClientFrameworkAdapter`,
 `IronHive.Agent.Ironbees`) runs its own tool loop through the same pipeline, so a verdict means the same thing on both

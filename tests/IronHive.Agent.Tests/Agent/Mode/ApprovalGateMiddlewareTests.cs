@@ -54,9 +54,9 @@ public class ApprovalGateMiddlewareTests
             .EnqueueToolCallResponse(toolName, argumentsJson)
             .EnqueueResponse("done");
 
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
         var client = mock.AsBuilder()
-            .UseToolInvocationPipeline(new ToolInvocationPipeline([new ApprovalGateMiddleware(filter, approval)]))
+            .UseToolInvocationPipeline(new ToolInvocationPipeline([new ApprovalGateMiddleware(policy, approval)]))
             .Build();
 
         var loop = new AgentLoop(client, new AgentOptions { Tools = tools });
@@ -226,12 +226,12 @@ public class ApprovalGateMiddlewareTests
     [Fact]
     public async Task A_middleware_after_the_gate_runs_approved_calls()
     {
-        var filter = new ModeToolFilter(ConfigWith(c => c.Tools.Add(new PermissionRule { Pattern = "Lookup", Action = PermissionAction.Allow })));
+        var policy = new ToolCallPolicy(ConfigWith(c => c.Tools.Add(new PermissionRule { Pattern = "Lookup", Action = PermissionAction.Allow })));
         var answering = new Answering("from inner");
         var probe = new Probe();
         var mock = new MockChatClient().EnqueueToolCallResponse("Lookup", """{"query":"q"}""").EnqueueResponse("done");
         var client = mock.AsBuilder()
-            .UseToolInvocationPipeline(new ToolInvocationPipeline([new ApprovalGateMiddleware(filter), answering]))
+            .UseToolInvocationPipeline(new ToolInvocationPipeline([new ApprovalGateMiddleware(policy), answering]))
             .Build();
         var loop = new AgentLoop(client, new AgentOptions { Tools = [AIFunctionFactory.Create(probe.Lookup, "Lookup")] });
 

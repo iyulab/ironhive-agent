@@ -1,4 +1,4 @@
-﻿using IronHive.Agent.Permissions;
+using IronHive.Agent.Permissions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -9,20 +9,42 @@ namespace IronHive.Agent.Mode;
 /// invocation pipeline that every path running tools goes through, so a permission verdict means the same thing on
 /// each. Public so a host's own tool loop (another framework's adapter) can judge calls by the same rule.
 /// </summary>
+/// <remarks>
+/// Order per call: Planning mode first (when a mode manager is given — a tool the mode does not permit is denied whatever
+/// the policy says), then the <see cref="IToolCallPolicy"/> verdict, then, for <c>Ask</c>, the approver.
+/// </remarks>
 public sealed partial class ApprovalGate
 {
-    private readonly IModeToolFilter _filter;
+    private readonly IToolCallPolicy _policy;
     private readonly IHumanApprovalService? _approval;
+    private readonly IModeManager? _modes;
+    private readonly IModeToolFilter? _modeFilter;
     private readonly ILogger _logger;
 
-    /// <summary>Creates a gate over the mode's permission rules and, for <c>Ask</c> verdicts, an approval service.</summary>
-    /// <param name="filter">Assesses each call's risk (the permission rules of the current mode).</param>
-    /// <param name="approval">Asked when a rule says <c>Ask</c>; without one such a call is refused.</param>
+    /// <summary>Creates a gate over a tool-call policy and, for <c>Ask</c> verdicts, an approver.</summary>
+    /// <param name="policy">Judges each call.</param>
+    /// <param name="approval">Asked when the verdict is <c>Ask</c>; without one such a call is refused.</param>
     /// <param name="logger">Receives a line per refusal; optional.</param>
-    public ApprovalGate(IModeToolFilter filter, IHumanApprovalService? approval, ILogger? logger = null)
+    /// <param name="modeManager">When given, a call the current mode does not permit is denied — only
+    /// <see cref="AgentMode.Planning"/> is enforced (Idle and HumanInTheLoop are interaction states, not verdicts).</param>
+    /// <param name="modeToolFilter">Says which tools a mode permits; required with <paramref name="modeManager"/>.</param>
+    public ApprovalGate(
+        IToolCallPolicy policy,
+        IHumanApprovalService? approval = null,
+        ILogger? logger = null,
+        IModeManager? modeManager = null,
+        IModeToolFilter? modeToolFilter = null)
     {
-        _filter = filter ?? throw new ArgumentNullException(nameof(filter));
+        _policy = policy ?? throw new ArgumentNullException(nameof(policy));
+        if (modeManager is not null && modeToolFilter is null)
+        {
+            throw new ArgumentException(
+                "A mode manager needs the mode tool filter that says which tools a mode permits.", nameof(modeToolFilter));
+        }
+
         _approval = approval;
+        _modes = modeManager;
+        _modeFilter = modeToolFilter;
         _logger = logger ?? NullLogger.Instance;
     }
 
@@ -30,12 +52,31 @@ public sealed partial class ApprovalGate
     /// Decides whether <paramref name="toolName"/> may run with <paramref name="arguments"/>.
     /// Never throws for a refusal: the refusal is a result the model reads, so it can change course.
     /// </summary>
+    public ValueTask<GateDecision> DecideAsync(
+        string toolName,
+        IDictionary<string, object?>? arguments,
+        CancellationToken cancellationToken) =>
+        DecideAsync(toolName, arguments, callId: null, cancellationToken);
+
+    /// <summary>
+    /// Decides whether <paramref name="toolName"/> may run with <paramref name="arguments"/>; <paramref name="callId"/> is
+    /// passed to the approver (<see cref="ApprovalRequest.CallId"/>) so a request can be paired with the call it is about.
+    /// Never throws for a refusal: the refusal is a result the model reads, so it can change course.
+    /// </summary>
     public async ValueTask<GateDecision> DecideAsync(
         string toolName,
         IDictionary<string, object?>? arguments,
+        string? callId,
         CancellationToken cancellationToken)
     {
-        var risk = _filter.AssessRisk(toolName, arguments);
+        if (_modes is { CurrentMode: AgentMode.Planning } && !_modeFilter!.IsToolPermitted(toolName, AgentMode.Planning))
+        {
+            const string reason = "Planning mode permits read-only tools only";
+            LogDenied(_logger, toolName, reason);
+            return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Denied, $"{reason}: {toolName}"));
+        }
+
+        var risk = _policy.Evaluate(toolName, arguments);
 
         switch (risk.Verdict)
         {
@@ -60,7 +101,8 @@ public sealed partial class ApprovalGate
                     ToolName = toolName,
                     Arguments = arguments,
                     RiskAssessment = risk,
-                    Description = risk.ApprovalPrompt ?? risk.Reason
+                    Description = risk.ApprovalPrompt ?? risk.Reason,
+                    CallId = callId
                 }, cancellationToken);
 
                 if (!result.Approved)
@@ -86,11 +128,7 @@ public sealed partial class ApprovalGate
     private static partial void LogRejected(ILogger logger, string toolName, string reason);
 }
 
-/// <summary>
-/// Outcome of <see cref="ApprovalGate.DecideAsync"/>: either run (optionally with arguments the
-/// approver edited) or return <see cref="Refusal"/> to the model as the tool's result.
-/// </summary>
-/// <summary>What <see cref="ApprovalGate.DecideAsync"/> decided about one tool call.</summary>
+/// <summary>What <see cref="ApprovalGate.DecideAsync(string, IDictionary{string, object?}?, CancellationToken)"/> decided about one tool call.</summary>
 /// <param name="ShouldProceed">Run the call.</param>
 /// <param name="Refusal">When not proceeding: the result the model reads instead of the tool's.</param>
 /// <param name="ModifiedArguments">When proceeding: arguments the approver changed, to run with instead; null to keep the call's own.</param>

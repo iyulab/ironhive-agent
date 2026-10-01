@@ -28,10 +28,30 @@ public class PermissionEvaluator : IPermissionEvaluator
     }
 
     /// <inheritdoc />
+    public PermissionResult EvaluateDelete(string filePath)
+    {
+        var edit = EvaluateEdit(filePath);
+        if (edit.Action == PermissionAction.Allow && _config.AskBeforeDelete)
+        {
+            // The edit rules allow it; deleting still asks. The allowing rule stays as the match, so a caller can tell
+            // this confirmation from a rule that asks on its own.
+            return new PermissionResult
+            {
+                Action = PermissionAction.Ask,
+                MatchedRule = edit.MatchedRule ?? new PermissionRule { Pattern = "*", Action = PermissionAction.Allow },
+                OutsideWorkingDirectory = edit.OutsideWorkingDirectory,
+                Reason = "File deletion (AskBeforeDelete)"
+            };
+        }
+
+        return edit;
+    }
+
+    /// <inheritdoc />
     public PermissionResult EvaluateBash(string command)
     {
         // First check for always-deny patterns (dangerous commands)
-        if (IsDangerousCommand(command))
+        if (ShellCommandRisk.IsAlwaysDenied(command))
         {
             return PermissionResult.Deny("Potentially dangerous command");
         }
@@ -114,7 +134,9 @@ public class PermissionEvaluator : IPermissionEvaluator
 
     /// <inheritdoc />
     public bool IsReadOnlyTool(string toolName) =>
-        !string.IsNullOrWhiteSpace(toolName) && _config.ReadOnlyTools.Any(pattern => MatchesPattern(toolName, pattern));
+        !string.IsNullOrWhiteSpace(toolName)
+        && (BuiltInToolNames.ReadOnlyPatterns.Any(pattern => MatchesPattern(toolName, pattern))
+            || _config.ReadOnlyTools.Any(pattern => MatchesPattern(toolName, pattern)));
 
     /// <inheritdoc />
     public PermissionResult Evaluate(string permissionType, string target)
@@ -271,31 +293,5 @@ public class PermissionEvaluator : IPermissionEvaluator
 
         // Normalize path separators to forward slashes for consistent matching
         return path.Replace('\\', '/').TrimStart('/');
-    }
-
-    private static bool IsDangerousCommand(string command)
-    {
-        var lowerCommand = command.ToLowerInvariant().Trim();
-
-        // Critical danger patterns that should always be denied
-        string[] criticalPatterns =
-        [
-            ":(){:|:&};:",     // Fork bomb
-            "> /dev/sda",
-            "dd if=/dev/",
-            "mkfs.",
-            "fdisk",
-            "format c:",
-            "rm -rf /",        // Remove root
-            "rm -rf /*",       // Remove root contents
-            "chmod 777 /",     // Insecure permissions on root
-            "chmod -r 777 /",  // Recursive insecure permissions
-            "| bash",          // Pipe to bash (remote code execution)
-            "| sh",            // Pipe to sh (remote code execution)
-            "| /bin/bash",
-            "| /bin/sh",
-        ];
-
-        return criticalPatterns.Any(p => lowerCommand.Contains(p));
     }
 }

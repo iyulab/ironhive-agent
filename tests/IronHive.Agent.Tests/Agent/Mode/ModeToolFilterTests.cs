@@ -9,6 +9,7 @@ namespace IronHive.Agent.Tests.Agent.Mode;
 public class ModeToolFilterTests
 {
     private readonly ModeToolFilter _filter = new();
+    private readonly ToolCallPolicy _policy = new();
 
     [Theory]
     [InlineData("read_file", AgentMode.Planning, true)]
@@ -50,7 +51,7 @@ public class ModeToolFilterTests
     public void AssessRisk_DeleteFile_ReturnsRisk()
     {
         var args = new Dictionary<string, object?> { ["path"] = "test.cs" };
-        var result = _filter.AssessRisk("delete_file", args);
+        var result = _policy.Evaluate("delete_file", args);
 
         Assert.True(result.IsRisky);
         Assert.True(result.Level >= RiskLevel.Medium);
@@ -62,7 +63,7 @@ public class ModeToolFilterTests
     {
         // Default config allows all reads (except *.env and secrets)
         var args = new Dictionary<string, object?> { ["path"] = "src/Program.cs" };
-        var result = _filter.AssessRisk("read_file", args);
+        var result = _policy.Evaluate("read_file", args);
 
         Assert.False(result.IsRisky);
         Assert.Equal(RiskLevel.Low, result.Level);
@@ -77,7 +78,7 @@ public class ModeToolFilterTests
     {
         var args = new Dictionary<string, object?> { ["command"] = command };
 
-        var result = _filter.AssessRisk("shell", args);
+        var result = _policy.Evaluate("shell", args);
 
         Assert.True(result.IsRisky);
         Assert.True(result.Level >= RiskLevel.High);
@@ -90,7 +91,7 @@ public class ModeToolFilterTests
     {
         var args = new Dictionary<string, object?> { ["command"] = command };
 
-        var result = _filter.AssessRisk("shell", args);
+        var result = _policy.Evaluate("shell", args);
 
         Assert.True(result.IsRisky);
         Assert.True(result.Level >= RiskLevel.High);
@@ -99,7 +100,7 @@ public class ModeToolFilterTests
     [Fact]
     public void AssessRisk_ReadFile_WithNoArgs_ReturnsSafe()
     {
-        var result = _filter.AssessRisk("read_file", null);
+        var result = _policy.Evaluate("read_file", null);
 
         Assert.False(result.IsRisky);
         Assert.Equal(RiskLevel.Low, result.Level);
@@ -114,7 +115,7 @@ public class ModeToolFilterTests
     public void AssessRisk_CarriesTheVerdictExplicitly(string tool, string argument, PermissionAction expected)
     {
         var key = tool == "shell" ? "command" : "path";
-        var risk = _filter.AssessRisk(tool, new Dictionary<string, object?> { [key] = argument });
+        var risk = _policy.Evaluate(tool, new Dictionary<string, object?> { [key] = argument });
 
         Assert.Equal(expected, risk.Verdict);
         Assert.Equal(expected == PermissionAction.Ask, risk.RequiresApproval);
@@ -124,7 +125,7 @@ public class ModeToolFilterTests
     [Fact]
     public void AssessRisk_ShellWithNoCommand_IsDeniedNotAsked()
     {
-        var risk = _filter.AssessRisk("shell", new Dictionary<string, object?>());
+        var risk = _policy.Evaluate("shell", new Dictionary<string, object?>());
 
         Assert.Equal(PermissionAction.Deny, risk.Verdict);
     }
@@ -137,7 +138,7 @@ public class ModeToolFilterTests
     [InlineData("send_email", PermissionAction.Ask)]
     public void AssessRisk_UnknownToolName_IsJudgedByTheToolsRules(string tool, PermissionAction expected)
     {
-        var risk = _filter.AssessRisk(tool, null);
+        var risk = _policy.Evaluate(tool, null);
 
         Assert.Equal(expected, risk.Verdict);
     }
@@ -147,9 +148,9 @@ public class ModeToolFilterTests
     {
         var config = PermissionConfig.CreateDefault();
         config.Tools.Add(new PermissionRule { Pattern = "send_*", Action = PermissionAction.Deny, Priority = 50, Reason = "Outbound blocked" });
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
-        var risk = filter.AssessRisk("send_email", null);
+        var risk = policy.Evaluate("send_email", null);
 
         Assert.Equal(PermissionAction.Deny, risk.Verdict);
         Assert.Equal("Outbound blocked", risk.Reason);
@@ -189,10 +190,10 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Ask
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["path"] = "src/Program.cs" };
-        var result = filter.AssessRisk("read_file", args);
+        var result = policy.Evaluate("read_file", args);
 
         Assert.False(result.IsRisky);
     }
@@ -208,10 +209,10 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Allow
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["path"] = "config/secrets/api-key.txt" };
-        var result = filter.AssessRisk("read_file", args);
+        var result = policy.Evaluate("read_file", args);
 
         Assert.True(result.IsRisky);
     }
@@ -227,10 +228,10 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Allow
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["path"] = ".env" };
-        var result = filter.AssessRisk("read_file", args);
+        var result = policy.Evaluate("read_file", args);
 
         Assert.True(result.IsRisky);
         Assert.Equal(RiskLevel.Medium, result.Level);
@@ -248,10 +249,10 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Ask
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["command"] = "git status" };
-        var result = filter.AssessRisk("shell", args);
+        var result = policy.Evaluate("shell", args);
 
         Assert.False(result.IsRisky);
     }
@@ -267,10 +268,10 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Allow
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["command"] = "dangerous_cmd test" };
-        var result = filter.AssessRisk("shell", args);
+        var result = policy.Evaluate("shell", args);
 
         Assert.True(result.IsRisky);
     }
@@ -286,10 +287,10 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Ask
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["path"] = "src/Program.cs" };
-        var result = filter.AssessRisk("write_file", args);
+        var result = policy.Evaluate("write_file", args);
 
         Assert.False(result.IsRisky);
     }
@@ -305,10 +306,10 @@ public class ModeToolFilterTests
                 new PermissionRule { Pattern = "*.env", Action = PermissionAction.Deny, Priority = 10 }
             ]
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var args = new Dictionary<string, object?> { ["path"] = ".env" };
-        var result = filter.AssessRisk("read_file", args);
+        var result = policy.Evaluate("read_file", args);
 
         Assert.True(result.IsRisky); // Higher priority Deny rule wins
     }
@@ -324,9 +325,9 @@ public class ModeToolFilterTests
             ],
             DefaultAction = PermissionAction.Ask
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
-        var result = filter.AssessRisk("mcp__safe_tool", null);
+        var result = policy.Evaluate("mcp__safe_tool", null);
 
         Assert.False(result.IsRisky);
     }

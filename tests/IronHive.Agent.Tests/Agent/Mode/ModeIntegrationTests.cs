@@ -229,7 +229,7 @@ public class HITLScenarioTests
     public void RiskAssessment_DangerousCommands_RequireApproval()
     {
         var config = PermissionConfig.CreateDefault();
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         var dangerousCommands = new[]
         {
@@ -242,7 +242,7 @@ public class HITLScenarioTests
 
         foreach (var cmd in dangerousCommands)
         {
-            var risk = filter.AssessRisk("shell", new Dictionary<string, object?> { ["command"] = cmd });
+            var risk = policy.Evaluate("shell", new Dictionary<string, object?> { ["command"] = cmd });
             Assert.True(risk.IsRisky, $"Command '{cmd}' should be risky");
             Assert.True(risk.Level >= RiskLevel.High, $"Command '{cmd}' should be high severity");
         }
@@ -252,14 +252,14 @@ public class HITLScenarioTests
     public void RiskAssessment_SafeCommands_NoApprovalNeeded()
     {
         var config = PermissionConfig.CreateDefault();
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         // These commands are allowed by default config (git *, dotnet *, npm *)
         var safeCommands = new[] { "git status", "dotnet build", "npm install" };
 
         foreach (var cmd in safeCommands)
         {
-            var risk = filter.AssessRisk("shell", new Dictionary<string, object?> { ["command"] = cmd });
+            var risk = policy.Evaluate("shell", new Dictionary<string, object?> { ["command"] = cmd });
             Assert.False(risk.IsRisky || risk.Level >= RiskLevel.High,
                 $"Command '{cmd}' should not require approval");
         }
@@ -277,10 +277,10 @@ public class HITLScenarioTests
             ],
             DefaultAction = PermissionAction.Ask
         };
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
-        var risk1 = filter.AssessRisk("shell", new Dictionary<string, object?> { ["command"] = "npm install" });
-        var risk2 = filter.AssessRisk("shell", new Dictionary<string, object?> { ["command"] = "dotnet build" });
+        var risk1 = policy.Evaluate("shell", new Dictionary<string, object?> { ["command"] = "npm install" });
+        var risk2 = policy.Evaluate("shell", new Dictionary<string, object?> { ["command"] = "dotnet build" });
 
         Assert.False(risk1.IsRisky);
         Assert.False(risk2.IsRisky);
@@ -351,13 +351,13 @@ public class HITLScenarioTests
     {
         var manager = new ModeManager();
         var config = PermissionConfig.CreateDefault();
-        var filter = new ModeToolFilter(config);
+        var policy = new ToolCallPolicy(config);
 
         manager.Fire(ModeTrigger.StartWorking);
         Assert.Equal(AgentMode.Working, manager.CurrentMode);
 
         // Simulate tool execution check - sudo is denied by default config
-        var risk = filter.AssessRisk("shell", new Dictionary<string, object?> { ["command"] = "sudo apt update" });
+        var risk = policy.Evaluate("shell", new Dictionary<string, object?> { ["command"] = "sudo apt update" });
 
         if (risk.IsRisky)
         {

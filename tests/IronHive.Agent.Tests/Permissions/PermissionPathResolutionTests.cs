@@ -123,7 +123,7 @@ public class PermissionPathResolutionTests
     [InlineData("ListDirectory")]
     public void TheDirectoryTools_AnswerToTheReadRules(string tool)
     {
-        var filter = new ModeToolFilter(new PermissionEvaluator(new PermissionConfig
+        var policy = new ToolCallPolicy(new PermissionEvaluator(new PermissionConfig
         {
             WorkingDirectory = Root,
             Read =
@@ -136,8 +136,8 @@ public class PermissionPathResolutionTests
             DefaultAction = PermissionAction.Allow,
         }));
 
-        var denied = filter.AssessRisk(tool, new Dictionary<string, object?> { ["path"] = "public/../secrets", ["pattern"] = "*" });
-        var allowed = filter.AssessRisk(tool, new Dictionary<string, object?> { ["path"] = "public", ["pattern"] = "*" });
+        var denied = policy.Evaluate(tool, new Dictionary<string, object?> { ["path"] = "public/../secrets", ["pattern"] = "*" });
+        var allowed = policy.Evaluate(tool, new Dictionary<string, object?> { ["path"] = "public", ["pattern"] = "*" });
 
         denied.Verdict.Should().Be(PermissionAction.Deny);
         allowed.IsRisky.Should().BeFalse();
