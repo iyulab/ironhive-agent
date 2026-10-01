@@ -398,4 +398,41 @@ public class ModeToolFilterTests
     }
 
     #endregion
+
+    [Theory]
+    [InlineData("mcp__system-harness_do", AgentMode.Planning, false)]
+    [InlineData("mcp__system-harness_get", AgentMode.Planning, false)]
+    [InlineData("mcp__system-harness_help", AgentMode.Planning, false)]
+    [InlineData("mcp__system-harness_do", AgentMode.Working, true)]
+    [InlineData("mcp__system-harness_get", AgentMode.Working, true)]
+    [InlineData("mcp__system-harness_help", AgentMode.Working, true)]
+    public void IsToolPermitted_McpTools_BlockedInPlanningAllowedInWorking(string toolName, AgentMode mode, bool expected)
+    {
+        Assert.Equal(expected, _filter.IsToolPermitted(toolName, mode));
+    }
+
+    [Fact]
+    public void Evaluate_McpTool_DefaultConfig_Asks()
+    {
+        var result = _policy.Evaluate("mcp__system-harness_do", null);
+
+        Assert.True(result.IsRisky);
+        Assert.Equal(PermissionAction.Ask, result.Verdict);
+        Assert.Equal(RiskLevel.Medium, result.Level);
+    }
+
+    [Fact]
+    public void Evaluate_McpTool_DenyPattern_IsCriticalDeny()
+    {
+        var config = new PermissionConfig
+        {
+            McpTools = [new PermissionRule { Pattern = "mcp__dangerous_*", Action = PermissionAction.Deny, Priority = 10 }],
+            DefaultAction = PermissionAction.Allow
+        };
+
+        var result = new ToolCallPolicy(config).Evaluate("mcp__dangerous_tool", null);
+
+        Assert.Equal(PermissionAction.Deny, result.Verdict);
+        Assert.Equal(RiskLevel.Critical, result.Level);
+    }
 }
