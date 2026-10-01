@@ -28,7 +28,7 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.34.1</Version>
+    <Version>0.34.2</Version>
   </PropertyGroup>
 
   <!-- Ship the XML documentation with the package: without this the nupkg
@@ -47,6 +47,8 @@
   </PropertyGroup>
   <ItemGroup Condition="$(MSBuildProjectDirectory.Contains('\src\')) OR $(MSBuildProjectDirectory.Contains('/src/'))">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+    <!-- MIT asks that the copyright and permission notice travel with every copy: ship the text, not only the SPDX id -->
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" Visible="false" Condition="Exists('$(MSBuildThisFileDirectory)LICENSE')" />
   </ItemGroup>
 
   <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)../../local-packages')">

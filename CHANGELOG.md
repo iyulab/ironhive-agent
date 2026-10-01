@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.34.2] - Unreleased
+
+### Fixed
+- **A provider refusal is not retried as a network error.** `ErrorRecoveryService` read every `HttpRequestException` as a
+  network failure, so the loop's one transient retry also spent a call (and a backoff) on a bad key (401/403), a rejected
+  request (400, 404, 422 …) — the same request gets the same answer. The status now decides: 401/403 → authentication
+  (escalate), 429 → rate limit, 408 and 5xx → retry, other 4xx → invalid input (no retry). Without a status (connection
+  reset) it is still a network error.
+- Every package now carries the `LICENSE` text, not only the MIT expression.
+
 ## [0.34.1] - 2026-10-01
 
 ### Changed

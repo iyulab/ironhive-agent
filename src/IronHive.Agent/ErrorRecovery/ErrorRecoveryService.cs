@@ -198,6 +198,9 @@ public class ErrorRecoveryService : IErrorRecoveryService
     {
         return exception switch
         {
+            // A provider refusal carries its HTTP status (the OpenAI-compatible and other IronHive providers set it): read it
+            // before the type, so a bad key or a rejected request is not retried as if the network had blipped.
+            HttpRequestException { StatusCode: { } status } => CategorizeHttpStatus((int)status),
             HttpRequestException => ErrorCategory.Network,
             UnauthorizedAccessException => ErrorCategory.Authentication,
             TimeoutException or TaskCanceledException { InnerException: TimeoutException } => ErrorCategory.Timeout,
@@ -211,6 +214,20 @@ public class ErrorRecoveryService : IErrorRecoveryService
             _ => ErrorCategory.Unknown
         };
     }
+
+    /// <summary>
+    /// The status table iron-prow's <c>DefaultErrorClassifier</c> uses for a single provider: 408 and 5xx are transient,
+    /// 429 is a rate limit, 401/403 are credentials, any other 4xx is a request this provider rejects — retrying it the same
+    /// way gets the same answer.
+    /// </summary>
+    private static ErrorCategory CategorizeHttpStatus(int status) => status switch
+    {
+        401 or 403 => ErrorCategory.Authentication,
+        429 => ErrorCategory.RateLimit,
+        408 or >= 500 => ErrorCategory.Network,
+        >= 400 => ErrorCategory.InvalidInput,
+        _ => ErrorCategory.Network,
+    };
 
     private static ErrorSeverity DetermineSeverity(Exception exception, ErrorCategory category)
     {
