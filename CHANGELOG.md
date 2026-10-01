@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.34.0] - Unreleased
+
+### Added
+- **AGENTS.md support**: `AgentsMdInstructions` (an `ISystemInstructionContributor`) adds the `AGENTS.md` files that apply
+  to a working directory — from the repository root (the directory holding `.git`) down to it, root first so the nearest
+  file comes last and wins where they disagree, as the AGENTS.md convention has it. Files above the repository are not
+  read; outside a repository only the working directory's own file is. Read again every turn; `AgentsMdOptions.MaxCharacters`
+  (default 32,000) leaves out the farthest files first.
+
 ## [0.33.0] - 2026-10-01
 
 ### Added
