@@ -21,12 +21,26 @@ internal sealed class TurnGuards
     private readonly IUsageLimiter? _usageLimiter;
     private readonly IErrorRecoveryService? _errorRecovery;
     private readonly string? _modelId;
+    private readonly bool _recordedPerCall;
 
-    public TurnGuards(IUsageLimiter? usageLimiter, IErrorRecoveryService? errorRecovery, string? modelId)
+    /// <param name="usageLimiter">The session limit, or <c>null</c>.</param>
+    /// <param name="errorRecovery">Transient-failure retry, or <c>null</c>.</param>
+    /// <param name="modelId">The model id that prices the usage.</param>
+    /// <param name="chatClient">
+    /// The loop's chat client. When its pipeline holds a <see cref="UsageLimitChatClient"/>, the limiter is bound to it:
+    /// the limit is then checked and usage recorded on every model call — each tool round included — and not again here
+    /// at the end of the turn.
+    /// </param>
+    public TurnGuards(IUsageLimiter? usageLimiter, IErrorRecoveryService? errorRecovery, string? modelId, IChatClient? chatClient = null)
     {
         _usageLimiter = usageLimiter;
         _errorRecovery = errorRecovery;
         _modelId = modelId;
+        if (usageLimiter is not null && chatClient?.GetService<UsageLimitChatClient>() is { } perCall)
+        {
+            perCall.Bind(usageLimiter, modelId);
+            _recordedPerCall = true;
+        }
     }
 
     /// <summary>
@@ -50,15 +64,21 @@ internal sealed class TurnGuards
     /// </summary>
     public void RecordUsage(TokenUsage usage)
     {
-        if (_usageLimiter is null)
+        if (_usageLimiter is null || _recordedPerCall)
         {
             return;
         }
 
-        var pricing = !string.IsNullOrEmpty(_modelId) ? ModelCatalog.FindModel(_modelId) : null;
+        Record(_usageLimiter, usage, _modelId);
+    }
+
+    /// <summary>Records <paramref name="usage"/> into <paramref name="limiter"/>, priced from the TokenMeter catalog.</summary>
+    internal static void Record(IUsageLimiter limiter, TokenUsage usage, string? modelId)
+    {
+        var pricing = !string.IsNullOrEmpty(modelId) ? ModelCatalog.FindModel(modelId) : null;
         var cost = usage.CostAt(pricing) ?? 0m;
 
-        _usageLimiter.RecordTokenUsage((int)usage.TotalTokens, cost);
+        limiter.RecordTokenUsage((int)usage.TotalTokens, cost);
     }
 
     /// <summary>

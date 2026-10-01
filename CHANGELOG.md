@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.33.0] - Unreleased
+
+### Added
+- **A usage limit can stop a turn between its tool rounds, not only before the next turn.** `UsageLimitChatClient`
+  (`UseUsageLimit()` on a `ChatClientBuilder`, placed inside function invocation) checks the `IUsageLimiter` before each
+  model call and records each call's usage after it. `AgentLoop` and `ThinkingAgentLoop` bind their limiter to it when
+  the pipeline contains one unbound (as `ToolRoundContextChatClient` is bound), and then stop recording usage at the end
+  of the turn. Before, a turn of many tool rounds ran past the limit and only the next turn was refused.
+
 ## [0.32.0] - 2026-10-01
 
 ### Added

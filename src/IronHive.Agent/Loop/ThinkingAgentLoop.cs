@@ -70,7 +70,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         _toolRetriever = toolRetriever;
         _hostResults = new HostToolResultStage(chatClient);
         _turnObservers = turnObservers?.ToArray() ?? [];
-        _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
+        _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId, chatClient);
 
         // Configure usage tracker with model ID for accurate pricing
         if (_usageTracker is not null && !string.IsNullOrEmpty(_options.ModelId))

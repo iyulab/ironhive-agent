@@ -41,7 +41,7 @@ public class MockChatClient : IChatClient
     /// <summary>
     /// Enqueues a response with a tool call.
     /// </summary>
-    public MockChatClient EnqueueToolCallResponse(string toolName, string arguments, string? textContent = null)
+    public MockChatClient EnqueueToolCallResponse(string toolName, string arguments, string? textContent = null, UsageDetails? usage = null)
     {
         var contents = new List<AIContent>();
 
@@ -60,7 +60,7 @@ public class MockChatClient : IChatClient
             arguments: argsDict));
 
         var message = new ChatMessage(ChatRole.Assistant, contents);
-        var response = new ChatResponse([message]);
+        var response = new ChatResponse([message]) { Usage = usage };
         _responses.Enqueue(response);
         return this;
     }

@@ -44,7 +44,7 @@ public class AgentLoop : IAgentLoop
         {
             chatClient.GetService<ToolRoundContextChatClient>()?.Bind(contextManager);
         }
-        _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId);
+        _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId, chatClient);
         _toolRetriever = toolRetriever;
         _hostResults = new HostToolResultStage(chatClient);
         _turnObservers = turnObservers?.ToArray() ?? [];
