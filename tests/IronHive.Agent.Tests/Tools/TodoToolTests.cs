@@ -36,12 +36,11 @@ public class TodoToolTests : IDisposable
     }
 
     [Fact]
-    public async Task AddTodo_WithoutTask_ReturnsError()
+    public async Task AddTodo_WithoutTask_Throws()
     {
-        var result = await _todoTool.ManageTodo("add");
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _todoTool.ManageTodo("add"));
 
-        Assert.Contains("Error", result);
-        Assert.Contains("required", result);
+        Assert.Contains("required", ex.Message);
     }
 
     [Fact]
@@ -99,21 +98,19 @@ public class TodoToolTests : IDisposable
     }
 
     [Fact]
-    public async Task CompleteTodo_WithoutId_ReturnsError()
+    public async Task CompleteTodo_WithoutId_Throws()
     {
-        var result = await _todoTool.ManageTodo("complete");
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _todoTool.ManageTodo("complete"));
 
-        Assert.Contains("Error", result);
-        Assert.Contains("required", result);
+        Assert.Contains("required", ex.Message);
     }
 
     [Fact]
-    public async Task CompleteTodo_NonExistent_ReturnsError()
+    public async Task CompleteTodo_NonExistent_Throws()
     {
-        var result = await _todoTool.ManageTodo("complete", id: "999");
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(() => _todoTool.ManageTodo("complete", id: "999"));
 
-        Assert.Contains("Error", result);
-        Assert.Contains("not found", result);
+        Assert.Contains("not found", ex.Message);
     }
 
     [Fact]
@@ -148,12 +145,11 @@ public class TodoToolTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdateTodo_WithoutId_ReturnsError()
+    public async Task UpdateTodo_WithoutId_Throws()
     {
-        var result = await _todoTool.ManageTodo("update", task: "New task");
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _todoTool.ManageTodo("update", task: "New task"));
 
-        Assert.Contains("Error", result);
-        Assert.Contains("required", result);
+        Assert.Contains("required", ex.Message);
     }
 
     [Fact]
@@ -169,12 +165,11 @@ public class TodoToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RemoveTodo_NonExistent_ReturnsError()
+    public async Task RemoveTodo_NonExistent_Throws()
     {
-        var result = await _todoTool.ManageTodo("remove", id: "999");
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(() => _todoTool.ManageTodo("remove", id: "999"));
 
-        Assert.Contains("Error", result);
-        Assert.Contains("not found", result);
+        Assert.Contains("not found", ex.Message);
     }
 
     [Fact]
@@ -201,12 +196,11 @@ public class TodoToolTests : IDisposable
     }
 
     [Fact]
-    public async Task UnknownAction_ReturnsError()
+    public async Task UnknownAction_Throws()
     {
-        var result = await _todoTool.ManageTodo("unknown");
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _todoTool.ManageTodo("unknown"));
 
-        Assert.Contains("Error", result);
-        Assert.Contains("Unknown action", result);
+        Assert.Contains("Unknown action", ex.Message);
     }
 
     [Fact]

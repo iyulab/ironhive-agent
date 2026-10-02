@@ -11,6 +11,12 @@ namespace IronHive.Agent.Tools;
 /// <summary>
 /// Built-in tools for the agent, registered via AIFunctionFactory.
 /// </summary>
+/// <remarks>
+/// A tool that fails throws: the function-invoking client reports the failure to the model (with its message when
+/// <c>IncludeDetailedErrors</c> is set), and the library's loop guards count it as a failure — the repeated-error guard
+/// ends a request that keeps failing the same way. A refusal by policy (a path outside
+/// <see cref="FileToolOptions.AllowedRoots"/>) is not a failure and is returned as text.
+/// </remarks>
 public static class BuiltInTools
 {
     /// <summary>
@@ -100,32 +106,25 @@ public class ToolProvider
 
         if (!File.Exists(fullPath))
         {
-            return $"Error: File not found: {path}";
+            throw new FileNotFoundException($"File not found: {path}", path);
         }
 
         var fileInfo = new FileInfo(fullPath);
         if (fileInfo.Length > MaxFileSize)
         {
-            return $"Error: File too large ({fileInfo.Length / 1024}KB). Maximum size is {MaxFileSize / 1024}KB.";
+            throw new InvalidOperationException($"File too large ({fileInfo.Length / 1024}KB). Maximum size is {MaxFileSize / 1024}KB.");
         }
 
-        try
+        if (startLine.HasValue || lineCount.HasValue)
         {
-            if (startLine.HasValue || lineCount.HasValue)
-            {
-                var lines = await File.ReadAllLinesAsync(fullPath);
-                var start = Math.Max(0, (startLine ?? 1) - 1);
-                var count = lineCount ?? (lines.Length - start);
-                var selectedLines = lines.Skip(start).Take(count);
-                return string.Join(Environment.NewLine, selectedLines);
-            }
+            var lines = await File.ReadAllLinesAsync(fullPath);
+            var start = Math.Max(0, (startLine ?? 1) - 1);
+            var count = lineCount ?? (lines.Length - start);
+            var selectedLines = lines.Skip(start).Take(count);
+            return string.Join(Environment.NewLine, selectedLines);
+        }
 
-            return await File.ReadAllTextAsync(fullPath);
-        }
-        catch (Exception ex)
-        {
-            return $"Error reading file: {ex.Message}";
-        }
+        return await File.ReadAllTextAsync(fullPath);
     }
 
     /// <summary>
@@ -145,36 +144,29 @@ public class ToolProvider
             return refusal;
         }
 
-        try
+        var directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
         {
-            var directory = Path.GetDirectoryName(fullPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            Func<Task> write = append
-                ? () => File.AppendAllTextAsync(fullPath, content)
-                : () => File.WriteAllTextAsync(fullPath, content);
-
-            string? note = null;
-            if (_writeInterceptor is null)
-            {
-                await write();
-            }
-            else
-            {
-                note = await _writeInterceptor.InterceptAsync(fullPath, write);
-            }
-
-            return append
-                ? $"Successfully appended to file: {path}{note}"
-                : $"Successfully wrote to file: {path}{note}";
+            Directory.CreateDirectory(directory);
         }
-        catch (Exception ex)
+
+        Func<Task> write = append
+            ? () => File.AppendAllTextAsync(fullPath, content)
+            : () => File.WriteAllTextAsync(fullPath, content);
+
+        string? note = null;
+        if (_writeInterceptor is null)
         {
-            return $"Error writing file: {ex.Message}";
+            await write();
         }
+        else
+        {
+            note = await _writeInterceptor.InterceptAsync(fullPath, write);
+        }
+
+        return append
+            ? $"Successfully appended to file: {path}{note}"
+            : $"Successfully wrote to file: {path}{note}";
     }
 
     /// <summary>
@@ -214,66 +206,59 @@ public class ToolProvider
 
         if (!File.Exists(fullPath))
         {
-            return Directory.Exists(fullPath)
-                ? $"Error: '{path}' is a directory. EditFile edits files only."
-                : $"Error: File not found: {path}. EditFile changes an existing file; use WriteFile to create one.";
+            throw Directory.Exists(fullPath)
+                ? new InvalidOperationException($"'{path}' is a directory. EditFile edits files only.")
+                : new FileNotFoundException($"File not found: {path}. EditFile changes an existing file; use WriteFile to create one.", path);
         }
 
         if (string.IsNullOrEmpty(oldText))
         {
-            return "Error: oldText is empty. Give the exact text to replace, or use WriteFile to write the whole file.";
+            throw new ArgumentException("oldText is empty. Give the exact text to replace, or use WriteFile to write the whole file.", nameof(oldText));
         }
 
         if (new FileInfo(fullPath).Length > MaxFileSize)
         {
-            return $"Error: File too large ({new FileInfo(fullPath).Length / 1024}KB). Maximum size is {MaxFileSize / 1024}KB.";
+            throw new InvalidOperationException($"File too large ({new FileInfo(fullPath).Length / 1024}KB). Maximum size is {MaxFileSize / 1024}KB.");
         }
 
-        try
+        // Keep the file's encoding and byte-order mark: only the replaced text may change.
+        var bytes = await File.ReadAllBytesAsync(fullPath);
+        var (encoding, preamble) = DetectEncoding(bytes);
+        var content = encoding.GetString(bytes, preamble, bytes.Length - preamble);
+        var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var find = ToNewline(oldText, newline);
+        var replacement = ToNewline(newText ?? string.Empty, newline);
+
+        var matches = CountOccurrences(content, find);
+        if (matches == 0)
         {
-            // Keep the file's encoding and byte-order mark: only the replaced text may change.
-            var bytes = await File.ReadAllBytesAsync(fullPath);
-            var (encoding, preamble) = DetectEncoding(bytes);
-            var content = encoding.GetString(bytes, preamble, bytes.Length - preamble);
-            var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-            var find = ToNewline(oldText, newline);
-            var replacement = ToNewline(newText ?? string.Empty, newline);
-
-            var matches = CountOccurrences(content, find);
-            if (matches == 0)
-            {
-                var loose = CountOccurrences(Collapse(content), Collapse(find));
-                return loose > 0
-                    ? $"Error: oldText was not found in {path} exactly, but text that differs only in whitespace or indentation was. Read the file and copy the text exactly."
-                    : $"Error: oldText was not found in {path}. Read the file and copy the text exactly.";
-            }
-
-            if (matches > 1 && !replaceAll)
-            {
-                return $"Error: oldText occurs {matches} times in {path}. Include more surrounding lines to make it unique, or set replaceAll to replace every occurrence.";
-            }
-
-            var edited = content.Replace(find, replacement, StringComparison.Ordinal);
-            Func<Task> write = () => File.WriteAllTextAsync(fullPath, edited, encoding);
-
-            string? note = null;
-            if (_writeInterceptor is null)
-            {
-                await write();
-            }
-            else
-            {
-                note = await _writeInterceptor.InterceptAsync(fullPath, write);
-            }
-
-            return matches == 1
-                ? $"Successfully edited {path} (1 replacement){note}"
-                : $"Successfully edited {path} ({matches} replacements){note}";
+            var loose = CountOccurrences(Collapse(content), Collapse(find));
+            throw new InvalidOperationException(loose > 0
+                ? $"oldText was not found in {path} exactly, but text that differs only in whitespace or indentation was. Read the file and copy the text exactly."
+                : $"oldText was not found in {path}. Read the file and copy the text exactly.");
         }
-        catch (Exception ex)
+
+        if (matches > 1 && !replaceAll)
         {
-            return $"Error editing file: {ex.Message}";
+            throw new InvalidOperationException($"oldText occurs {matches} times in {path}. Include more surrounding lines to make it unique, or set replaceAll to replace every occurrence.");
         }
+
+        var edited = content.Replace(find, replacement, StringComparison.Ordinal);
+        Func<Task> write = () => File.WriteAllTextAsync(fullPath, edited, encoding);
+
+        string? note = null;
+        if (_writeInterceptor is null)
+        {
+            await write();
+        }
+        else
+        {
+            note = await _writeInterceptor.InterceptAsync(fullPath, write);
+        }
+
+        return matches == 1
+            ? $"Successfully edited {path} (1 replacement){note}"
+            : $"Successfully edited {path} ({matches} replacements){note}";
 
         static string ToNewline(string text, string newline) =>
             text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", newline, StringComparison.Ordinal);
@@ -325,23 +310,16 @@ public class ToolProvider
 
         if (Directory.Exists(fullPath))
         {
-            return $"Error: '{path}' is a directory. DeleteFile deletes files only.";
+            throw new InvalidOperationException($"'{path}' is a directory. DeleteFile deletes files only.");
         }
 
         if (!File.Exists(fullPath))
         {
-            return $"Error: File not found: {path}";
+            throw new FileNotFoundException($"File not found: {path}", path);
         }
 
-        try
-        {
-            File.Delete(fullPath);
-            return $"Successfully deleted file: {path}";
-        }
-        catch (Exception ex)
-        {
-            return $"Error deleting file: {ex.Message}";
-        }
+        File.Delete(fullPath);
+        return $"Successfully deleted file: {path}";
     }
 
     /// <summary>
@@ -369,36 +347,29 @@ public class ToolProvider
 
         if (!File.Exists(sourcePath))
         {
-            return Directory.Exists(sourcePath)
-                ? $"Error: '{source}' is a directory. MoveFile moves files only."
-                : $"Error: File not found: {source}";
+            throw Directory.Exists(sourcePath)
+                ? new InvalidOperationException($"'{source}' is a directory. MoveFile moves files only.")
+                : new FileNotFoundException($"File not found: {source}", source);
         }
 
         if (Directory.Exists(destinationPath))
         {
-            return $"Error: '{destination}' is a directory. Give the destination path including the file name.";
+            throw new InvalidOperationException($"'{destination}' is a directory. Give the destination path including the file name.");
         }
 
         if (File.Exists(destinationPath) && !overwrite)
         {
-            return $"Error: '{destination}' already exists. Pass overwrite=true to replace it.";
+            throw new InvalidOperationException($"'{destination}' already exists. Pass overwrite=true to replace it.");
         }
 
-        try
+        var directory = Path.GetDirectoryName(destinationPath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
         {
-            var directory = Path.GetDirectoryName(destinationPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            Directory.CreateDirectory(directory);
+        }
 
-            File.Move(sourcePath, destinationPath, overwrite);
-            return $"Successfully moved file: {source} -> {destination}";
-        }
-        catch (Exception ex)
-        {
-            return $"Error moving file: {ex.Message}";
-        }
+        File.Move(sourcePath, destinationPath, overwrite);
+        return $"Successfully moved file: {source} -> {destination}";
     }
 
     /// <summary>
@@ -418,41 +389,34 @@ public class ToolProvider
 
         if (!Directory.Exists(fullPath))
         {
-            return $"Error: Directory not found: {path ?? "."}";
+            throw new DirectoryNotFoundException($"Directory not found: {path ?? "."}");
         }
 
-        try
+        var sb = new StringBuilder();
+        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+
+        var dirs = Directory.GetDirectories(fullPath, "*", searchOption);
+        var files = Directory.GetFiles(fullPath, "*", searchOption);
+
+        foreach (var dir in dirs.Take(500))
         {
-            var sb = new StringBuilder();
-            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-            var dirs = Directory.GetDirectories(fullPath, "*", searchOption);
-            var files = Directory.GetFiles(fullPath, "*", searchOption);
-
-            foreach (var dir in dirs.Take(500))
-            {
-                var relativePath = Path.GetRelativePath(fullPath, dir);
-                sb.AppendLine(CultureInfo.InvariantCulture, $"[DIR]  {relativePath}/");
-            }
-
-            foreach (var file in files.Take(500))
-            {
-                var relativePath = Path.GetRelativePath(fullPath, file);
-                var size = new FileInfo(file).Length;
-                sb.AppendLine(CultureInfo.InvariantCulture, $"[FILE] {relativePath} ({FormatSize(size)})");
-            }
-
-            if (dirs.Length > 500 || files.Length > 500)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"... (truncated, total: {dirs.Length} dirs, {files.Length} files)");
-            }
-
-            return sb.ToString();
+            var relativePath = Path.GetRelativePath(fullPath, dir);
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[DIR]  {relativePath}/");
         }
-        catch (Exception ex)
+
+        foreach (var file in files.Take(500))
         {
-            return $"Error listing directory: {ex.Message}";
+            var relativePath = Path.GetRelativePath(fullPath, file);
+            var size = new FileInfo(file).Length;
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[FILE] {relativePath} ({FormatSize(size)})");
         }
+
+        if (dirs.Length > 500 || files.Length > 500)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"... (truncated, total: {dirs.Length} dirs, {files.Length} files)");
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -472,43 +436,36 @@ public class ToolProvider
 
         if (!Directory.Exists(basePath))
         {
-            return $"Error: Directory not found: {path ?? "."}";
+            throw new DirectoryNotFoundException($"Directory not found: {path ?? "."}");
         }
 
-        try
+        var matcher = new Matcher();
+        matcher.AddInclude(pattern);
+
+        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
+
+        // A pattern such as "../**" climbs out of the base directory; what it finds is held to the boundary too.
+        var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+
+        if (files.Count == 0)
         {
-            var matcher = new Matcher();
-            matcher.AddInclude(pattern);
-
-            var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
-
-            // A pattern such as "../**" climbs out of the base directory; what it finds is held to the boundary too.
-            var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
-
-            if (files.Count == 0)
-            {
-                return $"No files found matching pattern: {pattern}";
-            }
-
-            var sb = new StringBuilder();
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Found {files.Count} files matching '{pattern}':");
-
-            foreach (var file in files.Take(100))
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  {file.Path}");
-            }
-
-            if (files.Count > 100)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  ... (truncated, total: {files.Count} files)");
-            }
-
-            return sb.ToString();
+            return $"No files found matching pattern: {pattern}";
         }
-        catch (Exception ex)
+
+        var sb = new StringBuilder();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Found {files.Count} files matching '{pattern}':");
+
+        foreach (var file in files.Take(100))
         {
-            return $"Error searching files: {ex.Message}";
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  {file.Path}");
         }
+
+        if (files.Count > 100)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  ... (truncated, total: {files.Count} files)");
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -530,76 +487,69 @@ public class ToolProvider
 
         if (!Directory.Exists(basePath))
         {
-            return $"Error: Directory not found: {path ?? "."}";
+            throw new DirectoryNotFoundException($"Directory not found: {path ?? "."}");
         }
 
-        try
+        var matcher = new Matcher();
+        matcher.AddInclude(filePattern);
+
+        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
+
+        var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+
+        if (files.Count == 0)
         {
-            var matcher = new Matcher();
-            matcher.AddInclude(filePattern);
+            return $"No files found matching pattern: {filePattern}";
+        }
 
-            var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
+        var sb = new StringBuilder();
+        var matchCount = 0;
+        var fileCount = 0;
 
-            var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+        foreach (var file in files.Take(50))
+        {
+            var fullFilePath = Path.Combine(basePath, file.Path);
 
-            if (files.Count == 0)
+            try
             {
-                return $"No files found matching pattern: {filePattern}";
-            }
+                var lines = await File.ReadAllLinesAsync(fullFilePath);
+                var fileHasMatch = false;
 
-            var sb = new StringBuilder();
-            var matchCount = 0;
-            var fileCount = 0;
-
-            foreach (var file in files.Take(50))
-            {
-                var fullFilePath = Path.Combine(basePath, file.Path);
-
-                try
+                for (var i = 0; i < lines.Length; i++)
                 {
-                    var lines = await File.ReadAllLinesAsync(fullFilePath);
-                    var fileHasMatch = false;
-
-                    for (var i = 0; i < lines.Length; i++)
+                    if (lines[i].Contains(pattern, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (lines[i].Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                        if (!fileHasMatch)
                         {
-                            if (!fileHasMatch)
-                            {
-                                sb.AppendLine(CultureInfo.InvariantCulture, $"\n{file.Path}:");
-                                fileHasMatch = true;
-                                fileCount++;
-                            }
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"\n{file.Path}:");
+                            fileHasMatch = true;
+                            fileCount++;
+                        }
 
-                            sb.AppendLine(CultureInfo.InvariantCulture, $"  {i + 1}: {TruncateLine(lines[i], 200)}");
-                            matchCount++;
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"  {i + 1}: {TruncateLine(lines[i], 200)}");
+                        matchCount++;
 
-                            if (matchCount >= 100)
-                            {
-                                sb.AppendLine("\n... (truncated at 100 matches)");
-                                return sb.ToString();
-                            }
+                        if (matchCount >= 100)
+                        {
+                            sb.AppendLine("\n... (truncated at 100 matches)");
+                            return sb.ToString();
                         }
                     }
                 }
-                catch
-                {
-                    // Skip files that can't be read
-                }
             }
-
-            if (matchCount == 0)
+            catch
             {
-                return $"No matches found for '{pattern}' in files matching '{filePattern}'";
+                // Skip files that can't be read
             }
+        }
 
-            sb.Insert(0, $"Found {matchCount} matches in {fileCount} files:\n");
-            return sb.ToString();
-        }
-        catch (Exception ex)
+        if (matchCount == 0)
         {
-            return $"Error searching files: {ex.Message}";
+            return $"No matches found for '{pattern}' in files matching '{filePattern}'";
         }
+
+        sb.Insert(0, $"Found {matchCount} matches in {fileCount} files:\n");
+        return sb.ToString();
     }
 
     /// <summary>
@@ -612,73 +562,66 @@ public class ToolProvider
         [Description("The command to execute")] string command,
         [Description("Timeout in milliseconds (default: 30000)")] int timeoutMs = DefaultCommandTimeout)
     {
+        var isWindows = OperatingSystem.IsWindows();
+        var processInfo = new ProcessStartInfo
+        {
+            FileName = isWindows ? "cmd.exe" : "/bin/bash",
+            Arguments = isWindows ? $"/c {command}" : $"-c \"{command.Replace("\"", "\\\"")}\"",
+            WorkingDirectory = _workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = processInfo };
+        var outputCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
+        var errorCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
+
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+            {
+                outputCapture.AppendLine(e.Data);
+            }
+        };
+
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+            {
+                errorCapture.AppendLine(e.Data);
+            }
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        using var cts = new CancellationTokenSource(timeoutMs);
+
         try
         {
-            var isWindows = OperatingSystem.IsWindows();
-            var processInfo = new ProcessStartInfo
-            {
-                FileName = isWindows ? "cmd.exe" : "/bin/bash",
-                Arguments = isWindows ? $"/c {command}" : $"-c \"{command.Replace("\"", "\\\"")}\"",
-                WorkingDirectory = _workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = new Process { StartInfo = processInfo };
-            var outputCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
-            var errorCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
-
-            process.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data != null)
-                {
-                    outputCapture.AppendLine(e.Data);
-                }
-            };
-
-            process.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data != null)
-                {
-                    errorCapture.AppendLine(e.Data);
-                }
-            };
-
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            using var cts = new CancellationTokenSource(timeoutMs);
-
-            try
-            {
-                await process.WaitForExitAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                process.Kill(entireProcessTree: true);
-
-                // What the command printed before it was stopped is often why it hung (a prompt, a retry loop).
-                var partial = new StringBuilder();
-                partial.AppendLine(CultureInfo.InvariantCulture, $"Error: Command timed out after {timeoutMs}ms");
-                AppendStream(partial, "Output so far:", outputCapture.ToString());
-                AppendStream(partial, "Stderr so far:", errorCapture.ToString());
-                return partial.ToString();
-            }
-
-            var result = new StringBuilder();
-            result.AppendLine(CultureInfo.InvariantCulture, $"Exit code: {process.ExitCode}");
-            AppendStream(result, "Output:", outputCapture.ToString());
-            AppendStream(result, "Stderr:", errorCapture.ToString());
-
-            return result.ToString();
+            await process.WaitForExitAsync(cts.Token);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            return $"Error executing command: {ex.Message}";
+            process.Kill(entireProcessTree: true);
+
+            // What the command printed before it was stopped is often why it hung (a prompt, a retry loop).
+            var partial = new StringBuilder();
+            partial.AppendLine(CultureInfo.InvariantCulture, $"Command timed out after {timeoutMs}ms");
+            AppendStream(partial, "Output so far:", outputCapture.ToString());
+            AppendStream(partial, "Stderr so far:", errorCapture.ToString());
+            throw new TimeoutException(partial.ToString().TrimEnd());
         }
+
+        var result = new StringBuilder();
+        result.AppendLine(CultureInfo.InvariantCulture, $"Exit code: {process.ExitCode}");
+        AppendStream(result, "Output:", outputCapture.ToString());
+        AppendStream(result, "Stderr:", errorCapture.ToString());
+
+        return result.ToString();
     }
 
     // The one place a path from the model becomes a path on disk - and so the one place the boundary is

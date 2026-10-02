@@ -313,6 +313,36 @@ public class ToolInvocationPipelineTests
     }
 
     [Fact]
+    public async Task A_built_in_file_tool_that_keeps_failing_the_same_way_ends_the_request()
+    {
+        // The built-in tools report a failure by throwing, so the library's own guard sees it with no host convention.
+        var dir = Directory.CreateTempSubdirectory("builtin-failure-").FullName;
+        try
+        {
+            var readFile = IronHive.Agent.Tools.BuiltInTools.GetAll(dir).Single(t => t.Name == "ReadFile");
+            var (loop, mock) = BuildWith(
+                ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedErrors = 3 }),
+                readFile,
+                m => m.EnqueueToolCallResponse("ReadFile", """{"path":"missing.txt"}""")
+                    .EnqueueToolCallResponse("ReadFile", """{"path":"missing.txt"}""")
+                    .EnqueueToolCallResponse("ReadFile", """{"path":"missing.txt"}""")
+                    .EnqueueResponse("never requested"));
+
+            await loop.RunAsync("read it", Ct);
+
+            mock.ReceivedMessages.Should().HaveCount(3);
+            var refusal = loop.History[^1].Contents.OfType<FunctionResultContent>().Single().Result
+                .Should().BeOfType<ToolCallRefusal>().Subject;
+            refusal.Kind.Should().Be(ToolCallRefusalKind.RepeatedError);
+            refusal.Message.Should().Contain("File not found: missing.txt").And.Contain("3 times");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task An_MCP_tool_failing_with_different_errors_is_not_a_repeated_error()
     {
         var (tool, calls) = FailingMcpTool("read_file", n => $"error {n}");

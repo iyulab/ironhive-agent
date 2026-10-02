@@ -59,9 +59,9 @@ public class EditFileTests : IDisposable
     {
         File.WriteAllText(PathOf("a.txt"), "alpha beta");
 
-        var result = await _tools.EditFile("a.txt", "gamma", "delta");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _tools.EditFile("a.txt", "gamma", "delta"));
 
-        Assert.StartsWith("Error: oldText was not found in a.txt.", result, StringComparison.Ordinal);
+        Assert.StartsWith("oldText was not found in a.txt.", ex.Message, StringComparison.Ordinal);
         Assert.Equal("alpha beta", File.ReadAllText(PathOf("a.txt")));
     }
 
@@ -70,9 +70,9 @@ public class EditFileTests : IDisposable
     {
         File.WriteAllText(PathOf("a.py"), "def f():\n    return 1\n");
 
-        var result = await _tools.EditFile("a.py", "def f():\n  return 1", "def f():\n  return 2");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _tools.EditFile("a.py", "def f():\n  return 1", "def f():\n  return 2"));
 
-        Assert.Contains("differs only in whitespace", result, StringComparison.Ordinal);
+        Assert.Contains("differs only in whitespace", ex.Message, StringComparison.Ordinal);
         Assert.Equal("def f():\n    return 1\n", File.ReadAllText(PathOf("a.py")));
     }
 
@@ -81,9 +81,9 @@ public class EditFileTests : IDisposable
     {
         File.WriteAllText(PathOf("a.txt"), "x = 1\ny = 1\n");
 
-        var result = await _tools.EditFile("a.txt", "= 1", "= 2");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _tools.EditFile("a.txt", "= 1", "= 2"));
 
-        Assert.StartsWith("Error: oldText occurs 2 times in a.txt.", result, StringComparison.Ordinal);
+        Assert.StartsWith("oldText occurs 2 times in a.txt.", ex.Message, StringComparison.Ordinal);
         Assert.Equal("x = 1\ny = 1\n", File.ReadAllText(PathOf("a.txt")));
     }
 
@@ -126,9 +126,9 @@ public class EditFileTests : IDisposable
         Directory.CreateDirectory(PathOf("dir"));
         File.WriteAllText(PathOf("a.txt"), "x");
 
-        Assert.Contains("use WriteFile to create one", await _tools.EditFile("missing.txt", "a", "b"), StringComparison.Ordinal);
-        Assert.Contains("is a directory", await _tools.EditFile("dir", "a", "b"), StringComparison.Ordinal);
-        Assert.StartsWith("Error: oldText is empty.", await _tools.EditFile("a.txt", "", "b"), StringComparison.Ordinal);
+        Assert.Contains("use WriteFile to create one", (await Assert.ThrowsAsync<FileNotFoundException>(() => _tools.EditFile("missing.txt", "a", "b"))).Message, StringComparison.Ordinal);
+        Assert.Contains("is a directory", (await Assert.ThrowsAsync<InvalidOperationException>(() => _tools.EditFile("dir", "a", "b"))).Message, StringComparison.Ordinal);
+        Assert.StartsWith("oldText is empty.", (await Assert.ThrowsAsync<ArgumentException>(() => _tools.EditFile("a.txt", "", "b"))).Message, StringComparison.Ordinal);
         Assert.False(File.Exists(PathOf("missing.txt")));
         Assert.Equal("x", File.ReadAllText(PathOf("a.txt")));
     }

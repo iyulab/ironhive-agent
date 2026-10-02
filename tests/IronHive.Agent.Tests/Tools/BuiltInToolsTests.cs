@@ -46,8 +46,8 @@ public class BuiltInToolsTests : IDisposable
 
         Assert.StartsWith("Successfully deleted file", _tools.DeleteFile("gone.txt"), StringComparison.Ordinal);
         Assert.False(File.Exists(file));
-        Assert.StartsWith("Error: File not found", _tools.DeleteFile("gone.txt"), StringComparison.Ordinal);
-        Assert.Contains("is a directory", _tools.DeleteFile("folder"), StringComparison.Ordinal);
+        Assert.StartsWith("File not found", Assert.Throws<FileNotFoundException>(() => _tools.DeleteFile("gone.txt")).Message, StringComparison.Ordinal);
+        Assert.Contains("is a directory", Assert.Throws<InvalidOperationException>(() => _tools.DeleteFile("folder")).Message, StringComparison.Ordinal);
         Assert.True(Directory.Exists(Path.Combine(_testDir, "folder")));
     }
 
@@ -69,7 +69,7 @@ public class BuiltInToolsTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_testDir, "a.txt"), "a", TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(Path.Combine(_testDir, "b.txt"), "b", TestContext.Current.CancellationToken);
 
-        Assert.Contains("already exists", _tools.MoveFile("a.txt", "b.txt"), StringComparison.Ordinal);
+        Assert.Contains("already exists", Assert.Throws<InvalidOperationException>(() => _tools.MoveFile("a.txt", "b.txt")).Message, StringComparison.Ordinal);
         Assert.Equal("b", await File.ReadAllTextAsync(Path.Combine(_testDir, "b.txt"), TestContext.Current.CancellationToken));
 
         Assert.StartsWith("Successfully moved file", _tools.MoveFile("a.txt", "b.txt", overwrite: true), StringComparison.Ordinal);
@@ -83,19 +83,19 @@ public class BuiltInToolsTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_testDir, "dir"));
         File.WriteAllText(Path.Combine(_testDir, "f.txt"), "f");
 
-        Assert.StartsWith("Error: File not found", _tools.MoveFile("missing.txt", "x.txt"), StringComparison.Ordinal);
-        Assert.Contains("including the file name", _tools.MoveFile("f.txt", "dir"), StringComparison.Ordinal);
+        Assert.StartsWith("File not found", Assert.Throws<FileNotFoundException>(() => _tools.MoveFile("missing.txt", "x.txt")).Message, StringComparison.Ordinal);
+        Assert.Contains("including the file name", Assert.Throws<InvalidOperationException>(() => _tools.MoveFile("f.txt", "dir")).Message, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(_testDir, "f.txt")));
     }
 
     [Fact]
-    public async Task ReadFile_NonExistent_ReturnsError()
+    public async Task ReadFile_NonExistent_Throws()
     {
         // Act
-        var result = await _tools.ReadFile("nonexistent.txt");
+        var ex = await Assert.ThrowsAsync<FileNotFoundException>(() => _tools.ReadFile("nonexistent.txt"));
 
         // Assert
-        Assert.StartsWith("Error: File not found", result);
+        Assert.StartsWith("File not found", ex.Message);
     }
 
     [Fact]
@@ -206,16 +206,16 @@ public class BuiltInToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteCommand_Timeout_ReturnsError()
+    public async Task ExecuteCommand_Timeout_Throws()
     {
         // Arrange - command that takes a long time
         var command = OperatingSystem.IsWindows() ? "ping -n 10 127.0.0.1" : "sleep 10";
 
         // Act
-        var result = await _tools.ExecuteCommand(command, timeoutMs: 100);
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() => _tools.ExecuteCommand(command, timeoutMs: 100));
 
         // Assert
-        Assert.Contains("timed out", result);
+        Assert.Contains("timed out", ex.Message);
     }
 
     [Fact]

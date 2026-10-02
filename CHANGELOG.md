@@ -22,6 +22,17 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   content is no longer visible and that the tool can be called again with the same arguments — a model that needs it
   re-reads instead of guessing. This applies to masking across user turns too.
 
+- **A built-in tool that fails throws instead of returning "Error…" text.** `ReadFile`, `WriteFile`, `EditFile`,
+  `DeleteFile`, `MoveFile`, `ListDirectory`, `GlobFiles`, `GrepFiles`, `ExecuteCommand` and `ManageTodo` returned
+  failures as ordinary results, which the library's own guards counted as successes: a model retrying the same failing
+  call ran to the iteration cap. They now throw (`FileNotFoundException`, `DirectoryNotFoundException`,
+  `InvalidOperationException`, `ArgumentException`, `KeyNotFoundException`, `TimeoutException` for a command that timed
+  out, carrying what it printed so far), so `RepeatedErrorGuardMiddleware` ends the request when the same failure
+  repeats. The model reads the message when `IncludeDetailedErrors` is set. A path outside `AllowedRoots` is still a
+  refusal returned as text. **Breaking** — **Migration:** code that calls `ToolProvider`/`TodoTool` methods directly
+  and reads an "Error…" result catches the exception instead; set `IncludeDetailedErrors = true` on the
+  function-invoking client if the model should see why a tool failed.
+
 ### Fixed
 - **Token estimates count Korean, Japanese and Chinese text at its own density, and count a message's text once.**
   `ContextTokenCounter` estimated every text at four characters per token, so CJK text — about one to one and a half

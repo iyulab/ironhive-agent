@@ -75,9 +75,9 @@ public class FileWriteInterceptorTests : IDisposable
     {
         var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = new Throwing() });
 
-        var result = await tools.WriteFile("x.txt", "x");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tools.WriteFile("x.txt", "x"));
 
-        Assert.Equal("Error writing file: versioning store is read-only", result);
+        Assert.Equal("versioning store is read-only", ex.Message);
     }
 
     [Fact]

@@ -57,7 +57,7 @@ public class TodoTool
             "complete" => await CompleteTodoAsync(id),
             "remove" => await RemoveTodoAsync(id),
             "clear" => await ClearTodosAsync(),
-            _ => $"Error: Unknown action '{action}'. Use 'add', 'list', 'update', 'complete', 'remove', or 'clear'."
+            _ => throw new ArgumentException($"Unknown action '{action}'. Use 'add', 'list', 'update', 'complete', 'remove', or 'clear'.", nameof(action))
         };
     }
 
@@ -65,7 +65,7 @@ public class TodoTool
     {
         if (string.IsNullOrWhiteSpace(task))
         {
-            return "Error: Task description is required for 'add' action.";
+            throw new ArgumentException("Task description is required for 'add' action.", nameof(task));
         }
 
         var todos = await LoadTodosAsync();
@@ -129,7 +129,7 @@ public class TodoTool
     {
         if (string.IsNullOrWhiteSpace(id))
         {
-            return "Error: Task ID is required for 'update' action.";
+            throw new ArgumentException("Task ID is required for 'update' action.", nameof(id));
         }
 
         var todos = await LoadTodosAsync();
@@ -137,7 +137,7 @@ public class TodoTool
 
         if (todo == null)
         {
-            return $"Error: Task #{id} not found.";
+            throw new KeyNotFoundException($"Task #{id} not found.");
         }
 
         if (!string.IsNullOrWhiteSpace(task))
@@ -170,7 +170,7 @@ public class TodoTool
     {
         if (string.IsNullOrWhiteSpace(id))
         {
-            return "Error: Task ID is required for 'complete' action.";
+            throw new ArgumentException("Task ID is required for 'complete' action.", nameof(id));
         }
 
         var todos = await LoadTodosAsync();
@@ -178,7 +178,7 @@ public class TodoTool
 
         if (todo == null)
         {
-            return $"Error: Task #{id} not found.";
+            throw new KeyNotFoundException($"Task #{id} not found.");
         }
 
         // Check dependencies
@@ -206,7 +206,7 @@ public class TodoTool
     {
         if (string.IsNullOrWhiteSpace(id))
         {
-            return "Error: Task ID is required for 'remove' action.";
+            throw new ArgumentException("Task ID is required for 'remove' action.", nameof(id));
         }
 
         var todos = await LoadTodosAsync();
@@ -214,7 +214,7 @@ public class TodoTool
 
         if (removed == 0)
         {
-            return $"Error: Task #{id} not found.";
+            throw new KeyNotFoundException($"Task #{id} not found.");
         }
 
         await SaveTodosAsync(todos);
