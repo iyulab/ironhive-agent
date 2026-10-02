@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.35.1] - 2026-10-02
+
+### Changed
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.18.1 -> 0.18.2, `Ironbees.Autonomous` 0.21.9 -> 0.21.10, `Ironbees.Core` 0.21.9 -> 0.21.10, `IronHive.Abstractions` 0.45.4 -> 0.46.0, `IronProw.Core` 0.11.0 -> 0.12.1, `WebFlux` 0.19.4 -> 0.19.5. No source changes.
+
 ## [0.35.0] - 2026-10-02
 
 ### Changed

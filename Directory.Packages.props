@@ -4,12 +4,12 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.45.4" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.46.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
-    <PackageVersion Include="IronProw.Core" Version="0.11.0" />
+    <PackageVersion Include="IronProw.Core" Version="0.12.1" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.21.9" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.9" />
+    <PackageVersion Include="Ironbees.Core" Version="0.21.10" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.10" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.8" />
     <!-- Microsoft.Extensions.AI -->
@@ -38,9 +38,9 @@
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.20.2" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
-    <PackageVersion Include="FluxGuard.Remote" Version="0.18.1" />
+    <PackageVersion Include="FluxGuard.Remote" Version="0.18.2" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.19.4" />
+    <PackageVersion Include="WebFlux" Version="0.19.5" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
