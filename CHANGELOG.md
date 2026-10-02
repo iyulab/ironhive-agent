@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.40.0] - Unreleased
+
+### Changed
+- **A failed delegated run throws instead of returning text.** `DelegationTools` returned "Delegation to 'x' failed: …"
+  as an ordinary result, which no loop guard recognises as a failure: on a real model a delegation failing with "Model
+  not found" was called again with reworded tasks until the iteration cap. It now throws an `InvalidOperationException`
+  naming the agent and the cause, so the tool loop reports it to the model like any failing tool (the message with
+  `IncludeDetailedErrors`) and `RepeatedErrorGuardMiddleware` ends the request when the same failure repeats. Refusals
+  (depth, usage limit) still return text. **Migration:** code that invoked a delegation tool directly and read the
+  failure text catches the exception instead.
+
 ## [0.39.1] - 2026-10-02
 
 ### Changed

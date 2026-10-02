@@ -19,8 +19,11 @@ namespace IronHive.Agent.Delegation;
 /// context, as arguments.</para>
 /// <para>What a delegated run cannot do on its own the caller's settings enforce: nesting depth
 /// (<see cref="DelegationOptions.MaxDepth"/>), concurrency, the parent's usage limit, and the tool-turn limit. A
-/// refused or failed delegation returns a result that says so — the calling model reads it and can take another
-/// route — while cancellation propagates.</para>
+/// refused delegation returns a result that says so — the calling model reads it and can take another route. A
+/// delegated run that fails throws, naming the agent and the cause: the tool loop reports it to the model like any
+/// failing tool (its message, with <c>IncludeDetailedErrors</c>), and <c>RepeatedErrorGuardMiddleware</c> ends the
+/// request when the same failure repeats — a failure the model cannot fix by rewording the task (no such model, the
+/// provider down) is otherwise retried until the loop's iteration cap. Cancellation propagates.</para>
 /// </remarks>
 public static partial class DelegationTools
 {
@@ -108,7 +111,7 @@ public static partial class DelegationTools
             }
             catch (Exception ex)
             {
-                return $"Delegation to '{agent.AgentName}' failed: {ex.Message}";
+                throw new InvalidOperationException($"Delegation to '{agent.AgentName}' failed: {ex.Message}", ex);
             }
             finally
             {

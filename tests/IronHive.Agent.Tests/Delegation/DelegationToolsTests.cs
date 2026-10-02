@@ -1,5 +1,6 @@
 using Ironbees.Core;
 using IronHive.Agent.Delegation;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Ironbees;
 using IronHive.Agent.Tests.Mocks;
 using IronHive.Agent.Tracking;
@@ -132,17 +133,47 @@ public class DelegationToolsTests
     }
 
     [Fact]
-    public async Task AFailedRun_ComesBackAsAResultTheModelCanRead()
+    public async Task AFailedRun_Throws_NamingTheAgentAndTheCause()
     {
         var orchestrator = Orchestrator();
         orchestrator.ProcessStructuredAsync(Arg.Any<string>(), Arg.Any<ProcessOptions>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("provider unavailable"));
         var tool = DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research" });
 
-        var output = await InvokeAsync(tool, "go");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => InvokeAsync(tool, "go"));
 
-        Assert.Contains("failed", output);
-        Assert.Contains("provider unavailable", output);
+        Assert.Contains("'research' failed", ex.Message);
+        Assert.Contains("provider unavailable", ex.Message);
+    }
+
+    // Measured on a real model: a delegation that failed with "Model not found" came back as plain text, which no loop
+    // guard recognises, and the model called it again with reworded tasks until the iteration cap. A thrown failure is
+    // what the repeated-error guard counts — the task text differs, the failure does not.
+    [Fact]
+    public async Task TheSameFailedDelegationRepeated_EndsTheRequest_ThroughTheRepeatedErrorGuard()
+    {
+        var orchestrator = Orchestrator();
+        orchestrator.ProcessStructuredAsync(Arg.Any<string>(), Arg.Any<ProcessOptions>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("Model not found"));
+        var tool = DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research" });
+        var mock = new MockChatClient()
+            .EnqueueToolCallResponse("research", """{"task":"look it up"}""")
+            .EnqueueToolCallResponse("research", """{"task":"please look it up"}""")
+            .EnqueueToolCallResponse("research", """{"task":"look it up, it is important"}""")
+            .EnqueueResponse("never requested");
+        var client = mock.AsBuilder()
+            .UseToolInvocationPipeline(IronHive.Agent.Invocation.ToolInvocationPipeline.CreateDefault(
+                new IronHive.Agent.Invocation.ToolInvocationOptions { MaxRepeatedErrors = 3 }))
+            .Build();
+        var loop = new IronHive.Agent.Loop.AgentLoop(client, new IronHive.Agent.Loop.AgentOptions { Tools = [tool] });
+
+        await loop.RunAsync("delegate it", TestContext.Current.CancellationToken);
+
+        await orchestrator.Received(3).ProcessStructuredAsync(Arg.Any<string>(), Arg.Any<ProcessOptions>(), Arg.Any<CancellationToken>());
+        Assert.Equal(3, mock.ReceivedMessages.Count);
+        var last = Assert.Single(loop.History[^1].Contents.OfType<FunctionResultContent>());
+        var refusal = Assert.IsType<IronHive.Agent.Mode.ToolCallRefusal>(last.Result);
+        Assert.Equal(IronHive.Agent.Mode.ToolCallRefusalKind.RepeatedError, refusal.Kind);
     }
 
     [Fact]
