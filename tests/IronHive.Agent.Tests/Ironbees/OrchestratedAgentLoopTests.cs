@@ -1,5 +1,6 @@
 using IronHive.Agent.Ironbees;
 using Ironbees.Core;
+using Ironbees.Core.Conversation;
 using Microsoft.Extensions.AI;
 using NSubstitute;
 
@@ -43,5 +44,50 @@ public class OrchestratedAgentLoopTests
         }
 
         await Assert.ThrowsAsync<NotSupportedException>(Act);
+    }
+
+    // Moved from the host (its AddIronbeesOrchestration helper was removed): the loop's history is the conversation
+    // store's, not an in-memory field, and without a store it is always empty rather than throwing.
+    [Fact]
+    public async Task WithAConversationStore_TheHistoryIsPersistedAndCleared()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"orchestrated-history-{Guid.NewGuid():N}");
+        try
+        {
+            using var store = new FileSystemConversationStore(directory);
+            var loop = new OrchestratedAgentLoop(Substitute.For<IAgentOrchestrator>(), conversationStore: store);
+
+            await loop.InitializeHistoryAsync(
+                [new ChatMessage(ChatRole.User, "hello"), new ChatMessage(ChatRole.Assistant, "hi there")],
+                TestContext.Current.CancellationToken);
+
+            var history = await loop.GetHistoryAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(["hello", "hi there"], history.Select(m => m.Text));
+            Assert.Equal([ChatRole.User, ChatRole.Assistant], history.Select(m => m.Role));
+
+            var id = Assert.Single(await store.ListAsync(cancellationToken: TestContext.Current.CancellationToken));
+            var stored = await store.LoadAsync(id, TestContext.Current.CancellationToken);
+            Assert.Equal(2, stored!.Messages.Count);
+
+            await loop.ClearHistoryAsync(TestContext.Current.CancellationToken);
+            Assert.Empty(await loop.GetHistoryAsync(TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WithoutAConversationStore_TheHistoryIsAlwaysEmpty()
+    {
+        var loop = new OrchestratedAgentLoop(Substitute.For<IAgentOrchestrator>());
+
+        await loop.InitializeHistoryAsync([new ChatMessage(ChatRole.User, "hello")], TestContext.Current.CancellationToken);
+
+        Assert.Empty(await loop.GetHistoryAsync(TestContext.Current.CancellationToken));
     }
 }
