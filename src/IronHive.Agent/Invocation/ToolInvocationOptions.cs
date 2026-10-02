@@ -22,6 +22,15 @@ public sealed class ToolInvocationOptions
     public int MaxRepeatedCalls { get; set; } = 3;
 
     /// <summary>
+    /// How many times in a row the repeated-call guard refuses the same call before it ends the request
+    /// (<c>FunctionInvocationContext.Terminate</c>; the turn ends as <c>TurnStopReason.ToolTerminated</c> on a
+    /// <see cref="IronHive.Agent.Mode.ToolCallRefusal"/> of kind <c>RepeatedCall</c>). A model that keeps re-issuing a
+    /// refused call is stuck; without this it spends the rest of the step budget on refusals and the turn ends as a step
+    /// limit, which reads as "the task was too big". 0 keeps refusing without ending the request. Default: 2.
+    /// </summary>
+    public int MaxRefusedRepeats { get; set; } = 2;
+
+    /// <summary>
     /// How many times in a row the same tool may fail with the same error before the request is ended
     /// (<c>FunctionInvocationContext.Terminate</c>) instead of letting the model retry again. 0 turns the guard off.
     /// Default: 3.

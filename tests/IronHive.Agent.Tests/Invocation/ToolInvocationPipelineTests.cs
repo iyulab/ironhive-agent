@@ -162,6 +162,51 @@ public class ToolInvocationPipelineTests
         response.ToolCalls[0].Success.Should().BeFalse();
     }
 
+    // A model that keeps re-issuing a refused call is stuck. Measured: 33 refusals in a row until the step budget ran out,
+    // and the turn read as "needed more steps". The second refusal in a row ends the request instead.
+    [Fact]
+    public async Task A_call_re_issued_after_being_refused_ends_the_request_as_tool_terminated_not_as_a_step_limit()
+    {
+        var (loop, mock, probe) = Build(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedCalls = 3 }),
+            m =>
+            {
+                for (var i = 0; i < 12; i++)
+                {
+                    m.EnqueueToolCallResponse("Lookup", """{"query":"q"}""");
+                }
+
+                m.EnqueueResponse("never requested");
+            });
+
+        var response = await loop.RunAsync("look", Ct);
+
+        probe.Invocations.Should().Be(3);
+        mock.ReceivedMessages.Should().HaveCount(5, "three runs, one refusal the model may correct, then the second refusal ends it");
+        response.StopReason.Should().Be(TurnStopReason.ToolTerminated);
+        var last = loop.History[^1].Contents.OfType<FunctionResultContent>().Single();
+        last.Result.Should().BeOfType<ToolCallRefusal>().Which.Kind.Should().Be(ToolCallRefusalKind.RepeatedCall);
+    }
+
+    [Fact]
+    public async Task With_MaxRefusedRepeats_0_the_guard_keeps_refusing_without_ending_the_request()
+    {
+        var (loop, mock, probe) = Build(
+            ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions { MaxRepeatedCalls = 3, MaxRefusedRepeats = 0 }),
+            m => m.EnqueueToolCallResponse("Lookup", """{"query":"q"}""")
+                .EnqueueToolCallResponse("Lookup", """{"query":"q"}""")
+                .EnqueueToolCallResponse("Lookup", """{"query":"q"}""")
+                .EnqueueToolCallResponse("Lookup", """{"query":"q"}""")
+                .EnqueueToolCallResponse("Lookup", """{"query":"q"}""")
+                .EnqueueResponse("done"));
+
+        var response = await loop.RunAsync("look", Ct);
+
+        probe.Invocations.Should().Be(3);
+        mock.ReceivedMessages.Should().HaveCount(6);
+        response.StopReason.Should().Be(TurnStopReason.Completed);
+    }
+
     [Fact]
     public async Task The_same_successful_call_past_the_limit_is_not_run_again_within_one_request()
     {

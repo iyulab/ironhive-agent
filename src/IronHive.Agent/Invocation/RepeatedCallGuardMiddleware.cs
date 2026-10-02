@@ -12,7 +12,9 @@ namespace IronHive.Agent.Invocation;
 /// (<see cref="ToolCallRefusalKind.RepeatedCall"/>) telling it it already has that result. Identical calls keep being
 /// refused until the model calls something else; any other call, failure or refusal in between ends the streak. A
 /// result that reports a failure (<see cref="ToolInvocationOptions.FailureOf"/>, or an MCP <c>isError</c> result) is a
-/// failure, not a successful run.
+/// failure, not a successful run. The <see cref="ToolInvocationOptions.MaxRefusedRepeats"/>-th refusal in a row of the
+/// same call also ends the request (<see cref="FunctionInvocationContext.Terminate"/>): the model is stuck, and asking
+/// again would only spend the step budget.
 /// </summary>
 /// <remarks>
 /// The streak is read from the conversation (<see cref="FunctionInvocationContext.Messages"/>), not kept in the
@@ -50,6 +52,7 @@ public sealed partial class RepeatedCallGuardMiddleware : IToolInvocationMiddlew
         var completed = ToolCallHistory.Completed(context.Messages, context.CallContent?.CallId);
 
         var streak = 0;
+        var refused = 0;
         for (var i = completed.Count - 1; i >= 0; i--)
         {
             var (call, result) = completed[i];
@@ -60,6 +63,11 @@ public sealed partial class RepeatedCallGuardMiddleware : IToolInvocationMiddlew
 
             if (result.Result is ToolCallRefusal { Kind: ToolCallRefusalKind.RepeatedCall })
             {
+                if (streak == 0)
+                {
+                    refused++; // refusals at the end of the history: how long the model has been stuck
+                }
+
                 continue; // already refused for repeating: the streak stands until the model changes course
             }
 
@@ -76,12 +84,25 @@ public sealed partial class RepeatedCallGuardMiddleware : IToolInvocationMiddlew
             return next(context, cancellationToken);
         }
 
+        if (_options.MaxRefusedRepeats > 0 && refused + 1 >= _options.MaxRefusedRepeats)
+        {
+            context.Terminate = true;
+            LogStuck(_logger, name, refused + 1);
+            return new ValueTask<object?>(new ToolCallRefusal(
+                ToolCallRefusalKind.RepeatedCall,
+                $"'{name}' was called again with the same arguments after being refused {refused} time(s); the request was " +
+                $"stopped as stuck repeating '{name}'."));
+        }
+
         LogRefused(_logger, name, streak);
         return new ValueTask<object?>(new ToolCallRefusal(
             ToolCallRefusalKind.RepeatedCall,
             $"'{name}' already ran {streak} times in a row with these same arguments. Its result is in the conversation; " +
             "do not call it again with these arguments — use that result, or call a different tool or change the arguments."));
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {Tool} refused for repeating {Count} times in a row; ending the request as stuck")]
+    private static partial void LogStuck(ILogger logger, string tool, int count);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {Tool} not run: the same call already succeeded {Count} times in a row")]
     private static partial void LogRefused(ILogger logger, string tool, int count);

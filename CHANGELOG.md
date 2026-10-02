@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.41.0] - Unreleased
+
+### Added
+- **A model stuck re-issuing a refused call ends the request instead of the step budget.** The repeated-call guard
+  refused an identical call past `MaxRepeatedCalls`, but a model that kept asking received a refusal every time until
+  the function-invoking client's iteration limit — measured at 33 refusals in a row, ending as `StepLimit` ("needed
+  more steps"). The new `ToolInvocationOptions.MaxRefusedRepeats` (default 2) ends the request on that many refusals in
+  a row of the same call: the turn ends as `TurnStopReason.ToolTerminated` on a `ToolCallRefusal` of kind
+  `RepeatedCall` that names the tool. 0 keeps the previous behaviour.
+
 ## [0.40.0] - 2026-10-02
 
 ### Changed
