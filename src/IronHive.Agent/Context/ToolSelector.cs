@@ -7,6 +7,14 @@ namespace IronHive.Agent.Context;
 /// pins, then tools the query names exactly, then the scored tail above the threshold, then the declared
 /// companions of everything selected. Retrievers differ only in how they score.
 /// </summary>
+/// <remarks>
+/// The groups decide which tools are selected and are kept, in that order, in
+/// <see cref="ToolRetrievalResult.Selections"/>. The order the tools are sent in is a separate contract:
+/// ordinal by name, so a given set always serialises identically whatever the scores, the query, or the
+/// order the catalog arrived in. A prefix-cached server re-reads the whole prompt when the tool list
+/// differs, and a chat template that renders tools before the system text turns even a reordering of the
+/// same set into a full cache miss.
+/// </remarks>
 internal static class ToolSelector
 {
     /// <summary>A scored tool. <paramref name="AliasMatched"/> marks a score that came from a declared alias.</summary>
@@ -107,7 +115,7 @@ internal static class ToolSelector
 
         return new ToolRetrievalResult
         {
-            SelectedTools = selected,
+            SelectedTools = selected.OrderBy(tool => tool.Name, StringComparer.Ordinal).ToList(),
             RelevanceScores = scores,
             Selections = selections,
         };

@@ -47,7 +47,9 @@ public record ToolRetrievalOptions
 public record ToolRetrievalResult
 {
     /// <summary>
-    /// The selected tools.
+    /// The selected tools, in the order they are sent. The retrievers in this library send them ordinal by name,
+    /// so the same set always serialises identically — a prefix-cached server keeps its prompt cache while the set
+    /// holds. The ranking that chose them is in <see cref="Selections"/>.
     /// </summary>
     public required IList<AITool> SelectedTools { get; init; }
 
@@ -57,8 +59,9 @@ public record ToolRetrievalResult
     public IReadOnlyDictionary<string, float>? RelevanceScores { get; init; }
 
     /// <summary>
-    /// Why each selected tool was selected, in selection order — what a request was actually sent and on
-    /// what grounds. Empty when the retriever does not report it.
+    /// Why each selected tool was selected, in selection order (pins, exact names, the scored tail by score,
+    /// companions) — what a request was actually sent and on what grounds. This is the ranking, not the order sent
+    /// (<see cref="SelectedTools"/>). Empty when the retriever does not report it.
     /// </summary>
     public IReadOnlyList<ToolSelection> Selections { get; init; } = [];
 }

@@ -440,6 +440,12 @@ Both retrievers select in this order:
 3. **Scored tail** — the top-scored tools above `MinRelevanceScore`, within the budget above.
 4. **Companions** — tools a selected tool declares it is used with, added outside the budget.
 
+That order decides **which** tools are selected and is what `ToolRetrievalResult.Selections` reports. The tools are
+**sent** ordinal by name (`SelectedTools`), so the same set always serialises identically whatever the scores, the
+query, or the order of the catalog. A prefix-cached server (llama-server, vLLM) keeps its prompt cache as long as the
+set holds — with a chat template that renders tools before the system text, even a reordering of the same set would
+re-read the whole prompt. `McpPluginManager.GetToolsAsync` lists plugins in name order for the same reason.
+
 A tool declares **retrieval hints** in `AITool.AdditionalProperties`, so they travel with the tool however it
 was created:
 

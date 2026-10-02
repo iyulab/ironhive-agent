@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.36.0] - Unreleased
+
+### Changed
+- **Selected tools are sent in a stable order: ordinal by name.** `KeywordToolRetriever` and `EmbeddingToolRetriever`
+  used to return `SelectedTools` in selection order (pins, exact names, the scored tail by score, companions), so the
+  same set came back reordered whenever the query moved the scores — and a prefix-cached local server re-read the whole
+  prompt on every reordering. The selection order and its reasons are unchanged in `Selections`. A caller that read
+  `SelectedTools[0]` as the top-ranked tool reads `Selections[0]` instead.
+- **`McpPluginManager.GetToolsAsync` lists plugins in name order.** With two or more plugins the catalog came back in a
+  different order on every process start.
+
 ## [0.35.1] - 2026-10-02
 
 ### Changed

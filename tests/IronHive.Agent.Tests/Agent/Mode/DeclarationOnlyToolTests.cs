@@ -40,7 +40,7 @@ public class DeclarationOnlyToolTests
         var result = await retriever.RetrieveAsync("read the page text of a browser tab", tools,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal("read_page", result.SelectedTools[0].Name);
+        Assert.Equal("read_page", result.Selections[0].Name);
         Assert.True(result.RelevanceScores!.ContainsKey("read_page"));
     }
 

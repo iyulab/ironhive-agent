@@ -60,8 +60,7 @@ public class KeywordToolRetrieverTests
         var result = await _retriever.RetrieveAsync("read file", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(result.SelectedTools);
-        var topTool = result.SelectedTools[0];
-        Assert.Equal("ReadFile", GetName(topTool));
+        Assert.Equal("ReadFile", result.Selections[0].Name);
 
         var score = result.RelevanceScores!["ReadFile"];
         Assert.True(score > 0.5f, $"Expected high score for exact match, got {score}");
@@ -119,7 +118,7 @@ public class KeywordToolRetrieverTests
         var result = await _retriever.RetrieveAsync("grep files", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         // GrepFiles should rank highest (name match)
-        Assert.Equal("GrepFiles", GetName(result.SelectedTools[0]));
+        Assert.Equal("GrepFiles", result.Selections[0].Name);
     }
 
     [Fact]
@@ -472,6 +471,56 @@ public class KeywordToolRetrieverTests
 
         Assert.True(result.SelectedTools.Count <= 2,
             $"MinScoredSlots must clamp to MaxTools, got {result.SelectedTools.Count} tools");
+    }
+
+    #endregion
+
+    #region Wire order
+
+    // A prefix-cached server re-reads the whole prompt when the tool list differs, and a chat template that renders
+    // tools before the system text makes even a reordering of the same set a full cache miss. The order sent must be
+    // a function of the selected set alone — not of the scores, the query, or the order the catalog arrived in.
+
+    [Theory]
+    [InlineData("read file")]
+    [InlineData("write file")]
+    [InlineData("grep files in a directory")]
+    [InlineData("execute command and list directory and read file")]
+    public async Task RetrieveAsync_SentOrderIsOrdinalByName_WhateverTheScores(string query)
+    {
+        var options = new ToolRetrievalOptions { MinRelevanceScore = 0.0f, MaxTools = 10 };
+
+        var result = await _retriever.RetrieveAsync(query, CreateTestTools(), options, TestContext.Current.CancellationToken);
+
+        var sent = result.SelectedTools.Select(GetName).ToList();
+        Assert.NotEmpty(sent);
+        Assert.Equal(sent.OrderBy(n => n, StringComparer.Ordinal), sent);
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_SameSetFromQueriesThatRankItDifferently_IsSentIdentically()
+    {
+        var options = new ToolRetrievalOptions { MinRelevanceScore = 0.0f, MaxTools = 10 };
+
+        var read = await _retriever.RetrieveAsync("read file", CreateTestTools(), options, TestContext.Current.CancellationToken);
+        var write = await _retriever.RetrieveAsync("write file", CreateTestTools(), options, TestContext.Current.CancellationToken);
+
+        // Positive control: the two queries rank the tools differently, which the selection trace keeps.
+        Assert.NotEqual(read.Selections[0].Name, write.Selections[0].Name);
+        Assert.Equal(read.SelectedTools.Select(GetName).Order(StringComparer.Ordinal), write.SelectedTools.Select(GetName).Order(StringComparer.Ordinal));
+        Assert.Equal(read.SelectedTools.Select(GetName), write.SelectedTools.Select(GetName));
+    }
+
+    [Fact]
+    public async Task RetrieveAsync_PermutedCatalog_IsSentIdentically()
+    {
+        var options = new ToolRetrievalOptions { MinRelevanceScore = 0.0f, MaxTools = 10, AlwaysInclude = ["ExecuteCommand", "ListDirectory"] };
+        var reversed = CreateTestTools().Reverse().ToList();
+
+        var forward = await _retriever.RetrieveAsync("grep or read a file", CreateTestTools(), options, TestContext.Current.CancellationToken);
+        var backward = await _retriever.RetrieveAsync("grep or read a file", reversed, options, TestContext.Current.CancellationToken);
+
+        Assert.Equal(forward.SelectedTools.Select(GetName), backward.SelectedTools.Select(GetName));
     }
 
     #endregion

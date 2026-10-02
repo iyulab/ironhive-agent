@@ -108,7 +108,9 @@ public class McpPluginManager : IMcpPluginManager
 
         var allTools = new List<AITool>();
 
-        foreach (var (_, wrapper) in _clients)
+        // By plugin name, not the dictionary's enumeration order: string hashing is randomised per process, so with two
+        // or more plugins the catalog would come back in a different order on every start.
+        foreach (var (_, wrapper) in _clients.OrderBy(entry => entry.Key, StringComparer.Ordinal))
         {
             try
             {

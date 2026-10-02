@@ -73,7 +73,7 @@ public class EmbeddingToolRetrieverTests
         var result = await retriever.RetrieveAsync("execute command shell", tools, cancellationToken: TestContext.Current.CancellationToken);
 
         // ExecuteCommand should be top result
-        Assert.Equal("ExecuteCommand", GetName(result.SelectedTools[0]));
+        Assert.Equal("ExecuteCommand", result.Selections[0].Name);
     }
 
     [Fact]

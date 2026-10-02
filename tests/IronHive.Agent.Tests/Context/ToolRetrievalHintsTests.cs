@@ -72,7 +72,8 @@ public class ToolRetrievalHintsTests
         var list = Assert.Single(result.Selections, s => s.Name == "list_file_versions");
         Assert.Equal(ToolSelectionReason.Companion, list.Reason);
 
-        Assert.Equal(Names(result), result.Selections.Select(s => s.Name));
+        // Sent ordinal by name (a stable wire order); the trace keeps the selection order.
+        Assert.Equal(result.Selections.Select(s => s.Name).Order(StringComparer.Ordinal), Names(result));
         Assert.Equal(ToolSelectionReason.Pinned, result.Selections[0].Reason);
     }
 
@@ -88,7 +89,7 @@ public class ToolRetrievalHintsTests
 
         var result = await _retriever.RetrieveAsync("use GrepFiles to find TODO markers", Catalogue(withHints: false), options, TestContext.Current.CancellationToken);
 
-        Assert.Equal(["read_file", "write_file", "GrepFiles"], Names(result));
+        Assert.Equal(["read_file", "write_file", "GrepFiles"], result.Selections.Select(s => s.Name));
         Assert.Equal(ToolSelectionReason.ExactName, result.Selections[2].Reason);
     }
 
@@ -135,7 +136,7 @@ public class ToolRetrievalHintsTests
         var result = await _retriever.RetrieveAsync("", tools, new ToolRetrievalOptions { AlwaysInclude = ["owner_tool"] }, TestContext.Current.CancellationToken);
 
         // The first three declared names are followed; "missing" is not available and fills no slot of its own.
-        Assert.Equal(["owner_tool", "c1", "c2"], Names(result));
+        Assert.Equal(["owner_tool", "c1", "c2"], result.Selections.Select(s => s.Name));
         Assert.All(result.Selections.Skip(1), s => Assert.Equal(ToolSelectionReason.Companion, s.Reason));
     }
 
