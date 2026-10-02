@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.37.0] - Unreleased
+
+### Changed
+- **Sticky tool selection holds the set instead of growing it.** With `ToolRetrievalOptions.StickyToolLimit` on, the
+  tools a conversation already sent are now sent again unchanged while they serve the request; the set changes only
+  for a pin, a tool named exactly or by alias, or the request's best-scored tool. Before, every request's lower-ranked
+  newcomers were appended, so the set grew on most messages — and since chat templates put the tools first, each
+  growth re-read the prompt; on a hybrid or recurrent model, all of it, with no cache at all until the set stopped
+  growing. Lower-ranked tools a held request would have added are not sent. **Migration:** none for callers; a trace
+  that needs them reads the new `ToolRetrievalResult.Withheld`.
+
+### Added
+- **`ToolRetrievalResult.Withheld`** — the tools a request selected but did not send because sticky selection held the
+  carried set, each with the reason it was selected.
+
 ## [0.36.2] - 2026-10-02
 
 ### Changed

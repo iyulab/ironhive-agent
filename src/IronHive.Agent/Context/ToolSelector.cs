@@ -11,9 +11,11 @@ namespace IronHive.Agent.Context;
 /// The groups decide which tools are selected and are kept, in that order, in
 /// <see cref="ToolRetrievalResult.Selections"/>. The order the tools are sent in is a separate contract:
 /// ordinal by name, so a given set always serialises identically whatever the scores, the query, or the
-/// order the catalog arrived in. A prefix-cached server re-reads the whole prompt when the tool list
-/// differs, and a chat template that renders tools before the system text turns even a reordering of the
-/// same set into a full cache miss.
+/// order the catalog arrived in. Chat templates and provider prompt caches put the tools first, so any
+/// change to the tool list — a reordering, an added tool — is a re-read of the whole prompt after it; a
+/// hybrid or recurrent model (which can only roll back to a saved checkpoint, and none precedes the tools)
+/// re-reads all of it. With sticky selection on, the carried set is therefore held unchanged unless the
+/// request needs something it lacks.
 /// </remarks>
 internal static class ToolSelector
 {
@@ -113,13 +115,33 @@ internal static class ToolSelector
             }
         }
 
-        // 5. Tools sent earlier in the conversation, first-sent order, while the whole set fits the limit.
-        var carried = Carry(options, byName, selected);
-        foreach (var name in carried)
+        // 5. Tools sent earlier in the conversation: hold that set, grow it, or start over (see Sticky).
+        var carried = Carried(options, byName);
+        List<ToolSelection> withheld = [];
+        if (carried.Count > 0)
         {
-            if (selectedNames.Add(name))
+            var carriedSet = new HashSet<string>(carried, StringComparer.OrdinalIgnoreCase);
+            var newcomers = selections.Where(s => !carriedSet.Contains(s.Name)).ToList();
+
+            if (!NeedsChange(selections, carriedSet))
             {
-                Add(byName[name], name, ToolSelectionReason.Carried, scores.TryGetValue(name, out var score) ? score : null);
+                // Hold: the set sent last time, exactly. This request's other newcomers are reported, not sent.
+                withheld = newcomers;
+                selected.RemoveAll(tool => !carriedSet.Contains(tool.Name));
+                selections.RemoveAll(s => !carriedSet.Contains(s.Name));
+                selectedNames.IntersectWith(carriedSet);
+            }
+            else if (carried.Count + newcomers.Count > options.StickyToolLimit)
+            {
+                carried = [];
+            }
+
+            foreach (var name in carried)
+            {
+                if (selectedNames.Add(name))
+                {
+                    Add(byName[name], name, ToolSelectionReason.Carried, scores.TryGetValue(name, out var score) ? score : null);
+                }
             }
         }
 
@@ -133,16 +155,14 @@ internal static class ToolSelector
             SelectedTools = wire,
             RelevanceScores = scores,
             Selections = selections,
+            Withheld = withheld,
         };
     }
 
     /// <summary>
-    /// The carried tools still in the catalog, in first-sent order — or none, when sticky selection is off or the
-    /// carried tools and this request's selection together would exceed <see cref="ToolRetrievalOptions.StickyToolLimit"/>
-    /// (the selection then starts over from this request).
+    /// The carried tools still in the catalog, in first-sent order — none when sticky selection is off.
     /// </summary>
-    private static List<string> Carry(
-        ToolRetrievalOptions options, Dictionary<string, AITool> byName, List<AITool> selected)
+    private static List<string> Carried(ToolRetrievalOptions options, Dictionary<string, AITool> byName)
     {
         if (options.StickyToolLimit <= 0 || options.StickyTools is not { Count: > 0 })
         {
@@ -159,8 +179,30 @@ internal static class ToolSelector
             }
         }
 
-        var added = selected.Count(tool => !seen.Contains(tool.Name));
-        return carried.Count + added <= options.StickyToolLimit ? carried : [];
+        return carried;
+    }
+
+    /// <summary>
+    /// Whether this request may change the carried set: a pin, a tool the query names exactly or by a declared alias,
+    /// or the request's best-scored tool is not in it. Anything weaker — a lower-ranked tool of the scored tail, a
+    /// companion of one — is held back, because changing the tool block costs a re-read of the whole prompt.
+    /// </summary>
+    private static bool NeedsChange(List<ToolSelection> selections, HashSet<string> carried)
+    {
+        foreach (var selection in selections)
+        {
+            if (selection.Reason is ToolSelectionReason.Pinned or ToolSelectionReason.ExactName or ToolSelectionReason.Alias
+                && !carried.Contains(selection.Name))
+            {
+                return true;
+            }
+        }
+
+        var best = selections
+            .Where(s => s.Reason is ToolSelectionReason.Scored or ToolSelectionReason.Alias)
+            .OrderByDescending(s => s.Score ?? 0f)
+            .FirstOrDefault();
+        return best is not null && !carried.Contains(best.Name);
     }
 
     /// <summary>

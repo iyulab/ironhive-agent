@@ -8,8 +8,9 @@ using NSubstitute;
 namespace IronHive.Agent.Tests.Context;
 
 /// <summary>
-/// <see cref="ToolRetrievalOptions.StickyToolLimit"/>: tools a conversation already sent stay first, in the order first
-/// sent, so a prefix-cached server re-reads only from the first new tool.
+/// <see cref="ToolRetrievalOptions.StickyToolLimit"/>: the set a conversation already sent is sent again unchanged while it
+/// serves the request — chat templates put the tools first, so any change re-reads the prompt (all of it on a hybrid
+/// model). It changes only for a pin, an exact name or alias, or the request's best-scored tool.
 /// </summary>
 public class StickyToolSelectionTests
 {
@@ -36,6 +37,53 @@ public class StickyToolSelectionTests
         Assert.Equal(Names(first), Names(second).Take(first.SelectedTools.Count));
         Assert.Contains("ExecuteCommand", Names(second).Skip(first.SelectedTools.Count));
         Assert.Contains(second.Selections, s => s.Reason == ToolSelectionReason.Carried);
+    }
+
+    [Fact]
+    public async Task WhenTheBestMatchIsCarried_TheSetIsSentUnchanged_AndTheWeakerNewcomersAreWithheld()
+    {
+        const string query = "read the file in this directory";
+        var fresh = await Retrieve(query, Sticky);
+        var best = BestScored(fresh);
+        var newcomers = Names(fresh).Where(name => name != best).ToList();
+        Assert.NotEmpty(newcomers); // the request alone would also select other tools
+
+        var held = await Retrieve(query, Sticky with { StickyTools = [best] });
+
+        Assert.Equal([best], Names(held));
+        Assert.Equal(newcomers.Order(StringComparer.Ordinal), held.Withheld.Select(s => s.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task AHeldSet_StaysByteIdentical_AcrossMessagesThatItServes()
+    {
+        var first = await Retrieve("read a file", Sticky);
+        var carried = Names(first);
+
+        foreach (var query in new[] { "read the file in this directory", "read that file again", "thanks" })
+        {
+            var next = await Retrieve(query, Sticky with { StickyTools = carried });
+            Assert.Equal(carried, Names(next));
+        }
+    }
+
+    [Fact]
+    public async Task AToolNamedExactly_ChangesAHeldSet()
+    {
+        var result = await Retrieve("read a file then use GrepFiles", Sticky with { StickyTools = ["ReadFile"] });
+
+        Assert.Equal("ReadFile", Names(result)[0]);
+        Assert.Contains("GrepFiles", Names(result));
+        Assert.Empty(result.Withheld);
+    }
+
+    [Fact]
+    public async Task ANewPin_ChangesAHeldSet()
+    {
+        var result = await Retrieve("read a file", Sticky with { StickyTools = ["ReadFile"], AlwaysInclude = ["ExecuteCommand"] });
+
+        Assert.Equal("ReadFile", Names(result)[0]);
+        Assert.Contains("ExecuteCommand", Names(result));
     }
 
     [Fact]
@@ -118,6 +166,10 @@ public class StickyToolSelectionTests
         _retriever.RetrieveAsync(query, Catalogue(), options, TestContext.Current.CancellationToken);
 
     private static List<string> Names(ToolRetrievalResult result) => result.SelectedTools.Select(t => t.Name).ToList();
+
+    private static string BestScored(ToolRetrievalResult result) =>
+        result.Selections.Where(s => s.Reason is ToolSelectionReason.Scored or ToolSelectionReason.Alias)
+            .OrderByDescending(s => s.Score ?? 0f).First().Name;
 
     private static IList<AITool> Catalogue() =>
     [

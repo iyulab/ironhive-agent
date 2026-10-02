@@ -41,15 +41,18 @@ public record ToolRetrievalOptions
     public int MinScoredSlots { get; init; }
 
     /// <summary>
-    /// When greater than 0, tools already sent in this conversation (<see cref="StickyTools"/>) stay in the
-    /// selection, in the order they were first sent, with newly selected tools after them — as long as the
-    /// whole set fits this many tools. When it would not, the selection starts over from this request alone.
+    /// When greater than 0, the set of tools sent earlier in this conversation (<see cref="StickyTools"/>) is sent
+    /// again unchanged, in the order first sent, for as long as it serves the request. It changes only when the
+    /// request needs a tool it lacks: a pin, a tool the request names exactly or by a declared alias, or the
+    /// request's best-scored tool. Then this request's whole selection joins it, after the carried tools — or,
+    /// when that would exceed this many tools, the selection starts over from this request alone. Lower-ranked
+    /// tools of a request that does not change the set are reported in <see cref="ToolRetrievalResult.Withheld"/>.
     /// <para>
-    /// For a prefix-cached server (llama-server, vLLM) whose chat template renders tools before the system
-    /// text: a selection that changes with every message makes the server re-read the whole prompt on every
-    /// message; a set that only grows at its tail is re-read from the first new tool, and not at all while
-    /// it holds. Set it above <see cref="MaxTools"/> plus the pins, or nothing will ever fit. Leave it at 0
-    /// for a remote API that bills every prompt token.
+    /// For a prefix-cached server (llama-server, vLLM) or a provider prompt cache: chat templates put the tools
+    /// first, so any change to the tool list re-reads the prompt after it — all of it on a hybrid or recurrent
+    /// model, which can roll back only to a saved checkpoint. A held set keeps the cache from message to message.
+    /// Set it above <see cref="MaxTools"/> plus the pins, or nothing will ever fit. Leave it at 0 when every
+    /// request should get exactly its own selection.
     /// </para>
     /// <para>Default: 0 — off; every request is selected on its own.</para>
     /// </summary>
@@ -89,6 +92,12 @@ public record ToolRetrievalResult
     /// (<see cref="SelectedTools"/>). Empty when the retriever does not report it.
     /// </summary>
     public IReadOnlyList<ToolSelection> Selections { get; init; } = [];
+
+    /// <summary>
+    /// Tools this request selected but did not send, because <see cref="ToolRetrievalOptions.StickyToolLimit"/> held
+    /// the carried set unchanged — each with the reason it was selected. Empty when nothing was held back.
+    /// </summary>
+    public IReadOnlyList<ToolSelection> Withheld { get; init; } = [];
 }
 
 /// <summary>

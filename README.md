@@ -446,13 +446,16 @@ query, or the order of the catalog. A prefix-cached server (llama-server, vLLM) 
 set holds — with a chat template that renders tools before the system text, even a reordering of the same set would
 re-read the whole prompt. `McpPluginManager.GetToolsAsync` lists plugins in name order for the same reason.
 
-**Sticky selection** (opt-in, `ToolRetrievalOptions.StickyToolLimit`): tools a conversation already sent stay
-selected and are sent first, in the order first sent, with newly selected tools after them — so a prefix-cached
-server re-reads from the first new tool instead of from the top on every message. When the carried tools and the new
-selection together exceed the limit, the selection starts over (one cache miss). `AgentLoop` and `ThinkingAgentLoop`
-carry the list themselves (`ClearHistory` and `InitializeHistory` forget it); a caller driving a retriever directly
-passes the previous result's tool names in `StickyTools`. Carried-only tools appear in `Selections` as `Carried`.
-Leave it off (0, the default) for a remote API that bills every prompt token.
+**Sticky selection** (opt-in, `ToolRetrievalOptions.StickyToolLimit`): the set of tools a conversation already sent
+is sent again **unchanged** for as long as it serves the request. Chat templates and prompt caches put the tools first,
+so any change to the tool list re-reads the prompt after it — and a hybrid or recurrent model (which can only roll back
+to a saved checkpoint) re-reads all of it. The set changes only when the request needs a tool it lacks: a pin, a tool
+the request names exactly or by alias, or the request's best-scored tool. Then the request's whole selection joins it,
+after the carried tools; when that would exceed the limit, the selection starts over (one cache miss). Lower-ranked
+tools a held request would have added are reported in `ToolRetrievalResult.Withheld`, not sent. `AgentLoop` and
+`ThinkingAgentLoop` carry the list themselves (`ClearHistory` and `InitializeHistory` forget it); a caller driving a
+retriever directly passes the previous result's tool names in `StickyTools`. Carried-only tools appear in
+`Selections` as `Carried`. Leave it off (0, the default) when every request should get exactly its own selection.
 
 ```csharp
 var options = new AgentOptions
