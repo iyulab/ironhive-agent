@@ -13,6 +13,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   whole prompt on every message. Over the limit the selection starts over. `AgentLoop` and `ThinkingAgentLoop` keep the
   list per conversation; direct retriever callers pass it in `ToolRetrievalOptions.StickyTools`. New
   `ToolSelectionReason.Carried` marks a tool kept only for that reason.
+- **`DeleteFile` and `MoveFile` built-in tools.** An agent asked to rename a class could only empty the old file with
+  `WriteFile`, leaving an empty file behind. `MoveFile(source, destination, overwrite = false)` refuses to replace an
+  existing file unless told to and creates the destination directory; neither tool touches directories. Both honour
+  `FileToolOptions.AllowedRoots` (a move checks both ends); the write interceptor does not run for them. The default
+  tool-call policy judges `DeleteFile` as a delete (asks by default, `AskBeforeDelete`) and `MoveFile` as a delete of the
+  source plus an edit of the destination, taking the stricter verdict. Planning mode leaves both out (not read-only).
 
 ### Changed
 - **Selected tools are sent in a stable order: ordinal by name.** `KeywordToolRetriever` and `EmbeddingToolRetriever`

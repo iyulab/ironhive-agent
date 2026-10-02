@@ -135,6 +135,7 @@ public sealed class ToolCallPolicy : IToolCallPolicy
             "read_file" => AssessRead(arguments),
             "write_file" => AssessWrite(arguments),
             "delete_file" => AssessDelete(arguments),
+            "move_file" => AssessMove(arguments),
             "glob_files" or "grep_files" or "list_directory" => AssessDirectoryRead(toolName, arguments),
             "shell" or "execute_command" => AssessShell(arguments),
             _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) => ToRiskAssessment(_evaluator.EvaluateMcpTool(toolName), $"MCP tool: {toolName}"),
@@ -213,6 +214,34 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         }
 
         return ToRiskAssessment(result, $"Delete file: {TruncatePath(path)}", RiskLevel.High);
+    }
+
+    // A move deletes its source and writes its destination: each answers to its own rules, and the stricter verdict wins.
+    private RiskAssessment AssessMove(IDictionary<string, object?>? arguments)
+    {
+        var source = GetStringArgument(arguments, "source");
+        var destination = GetStringArgument(arguments, "destination");
+        if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(destination))
+        {
+            return RiskAssessment.Risky(RiskLevel.High, "Move operation with unknown path");
+        }
+
+        var removed = AssessDelete(new Dictionary<string, object?> { ["path"] = source });
+        var written = AssessWrite(new Dictionary<string, object?> { ["path"] = destination });
+        return Stricter(removed, written);
+    }
+
+    private static RiskAssessment Stricter(RiskAssessment a, RiskAssessment b)
+    {
+        static int Weight(RiskAssessment r) => r.Verdict switch
+        {
+            PermissionAction.Deny => 2,
+            _ when r.IsRisky => 1,
+            _ => 0,
+        };
+
+        var (wa, wb) = (Weight(a), Weight(b));
+        return wa != wb ? (wa > wb ? a : b) : (a.Level >= b.Level ? a : b);
     }
 
     private RiskAssessment AssessShell(IDictionary<string, object?>? arguments)

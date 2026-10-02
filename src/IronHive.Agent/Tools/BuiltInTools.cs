@@ -37,6 +37,8 @@ public static class BuiltInTools
         {
             AIFunctionFactory.Create(tools.ReadFile),
             AIFunctionFactory.Create(tools.WriteFile),
+            AIFunctionFactory.Create(tools.DeleteFile),
+            AIFunctionFactory.Create(tools.MoveFile),
             AIFunctionFactory.Create(tools.ListDirectory),
             AIFunctionFactory.Create(tools.GlobFiles),
             AIFunctionFactory.Create(tools.GrepFiles),
@@ -171,6 +173,100 @@ public class ToolProvider
         catch (Exception ex)
         {
             return $"Error writing file: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Deletes a file.
+    /// </summary>
+    /// <remarks>
+    /// Not a write: <see cref="FileToolOptions.WriteInterceptor"/> wraps writes and does not run here. The default
+    /// tool-call policy judges it as a delete (<c>delete_file</c>).
+    /// </remarks>
+    /// <param name="path">Relative or absolute path to the file to delete.</param>
+    [Description("Delete a file. Does not delete directories.")]
+    public string DeleteFile(
+        [Description("Path to the file to delete (relative to working directory or absolute)")] string path)
+    {
+        if (!TryResolvePath(path, out var fullPath, out var refusal))
+        {
+            return refusal;
+        }
+
+        if (Directory.Exists(fullPath))
+        {
+            return $"Error: '{path}' is a directory. DeleteFile deletes files only.";
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            return $"Error: File not found: {path}";
+        }
+
+        try
+        {
+            File.Delete(fullPath);
+            return $"Successfully deleted file: {path}";
+        }
+        catch (Exception ex)
+        {
+            return $"Error deleting file: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Moves or renames a file.
+    /// </summary>
+    /// <remarks>
+    /// Not a write: <see cref="FileToolOptions.WriteInterceptor"/> does not run here. The default tool-call policy judges
+    /// the source as a delete and the destination as an edit (<c>move_file</c>), and takes the stricter verdict.
+    /// </remarks>
+    /// <param name="source">Relative or absolute path of the file to move.</param>
+    /// <param name="destination">Relative or absolute path the file moves to, including its file name.</param>
+    /// <param name="overwrite">Replace a file already at <paramref name="destination"/>.</param>
+    [Description("Move or rename a file. Refuses to replace an existing file unless overwrite is true.")]
+    public string MoveFile(
+        [Description("Path of the file to move (relative to working directory or absolute)")] string source,
+        [Description("New path of the file, including its file name (relative to working directory or absolute)")] string destination,
+        [Description("If true, replace a file already at the destination")] bool overwrite = false)
+    {
+        if (!TryResolvePath(source, out var sourcePath, out var refusal)
+            || !TryResolvePath(destination, out var destinationPath, out refusal))
+        {
+            return refusal;
+        }
+
+        if (!File.Exists(sourcePath))
+        {
+            return Directory.Exists(sourcePath)
+                ? $"Error: '{source}' is a directory. MoveFile moves files only."
+                : $"Error: File not found: {source}";
+        }
+
+        if (Directory.Exists(destinationPath))
+        {
+            return $"Error: '{destination}' is a directory. Give the destination path including the file name.";
+        }
+
+        if (File.Exists(destinationPath) && !overwrite)
+        {
+            return $"Error: '{destination}' already exists. Pass overwrite=true to replace it.";
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.Move(sourcePath, destinationPath, overwrite);
+            return $"Successfully moved file: {source} -> {destination}";
+        }
+        catch (Exception ex)
+        {
+            return $"Error moving file: {ex.Message}";
         }
     }
 

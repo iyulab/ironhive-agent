@@ -87,6 +87,29 @@ public class FileToolBoundaryTests : IDisposable
     }
 
     [Fact]
+    public void DeleteFile_OutsideTheRoots_DeletesNothing()
+    {
+        var confined = _confined.DeleteFile("../outside/secret.txt");
+
+        Assert.Contains("outside the directories", confined, StringComparison.Ordinal);
+        Assert.True(File.Exists(_secret));
+    }
+
+    [Fact]
+    public void MoveFile_OutOfOrIntoTheOutside_IsRefused_AndMovesNothing()
+    {
+        var into = _confined.MoveFile("src/inside.txt", "../outside/taken.txt");
+        var outOf = _confined.MoveFile("../outside/secret.txt", "src/taken.txt");
+
+        Assert.Contains("outside the directories", into, StringComparison.Ordinal);
+        Assert.Contains("outside the directories", outOf, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(_work, "src", "inside.txt")));
+        Assert.True(File.Exists(_secret));
+        Assert.False(File.Exists(Path.Combine(_outside, "taken.txt")));
+        Assert.False(File.Exists(Path.Combine(_work, "src", "taken.txt")));
+    }
+
+    [Fact]
     public void ListDirectory_OutsideTheRoots_IsRefused()
     {
         Assert.Contains("secret.txt", _open.ListDirectory("../outside"), StringComparison.Ordinal);

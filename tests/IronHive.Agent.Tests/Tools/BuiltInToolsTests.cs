@@ -38,6 +38,57 @@ public class BuiltInToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteFile_RemovesTheFile_AndRefusesAMissingFileOrADirectory()
+    {
+        var file = Path.Combine(_testDir, "gone.txt");
+        await File.WriteAllTextAsync(file, "x", TestContext.Current.CancellationToken);
+        Directory.CreateDirectory(Path.Combine(_testDir, "folder"));
+
+        Assert.StartsWith("Successfully deleted file", _tools.DeleteFile("gone.txt"), StringComparison.Ordinal);
+        Assert.False(File.Exists(file));
+        Assert.StartsWith("Error: File not found", _tools.DeleteFile("gone.txt"), StringComparison.Ordinal);
+        Assert.Contains("is a directory", _tools.DeleteFile("folder"), StringComparison.Ordinal);
+        Assert.True(Directory.Exists(Path.Combine(_testDir, "folder")));
+    }
+
+    [Fact]
+    public async Task MoveFile_Renames_IntoANewDirectory_LeavingNothingBehind()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_testDir, "OrderService.cs"), "class OrderService {}", TestContext.Current.CancellationToken);
+
+        var result = _tools.MoveFile("OrderService.cs", "src/OrderManager.cs");
+
+        Assert.StartsWith("Successfully moved file", result, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_testDir, "OrderService.cs")));
+        Assert.Equal("class OrderService {}", await File.ReadAllTextAsync(Path.Combine(_testDir, "src", "OrderManager.cs"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task MoveFile_RefusesToReplaceAnExistingFile_UnlessToldTo()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_testDir, "a.txt"), "a", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(_testDir, "b.txt"), "b", TestContext.Current.CancellationToken);
+
+        Assert.Contains("already exists", _tools.MoveFile("a.txt", "b.txt"), StringComparison.Ordinal);
+        Assert.Equal("b", await File.ReadAllTextAsync(Path.Combine(_testDir, "b.txt"), TestContext.Current.CancellationToken));
+
+        Assert.StartsWith("Successfully moved file", _tools.MoveFile("a.txt", "b.txt", overwrite: true), StringComparison.Ordinal);
+        Assert.Equal("a", await File.ReadAllTextAsync(Path.Combine(_testDir, "b.txt"), TestContext.Current.CancellationToken));
+        Assert.False(File.Exists(Path.Combine(_testDir, "a.txt")));
+    }
+
+    [Fact]
+    public void MoveFile_RefusesAMissingSource_AndADirectoryDestination()
+    {
+        Directory.CreateDirectory(Path.Combine(_testDir, "dir"));
+        File.WriteAllText(Path.Combine(_testDir, "f.txt"), "f");
+
+        Assert.StartsWith("Error: File not found", _tools.MoveFile("missing.txt", "x.txt"), StringComparison.Ordinal);
+        Assert.Contains("including the file name", _tools.MoveFile("f.txt", "dir"), StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(_testDir, "f.txt")));
+    }
+
+    [Fact]
     public async Task ReadFile_NonExistent_ReturnsError()
     {
         // Act
@@ -174,6 +225,6 @@ public class BuiltInToolsTests : IDisposable
         var tools = BuiltInTools.GetAll(_testDir);
 
         // Assert
-        Assert.Equal(7, tools.Count); // ReadFile, WriteFile, ListDirectory, GlobFiles, GrepFiles, ExecuteCommand, ManageTodo
+        Assert.Equal(9, tools.Count); // ReadFile, WriteFile, DeleteFile, MoveFile, ListDirectory, GlobFiles, GrepFiles, ExecuteCommand, ManageTodo
     }
 }

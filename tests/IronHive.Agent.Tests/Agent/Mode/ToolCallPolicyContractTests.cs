@@ -156,6 +156,24 @@ public class ToolCallPolicyContractTests
     }
 
     [Fact]
+    public void Move_AsksLikeADelete_ByDefault_AndTakesTheStricterOfSourceAndDestination()
+    {
+        var args = new Dictionary<string, object?> { ["source"] = "src/a.cs", ["destination"] = "src/b.cs" };
+
+        Assert.Equal(PermissionAction.Ask, new ToolCallPolicy(PermissionConfig.CreateDefault()).Evaluate("MoveFile", args).Verdict);
+
+        var config = PermissionConfig.CreateDefault();
+        config.AskBeforeDelete = false;
+        Assert.Equal(PermissionAction.Allow, new ToolCallPolicy(config).Evaluate("move_file", args).Verdict);
+
+        config.Edit.Add(new PermissionRule { Pattern = "src/b.cs", Action = PermissionAction.Deny, Priority = 50 });
+        Assert.Equal(PermissionAction.Deny, new ToolCallPolicy(config).Evaluate("move_file", args).Verdict);
+
+        var noPaths = new ToolCallPolicy(config).Evaluate("move_file", new Dictionary<string, object?> { ["source"] = "src/a.cs" });
+        Assert.True(noPaths.IsRisky);
+    }
+
+    [Fact]
     public void Delete_ThatTheEditRulesDeny_StaysDenied_WhateverAskBeforeDeleteSays()
     {
         var config = PermissionConfig.CreateDefault();
