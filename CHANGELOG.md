@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.42.0] - Unreleased
+
+### Changed
+- **Masking inside one turn is driven by size, so short results no longer push out the reads still in use.**
+  `CompactionConfig.ObservationMaskingProtectedRounds` counted tool rounds: in a turn that read several sources and then
+  wrote one output per source, each write round (answering "ok") pushed the reads out, and the model wrote from
+  placeholders. It is replaced by `ObservationMaskingProtectedTokens`, a token budget measured from the newest result
+  back (with the manager's token counter): the results that fit are sent whole, older ones are masked, and the newest
+  round's results are always whole. A result once masked stays masked with the same text as rounds are added.
+  **Breaking** — **Migration:** replace `ObservationMaskingProtectedRounds = N` with
+  `ObservationMaskingProtectedTokens` set to the room you want for recent results — for a known window, a fraction of
+  it (for example a quarter); without one, a fixed size such as 8,000. `new ObservationMasker(…, protectedRounds)`
+  becomes `new ObservationMasker(…, protectedTokens, tokenCounter)`.
+- **A masked result names the call that produced it and says how to get it back.** The placeholder was
+  `[Masked: tool result, N chars, ~M lines]`; it now repeats the call's arguments (cut at 200 characters) and says the
+  content is no longer visible and that the tool can be called again with the same arguments — a model that needs it
+  re-reads instead of guessing. This applies to masking across user turns too.
+
 ## [0.41.0] - 2026-10-03
 
 ### Added

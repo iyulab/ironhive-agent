@@ -14,8 +14,8 @@ namespace IronHive.Agent.Context;
 /// <see cref="FunctionInvokingChatClient"/>, which re-sends the growing message list on each round — out of the loop's
 /// reach. Placed <b>inside</b> function invocation, this client sees each of those calls, so a turn made of one user
 /// message and many tool rounds (reading a long document, walking a folder) is reduced on every round, not only before
-/// the first. With <see cref="CompactionConfig.ObservationMaskingProtectedRounds"/> set, older rounds' results are masked
-/// inside the turn. Only the request sent to the model is reduced; the history the caller keeps is unchanged. No LLM call
+/// the first. With <see cref="CompactionConfig.ObservationMaskingProtectedTokens"/> set, results older than the budget are
+/// masked inside the turn. Only the request sent to the model is reduced; the history the caller keeps is unchanged. No LLM call
 /// is made here — summarizing compaction stays with the loop's once-per-turn preparation.
 /// </para>
 /// <para>

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -5,13 +7,25 @@ namespace IronHive.Agent.Context;
 /// <summary>
 /// Masks old tool observation results with compact placeholders to reduce context window usage.
 /// Protects recent user turns from masking, only replacing older tool results — and, when
-/// <c>protectedRounds</c> is set, also the tool results of older tool rounds inside those turns.
+/// <c>protectedTokens</c> is set, also the tool results inside those turns that no longer fit a size budget.
 /// </summary>
+/// <remarks>
+/// A placeholder names the call that produced the result (the tool and its arguments) and says the content is no longer
+/// visible, so a model that needs it again can re-issue the same call instead of working from memory. It depends only on
+/// the call and the result, so the same result is masked to the same text on every request.
+/// </remarks>
 public class ObservationMasker
 {
+    /// <summary>Longest argument text a placeholder repeats; longer arguments are cut with an ellipsis.</summary>
+    internal const int MaxArgumentsLength = 200;
+
+    // One line, so a placeholder repeats the call as the model wrote it rather than spread over several lines.
+    private static readonly JsonSerializerOptions ArgumentsJson = new(AIJsonUtilities.DefaultOptions) { WriteIndented = false };
+
     private readonly int _protectedTurns;
     private readonly int _minimumResultLength;
-    private readonly int? _protectedRounds;
+    private readonly int? _protectedTokens;
+    private readonly IContextTokenCounter? _tokenCounter;
 
     /// <summary>
     /// Creates a new observation masker.
@@ -25,32 +39,43 @@ public class ObservationMasker
     /// Minimum result character length to trigger masking. Results shorter than this are kept as-is.
     /// Default: 200.
     /// </param>
-    /// <param name="protectedRounds">
-    /// Number of recent tool rounds to protect, counted from the end of the history across turn boundaries.
-    /// A "round" is an assistant message that calls tools plus the tool results that answer it. When set, a tool
-    /// result older than the last <paramref name="protectedRounds"/> rounds is masked even inside a protected turn —
-    /// so one user message followed by many tool rounds (reading a long document, walking a folder) keeps only its
-    /// recent results at full size. The calls themselves stay, so the model still knows what it read. Default:
-    /// <c>null</c> (off — only user turns protect).
+    /// <param name="protectedTokens">
+    /// Size budget, in tokens, for the most recent tool results, measured from the newest result back across turn
+    /// boundaries. When set, the results that fit the budget stay whole and every older result is masked — even inside a
+    /// protected turn — so one user message followed by many tool rounds (reading a long document, walking a folder) keeps
+    /// only as much recent output at full size as the budget allows. Small results cost little, so a round of short
+    /// results (a write that answers "ok") does not push out a larger result before it. The results of the newest round
+    /// are always kept whole, even when they alone exceed the budget. The calls themselves stay, so the model still knows
+    /// what it read. Default: <c>null</c> (off — only user turns protect). Requires <paramref name="tokenCounter"/>.
     /// </param>
-    public ObservationMasker(int protectedTurns = 3, int minimumResultLength = 200, int? protectedRounds = null)
+    /// <param name="tokenCounter">Counts the tokens of each result against <paramref name="protectedTokens"/>.</param>
+    /// <exception cref="ArgumentException"><paramref name="protectedTokens"/> is set without a <paramref name="tokenCounter"/>.</exception>
+    public ObservationMasker(
+        int protectedTurns = 3, int minimumResultLength = 200, int? protectedTokens = null,
+        IContextTokenCounter? tokenCounter = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(protectedTurns);
         ArgumentOutOfRangeException.ThrowIfNegative(minimumResultLength);
-        if (protectedRounds is { } rounds)
+        if (protectedTokens is { } tokens)
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(rounds, nameof(protectedRounds));
+            ArgumentOutOfRangeException.ThrowIfNegative(tokens, nameof(protectedTokens));
+            if (tokenCounter is null)
+            {
+                throw new ArgumentException(
+                    "A token budget (protectedTokens) needs a token counter to measure results against it.", nameof(tokenCounter));
+            }
         }
 
         _protectedTurns = protectedTurns;
         _minimumResultLength = minimumResultLength;
-        _protectedRounds = protectedRounds;
+        _protectedTokens = protectedTokens;
+        _tokenCounter = tokenCounter;
     }
 
     /// <summary>
     /// Masks old tool observations in the history.
-    /// Recent turns (defined by <see cref="_protectedTurns"/>) are preserved.
-    /// Older tool results exceeding <see cref="_minimumResultLength"/> are replaced with compact placeholders.
+    /// Results in the protected user turns — and, with a token budget, within the budget — are preserved.
+    /// Other tool results of at least the minimum length are replaced with compact placeholders.
     /// </summary>
     /// <param name="history">The conversation history.</param>
     /// <returns>History with old observations masked, or the original history if nothing was masked.</returns>
@@ -61,53 +86,42 @@ public class ObservationMasker
             return history;
         }
 
-        // Build callId → tool name mapping from FunctionCallContent in assistant messages
-        var toolNameMap = BuildToolNameMap(history);
-
-        // Find the boundary index where protection starts: the later of the user-turn boundary and, when set,
-        // the tool-round boundary (a round inside a protected turn is still masked once it is old enough).
-        var protectedStartIndex = FindProtectedStartIndex(history);
-        if (_protectedRounds is { } rounds)
-        {
-            protectedStartIndex = Math.Max(protectedStartIndex, FindProtectedRoundStartIndex(history, rounds));
-        }
-
-        // If everything is protected, return as-is
-        if (protectedStartIndex <= 0)
+        var turnStartIndex = FindProtectedStartIndex(history);
+        var overBudget = _protectedTokens is { } budget ? FindResultsOverBudget(history, budget) : null;
+        if (turnStartIndex <= 0 && (overBudget is null || overBudget.Count == 0))
         {
             return history;
         }
 
-        // Mask old tool results
+        var calls = BuildCallMap(history);
         var result = new List<ChatMessage>(history.Count);
         var anyMasked = false;
 
         for (var i = 0; i < history.Count; i++)
         {
-            if (i >= protectedStartIndex || history[i].Role != ChatRole.Tool)
+            var message = history[i];
+            if (message.Role != ChatRole.Tool)
             {
-                result.Add(history[i]);
+                result.Add(message);
+                continue;
             }
-            else
-            {
-                var masked = MaskToolMessage(history[i], toolNameMap);
-                result.Add(masked);
-                if (!ReferenceEquals(masked, history[i]))
-                {
-                    anyMasked = true;
-                }
-            }
+
+            var maskAll = i < turnStartIndex;
+            var masked = MaskToolMessage(
+                message, calls, frc => maskAll || (overBudget is not null && overBudget.Contains(frc)));
+            result.Add(masked);
+            anyMasked |= !ReferenceEquals(masked, message);
         }
 
         return anyMasked ? result : history;
     }
 
     /// <summary>
-    /// Builds a mapping from CallId to tool name by scanning FunctionCallContent in assistant messages.
+    /// Maps each call id to the call that carries it, from the FunctionCallContent in assistant messages.
     /// </summary>
-    private static Dictionary<string, string> BuildToolNameMap(IReadOnlyList<ChatMessage> history)
+    private static Dictionary<string, FunctionCallContent> BuildCallMap(IReadOnlyList<ChatMessage> history)
     {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var map = new Dictionary<string, FunctionCallContent>(StringComparer.Ordinal);
 
         foreach (var message in history)
         {
@@ -120,7 +134,7 @@ public class ObservationMasker
             {
                 if (content is FunctionCallContent fcc && fcc.CallId is not null)
                 {
-                    map[fcc.CallId] = fcc.Name;
+                    map[fcc.CallId] = fcc;
                 }
             }
         }
@@ -158,102 +172,130 @@ public class ObservationMasker
     }
 
     /// <summary>
-    /// Finds the index of the assistant message that opens the oldest protected tool round (counting rounds —
-    /// assistant messages that call tools — from the end). Fewer rounds than <paramref name="rounds"/>: 0.
+    /// Walks the tool results from the newest back, summing their tokens. The first result that would take the sum past
+    /// <paramref name="budget"/>, and every result before it, is over budget. The newest round's results (those after the
+    /// last assistant message that calls tools) are always kept and counted. Because the walk starts from the end, a
+    /// result that is over budget stays over budget as later rounds are added.
     /// </summary>
-    private static int FindProtectedRoundStartIndex(IReadOnlyList<ChatMessage> history, int rounds)
+    private HashSet<FunctionResultContent> FindResultsOverBudget(IReadOnlyList<ChatMessage> history, int budget)
     {
-        if (rounds <= 0)
-        {
-            return history.Count;
-        }
-
-        var roundsFound = 0;
+        var over = new HashSet<FunctionResultContent>(ReferenceEqualityComparer.Instance);
+        var newestRoundStart = 0;
         for (var i = history.Count - 1; i >= 0; i--)
         {
             if (history[i].Role == ChatRole.Assistant && history[i].Contents.OfType<FunctionCallContent>().Any())
             {
-                roundsFound++;
-                if (roundsFound >= rounds)
+                newestRoundStart = i;
+                break;
+            }
+        }
+
+        var used = 0;
+        var exceeded = false;
+        for (var i = history.Count - 1; i >= 0; i--)
+        {
+            if (history[i].Role != ChatRole.Tool)
+            {
+                continue;
+            }
+
+            var contents = history[i].Contents;
+            for (var c = contents.Count - 1; c >= 0; c--)
+            {
+                if (contents[c] is not FunctionResultContent frc)
                 {
-                    return i;
+                    continue;
+                }
+
+                if (exceeded)
+                {
+                    over.Add(frc);
+                    continue;
+                }
+
+                used += _tokenCounter!.CountTokens(ResultText(frc));
+                if (used > budget && i < newestRoundStart)
+                {
+                    exceeded = true;
+                    over.Add(frc);
                 }
             }
         }
 
-        return 0;
+        return over;
     }
 
     /// <summary>
-    /// Masks a single tool message by replacing large FunctionResultContent with placeholders.
+    /// Masks the results of a tool message that <paramref name="shouldMask"/> selects and that are at least the minimum
+    /// length. Returns the message itself when nothing in it is masked.
     /// </summary>
-    private ChatMessage MaskToolMessage(ChatMessage toolMessage, Dictionary<string, string> toolNameMap)
+    private ChatMessage MaskToolMessage(
+        ChatMessage toolMessage, Dictionary<string, FunctionCallContent> calls, Func<FunctionResultContent, bool> shouldMask)
     {
         if (toolMessage.Contents is null || toolMessage.Contents.Count == 0)
         {
             return toolMessage;
         }
 
-        // Check if any result needs masking
-        var needsMasking = false;
-        foreach (var content in toolMessage.Contents)
+        List<AIContent>? maskedContents = null;
+        for (var i = 0; i < toolMessage.Contents.Count; i++)
         {
-            if (content is FunctionResultContent frc)
+            var content = toolMessage.Contents[i];
+            if (content is FunctionResultContent frc && shouldMask(frc))
             {
-                var resultText = frc.Result?.ToString() ?? string.Empty;
+                var resultText = ResultText(frc);
                 if (resultText.Length >= _minimumResultLength)
                 {
-                    needsMasking = true;
-                    break;
+                    maskedContents ??= [.. toolMessage.Contents.Take(i)];
+                    maskedContents.Add(new FunctionResultContent(frc.CallId, Placeholder(frc, resultText, calls)));
+                    continue;
                 }
             }
+
+            maskedContents?.Add(content);
         }
 
-        if (!needsMasking)
-        {
-            return toolMessage;
-        }
-
-        // Create masked contents
-        var maskedContents = new List<AIContent>(toolMessage.Contents.Count);
-
-        foreach (var content in toolMessage.Contents)
-        {
-            if (content is FunctionResultContent frc)
-            {
-                var resultText = frc.Result?.ToString() ?? string.Empty;
-                if (resultText.Length >= _minimumResultLength)
-                {
-                    var toolName = ResolveToolName(frc, toolNameMap);
-                    var lineCount = resultText.Count(c => c == '\n') + 1;
-                    var placeholder = string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                        $"[Masked: {toolName} result, {resultText.Length:N0} chars, ~{lineCount} lines]");
-                    maskedContents.Add(new FunctionResultContent(frc.CallId, placeholder));
-                }
-                else
-                {
-                    maskedContents.Add(content);
-                }
-            }
-            else
-            {
-                maskedContents.Add(content);
-            }
-        }
-
-        return new ChatMessage(ChatRole.Tool, maskedContents);
+        return maskedContents is null ? toolMessage : new ChatMessage(ChatRole.Tool, maskedContents);
     }
 
+    private static string ResultText(FunctionResultContent frc) => frc.Result?.ToString() ?? string.Empty;
+
     /// <summary>
-    /// Resolves the tool name from the callId→name mapping built from FunctionCallContent.
+    /// The text that replaces a masked result: the call that produced it, how large it was, and that it can be fetched
+    /// again with the same call.
     /// </summary>
-    private static string ResolveToolName(FunctionResultContent frc, Dictionary<string, string> toolNameMap)
+    private static string Placeholder(
+        FunctionResultContent frc, string resultText, Dictionary<string, FunctionCallContent> calls)
     {
-        if (frc.CallId is not null && toolNameMap.TryGetValue(frc.CallId, out var name))
+        var call = frc.CallId is not null && calls.TryGetValue(frc.CallId, out var found) ? found : null;
+        var toolName = call?.Name ?? "tool";
+        var arguments = FormatArguments(call);
+        var lineCount = resultText.Count(c => c == '\n') + 1;
+        var invocation = arguments.Length > 0 ? $"{toolName} {arguments}" : toolName;
+        var again = call is not null
+            ? $"call {toolName} again with the same arguments if you need it"
+            : "repeat the call that produced it if you need it";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"[Masked: {invocation} result, {resultText.Length:N0} chars, ~{lineCount} lines. The content is no longer visible here; {again}.]");
+    }
+
+    private static string FormatArguments(FunctionCallContent? call)
+    {
+        if (call?.Arguments is not { Count: > 0 } arguments)
         {
-            return name;
+            return string.Empty;
         }
 
-        return "tool";
+        string text;
+        try
+        {
+            text = JsonSerializer.Serialize(arguments, ArgumentsJson.GetTypeInfo(typeof(IDictionary<string, object?>)));
+        }
+        catch (Exception ex) when (ex is NotSupportedException or JsonException or InvalidOperationException)
+        {
+            return string.Empty;
+        }
+
+        return text.Length <= MaxArgumentsLength ? text : string.Concat(text.AsSpan(0, MaxArgumentsLength), "…");
     }
 }

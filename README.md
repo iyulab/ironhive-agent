@@ -5,7 +5,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 ## Features
 
 - **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs)). Every turn says why it ended — `AgentResponse.StopReason` / `TurnRecord.StopReason` (`Completed` · `OutputLimit` · `ContentFilter` · `ToolTerminated` · `AwaitingHostTools` · `StepLimit`); `AgentOptions.MaxTurnDuration` caps one turn's wall-clock time (past it the turn throws `TimeoutException`)
-- **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedRounds` per tool round inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
+- **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold), goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedTokens` by a size budget inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **Tool invocation pipeline**: every tool call runs through ordered `IToolInvocationMiddleware` steps and every result through `IToolResultMiddleware` steps — on a chat client, in the Ironbees adapter, and for results a host supplies before `ContinueAsync`. Turn it on with `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)` in place of `UseFunctionInvocation()` (`AddIronHiveAgent` registers the pipeline with its default loop guards; `AddIronHiveAgentApprovalGate()` adds the permission gate; `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()` add your own). See [Tool Invocation Pipeline](#tool-invocation-pipeline)
 - **MCP Plugins**: Model Context Protocol server connections, hot reload; supports Stdio and HTTP/SSE transports; `IsHealthyAsync` for liveness checks
@@ -661,13 +661,13 @@ wrapper around `AgentLoop`.
 ### Long single-message tasks
 
 One user message followed by many tool rounds — read a document section by section, walk a folder — is one user turn,
-so masking by user turns keeps every result of it at full size until the window overflows. Protect recent **rounds**
-instead, and let every model call of the turn pass through the context manager:
+so masking by user turns keeps every result of it at full size until the window overflows. Give recent results a **size
+budget** instead, and let every model call of the turn pass through the context manager:
 
 ```csharp
 var contextManager = ContextManager.ForModel("gpt-4o", new CompactionConfig
 {
-    ObservationMaskingProtectedRounds = 3,   // older rounds' results become "[Masked: read_section result, …]"
+    ObservationMaskingProtectedTokens = 8_000,   // results past the newest 8k tokens become "[Masked: read_section {…} result, …]"
 });
 var client = chatClient.AsBuilder()
     .UseFunctionInvocation()
@@ -680,8 +680,13 @@ Building the pipeline before the manager exists (a `ChatClientFactory` decorator
 Add `.UseToolRoundContext()` with no argument after `UseFunctionInvocation()`; the loop binds its own `ContextManager`
 when it is constructed over that client.
 
-The tool calls stay, so the model still knows what it read; only results longer than
-`ObservationMaskingMinResultLength` are replaced, and only in the request — `History` keeps them in full.
+The budget is size, not rounds: a round of short results (a write answering "ok") costs little and does not push out the
+larger reads before it, and the newest round's results are always sent whole. Pick the budget from the window when you
+know it (a quarter of it, say) and a fixed size when you do not. A placeholder names the call — tool and arguments — and
+says the content is no longer visible and that the tool can be called again with the same arguments, so a model that needs
+it re-reads rather than guesses; a masked result keeps the same text on later rounds. The tool calls stay, so the model
+still knows what it read; only results longer than `ObservationMaskingMinResultLength` are replaced, and only in the
+request — `History` keeps them in full.
 `ToolRoundContextChatClient` also applies tool-result compaction (`EnableToolResultCompaction`) per round. It makes no LLM
 call of its own, except to compact after an overflow (below); summarizing compaction otherwise runs once per turn in the loop.
 

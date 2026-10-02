@@ -475,7 +475,7 @@ public class ContextManager
             EnableObservationMasking = source.EnableObservationMasking,
             ObservationMaskingProtectedTurns = source.ObservationMaskingProtectedTurns,
             ObservationMaskingMinResultLength = source.ObservationMaskingMinResultLength,
-            ObservationMaskingProtectedRounds = source.ObservationMaskingProtectedRounds,
+            ObservationMaskingProtectedTokens = source.ObservationMaskingProtectedTokens,
             GoalReminder = source.GoalReminder,
             EnableToolResultCompaction = source.EnableToolResultCompaction,
             MaxToolResultChars = source.MaxToolResultChars,
@@ -568,7 +568,8 @@ public class ContextManager
             ? new ObservationMasker(
                 config.ObservationMaskingProtectedTurns,
                 config.ObservationMaskingMinResultLength,
-                config.ObservationMaskingProtectedRounds)
+                config.ObservationMaskingProtectedTokens,
+                tokenCounter)
             : null;
 
         return new ContextManager(

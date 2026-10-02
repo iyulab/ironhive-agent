@@ -66,15 +66,17 @@ public class CompactionConfig
     public int ObservationMaskingMinResultLength { get; set; } = 200;
 
     /// <summary>
-    /// Number of recent tool rounds to protect from observation masking, counted across turn boundaries — a round is
-    /// an assistant message that calls tools plus the results that answer it. <c>null</c> (default): off, only user
-    /// turns protect. When set, tool results older than the last N rounds are masked even inside a protected turn, so
-    /// a long single-message task (read a document section by section, walk a folder) keeps only its recent results at
-    /// full size. Masking inside one turn needs the model calls of that turn to pass through the context manager —
-    /// add <see cref="ToolRoundContextChatClient"/> inside function invocation
-    /// (<c>.UseFunctionInvocation().UseToolRoundContext(contextManager)</c>).
+    /// Size budget, in tokens, for the most recent tool results, measured from the newest result back across turn
+    /// boundaries. <c>null</c> (default): off, only user turns protect. When set, the results that fit the budget are sent
+    /// whole and every older result is masked even inside a protected turn, so a long single-message task (read a document
+    /// section by section, walk a folder) keeps only as much recent output at full size as the budget allows. The unit is
+    /// size, not rounds: a round of short results (a write that answers "ok") costs little and does not push out a larger
+    /// result before it. The newest round's results are always sent whole. A masked result names the call that produced it
+    /// and says it can be fetched again with the same call. Masking inside one turn needs the model calls of that turn to
+    /// pass through the context manager — add <see cref="ToolRoundContextChatClient"/> inside function invocation
+    /// (<c>.UseFunctionInvocation().UseToolRoundContext(contextManager)</c>). Measured with the manager's token counter.
     /// </summary>
-    public int? ObservationMaskingProtectedRounds { get; set; }
+    public int? ObservationMaskingProtectedTokens { get; set; }
 
     /// <summary>
     /// Goal reminder options for a context manager built from this config (<see cref="ContextManager.ForModel(string, CompactionConfig, Microsoft.Extensions.AI.IChatClient?)"/>).
