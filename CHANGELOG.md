@@ -14,6 +14,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   growth re-read the prompt; on a hybrid or recurrent model, all of it, with no cache at all until the set stopped
   growing. Lower-ranked tools a held request would have added are not sent. **Migration:** none for callers; a trace
   that needs them reads the new `ToolRetrievalResult.Withheld`.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.46.0 -> 0.46.1.
 
 ### Added
 - **`ToolRetrievalResult.Withheld`** — the tools a request selected but did not send because sticky selection held the
