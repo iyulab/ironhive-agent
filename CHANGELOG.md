@@ -15,6 +15,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   growing. Lower-ranked tools a held request would have added are not sent. **Migration:** none for callers; a trace
   that needs them reads the new `ToolRetrievalResult.Withheld`.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.46.0 -> 0.46.1.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.10 -> 0.21.11, `Ironbees.Core` 0.21.10 -> 0.21.11, `IronProw.Core` 0.12.2 -> 0.13.0.
 
 ### Added
 - **`ToolRetrievalResult.Withheld`** — the tools a request selected but did not send because sticky selection held the
