@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.38.0] - Unreleased
+
+### Added
+- **`EditFile` built-in tool — change part of a file without rewriting it.** `EditFile(path, oldText, newText,
+  replaceAll = false)` replaces exact text. `oldText` must occur exactly once unless `replaceAll`; zero or several matches
+  are an error that leaves the file untouched (a match that differs only in whitespace is named as such). Line endings in
+  the arguments are taken as the file's own, and the file's encoding and byte-order mark are kept, so only the replaced
+  text changes. Measured before it existed: changing one value in a 1,400-line file through `WriteFile` took a 27B model
+  a median of 243 s and 18k output tokens. It honours `FileToolOptions.AllowedRoots`, goes through the write
+  interceptor, and the default tool-call policy judges it as an edit; planning mode leaves it out.
+
 ## [0.37.0] - 2026-10-02
 
 ### Changed

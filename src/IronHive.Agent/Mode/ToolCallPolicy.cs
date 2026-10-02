@@ -133,7 +133,7 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         return BuiltInToolNames.Normalize(toolName) switch
         {
             "read_file" => AssessRead(arguments),
-            "write_file" => AssessWrite(arguments),
+            "write_file" or "edit_file" => AssessWrite(arguments),
             "delete_file" => AssessDelete(arguments),
             "move_file" => AssessMove(arguments),
             "glob_files" or "grep_files" or "list_directory" => AssessDirectoryRead(toolName, arguments),

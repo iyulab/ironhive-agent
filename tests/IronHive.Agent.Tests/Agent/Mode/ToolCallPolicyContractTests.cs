@@ -156,6 +156,21 @@ public class ToolCallPolicyContractTests
     }
 
     [Fact]
+    public void Edit_IsJudgedLikeAWrite_ByTheEditRules()
+    {
+        var args = new Dictionary<string, object?> { ["path"] = "src/a.cs", ["oldText"] = "x", ["newText"] = "y" };
+        var config = PermissionConfig.CreateDefault();
+        var write = new ToolCallPolicy(config).Evaluate("WriteFile", args);
+
+        Assert.Equal(write.Verdict, new ToolCallPolicy(config).Evaluate("EditFile", args).Verdict);
+        Assert.Equal(write.Verdict, new ToolCallPolicy(config).Evaluate("edit_file", args).Verdict);
+
+        config.Edit.Add(new PermissionRule { Pattern = "src/a.cs", Action = PermissionAction.Deny, Priority = 50 });
+        Assert.Equal(PermissionAction.Deny, new ToolCallPolicy(config).Evaluate("EditFile", args).Verdict);
+        Assert.True(new ToolCallPolicy(config).Evaluate("EditFile", new Dictionary<string, object?>()).IsRisky);
+    }
+
+    [Fact]
     public void Move_AsksLikeADelete_ByDefault_AndTakesTheStricterOfSourceAndDestination()
     {
         var args = new Dictionary<string, object?> { ["source"] = "src/a.cs", ["destination"] = "src/b.cs" };

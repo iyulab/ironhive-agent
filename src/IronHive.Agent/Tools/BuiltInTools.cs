@@ -37,6 +37,7 @@ public static class BuiltInTools
         {
             AIFunctionFactory.Create(tools.ReadFile),
             AIFunctionFactory.Create(tools.WriteFile),
+            AIFunctionFactory.Create(tools.EditFile),
             AIFunctionFactory.Create(tools.DeleteFile),
             AIFunctionFactory.Create(tools.MoveFile),
             AIFunctionFactory.Create(tools.ListDirectory),
@@ -174,6 +175,133 @@ public class ToolProvider
         {
             return $"Error writing file: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Replaces exact text in an existing file.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The alternative is <see cref="WriteFile"/> with the whole content: a one-line change to a 1,400-line file then costs
+    /// the model the whole file in output tokens (measured: minutes and ~18k tokens), and a model that mis-copies any other
+    /// line, or runs out of output, damages the file.
+    /// </para>
+    /// <para>
+    /// <paramref name="oldText"/> must occur exactly once unless <paramref name="replaceAll"/> — an edit of the wrong
+    /// occurrence is the failure this contract exists to stop. Line endings in <paramref name="oldText"/> and
+    /// <paramref name="newText"/> are taken as the file's own, so a model that sends <c>\n</c> can edit a CRLF file and
+    /// the file keeps CRLF. A write: <see cref="FileToolOptions.WriteInterceptor"/> wraps it, and the default tool-call
+    /// policy judges it as an edit (<c>edit_file</c>).
+    /// </para>
+    /// </remarks>
+    /// <param name="path">Relative or absolute path to the file to edit.</param>
+    /// <param name="oldText">The exact text to replace.</param>
+    /// <param name="newText">The text to put in its place.</param>
+    /// <param name="replaceAll">Replace every occurrence instead of requiring exactly one.</param>
+    [Description("Replace exact text in an existing file. Prefer this over WriteFile for changing part of a file. oldText " +
+                 "must match the file exactly (whitespace included) and occur exactly once - include enough surrounding " +
+                 "lines to make it unique - unless replaceAll is true.")]
+    public async Task<string> EditFile(
+        [Description("Path to the file to edit (relative to working directory or absolute)")] string path,
+        [Description("The exact text to replace, copied from the file")] string oldText,
+        [Description("The text to put in its place")] string newText,
+        [Description("If true, replace every occurrence instead of requiring exactly one")] bool replaceAll = false)
+    {
+        if (!TryResolvePath(path, out var fullPath, out var refusal))
+        {
+            return refusal;
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            return Directory.Exists(fullPath)
+                ? $"Error: '{path}' is a directory. EditFile edits files only."
+                : $"Error: File not found: {path}. EditFile changes an existing file; use WriteFile to create one.";
+        }
+
+        if (string.IsNullOrEmpty(oldText))
+        {
+            return "Error: oldText is empty. Give the exact text to replace, or use WriteFile to write the whole file.";
+        }
+
+        if (new FileInfo(fullPath).Length > MaxFileSize)
+        {
+            return $"Error: File too large ({new FileInfo(fullPath).Length / 1024}KB). Maximum size is {MaxFileSize / 1024}KB.";
+        }
+
+        try
+        {
+            // Keep the file's encoding and byte-order mark: only the replaced text may change.
+            var bytes = await File.ReadAllBytesAsync(fullPath);
+            var (encoding, preamble) = DetectEncoding(bytes);
+            var content = encoding.GetString(bytes, preamble, bytes.Length - preamble);
+            var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var find = ToNewline(oldText, newline);
+            var replacement = ToNewline(newText ?? string.Empty, newline);
+
+            var matches = CountOccurrences(content, find);
+            if (matches == 0)
+            {
+                var loose = CountOccurrences(Collapse(content), Collapse(find));
+                return loose > 0
+                    ? $"Error: oldText was not found in {path} exactly, but text that differs only in whitespace or indentation was. Read the file and copy the text exactly."
+                    : $"Error: oldText was not found in {path}. Read the file and copy the text exactly.";
+            }
+
+            if (matches > 1 && !replaceAll)
+            {
+                return $"Error: oldText occurs {matches} times in {path}. Include more surrounding lines to make it unique, or set replaceAll to replace every occurrence.";
+            }
+
+            var edited = content.Replace(find, replacement, StringComparison.Ordinal);
+            Func<Task> write = () => File.WriteAllTextAsync(fullPath, edited, encoding);
+
+            string? note = null;
+            if (_writeInterceptor is null)
+            {
+                await write();
+            }
+            else
+            {
+                note = await _writeInterceptor.InterceptAsync(fullPath, write);
+            }
+
+            return matches == 1
+                ? $"Successfully edited {path} (1 replacement){note}"
+                : $"Successfully edited {path} ({matches} replacements){note}";
+        }
+        catch (Exception ex)
+        {
+            return $"Error editing file: {ex.Message}";
+        }
+
+        static string ToNewline(string text, string newline) =>
+            text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", newline, StringComparison.Ordinal);
+
+        static string Collapse(string text) =>
+            System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+    }
+
+    // UTF-8 with or without a byte-order mark, or UTF-16 by its mark. Writing back with the returned encoding emits the
+    // same preamble the file had (none for UTF-8 without one).
+    private static (Encoding Encoding, int Preamble) DetectEncoding(byte[] bytes) => bytes switch
+    {
+        [0xEF, 0xBB, 0xBF, ..] => (new UTF8Encoding(encoderShouldEmitUTF8Identifier: true), 3),
+        [0xFF, 0xFE, ..] => (new UnicodeEncoding(bigEndian: false, byteOrderMark: true), 2),
+        [0xFE, 0xFF, ..] => (new UnicodeEncoding(bigEndian: true, byteOrderMark: true), 2),
+        _ => (new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 0),
+    };
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        for (var index = text.IndexOf(value, StringComparison.Ordinal); index >= 0;
+             index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>

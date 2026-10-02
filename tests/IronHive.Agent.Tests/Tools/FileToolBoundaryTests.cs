@@ -96,6 +96,17 @@ public class FileToolBoundaryTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_OutsideTheRoots_ChangesNothing()
+    {
+        var before = File.ReadAllText(_secret);
+
+        var confined = await _confined.EditFile("../outside/secret.txt", before, "changed");
+
+        Assert.Contains("outside the directories", confined, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(_secret));
+    }
+
+    [Fact]
     public void MoveFile_OutOfOrIntoTheOutside_IsRefused_AndMovesNothing()
     {
         var into = _confined.MoveFile("src/inside.txt", "../outside/taken.txt");

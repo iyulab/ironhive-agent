@@ -25,6 +25,7 @@ internal static class BuiltInToolNames
     {
         "ReadFile" => "read_file",
         "WriteFile" => "write_file",
+        "EditFile" => "edit_file",
         "DeleteFile" => "delete_file",
         "MoveFile" => "move_file",
         "ExecuteCommand" => "execute_command",
