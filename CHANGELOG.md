@@ -22,6 +22,15 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   content is no longer visible and that the tool can be called again with the same arguments — a model that needs it
   re-reads instead of guessing. This applies to masking across user turns too.
 
+### Fixed
+- **Token estimates count Korean, Japanese and Chinese text at its own density, and count a message's text once.**
+  `ContextTokenCounter` estimated every text at four characters per token, so CJK text — about one to one and a half
+  characters per token — was counted at a quarter to a third of its size, and every budget and compaction threshold
+  measured with it let that much more through. It now estimates per script with IndexThinking's
+  `ApproximateTokenCounter`. A message's text was also counted twice (its `Text` and again from its `TextContent`);
+  it is counted once, so user and assistant text now reads at about half its previous count (tool results were counted
+  once already), and a conversation of mostly text compacts later than before.
+
 ## [0.41.0] - 2026-10-03
 
 ### Added

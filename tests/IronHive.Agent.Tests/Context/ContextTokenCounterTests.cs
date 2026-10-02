@@ -68,6 +68,42 @@ public class ContextTokenCounterTests
     }
 
     [Fact]
+    public void CountTokens_KoreanText_CountsAboutOneTokenPerCharacterOrTwo()
+    {
+        // A single four-characters-per-token rule counts Korean at a quarter of its size; a budget measured with it
+        // would let four times as much Korean text through as its number says.
+        var counter = new ContextTokenCounter();
+        var korean = string.Concat(Enumerable.Repeat("국가 표준의 하위 항목을 추출합니다", 50));
+        var hangul = korean.Count(c => c is >= '가' and <= '힯');
+
+        var tokens = counter.CountTokens(korean);
+
+        Assert.InRange(tokens, hangul / 2, hangul * 2);
+        Assert.True(tokens > (korean.Length + 3) / 4 * 2, $"{tokens} tokens for {korean.Length} chars");
+    }
+
+    [Fact]
+    public void CountTokens_LatinText_StaysAboutFourCharactersPerToken()
+    {
+        var counter = new ContextTokenCounter();
+        var english = string.Concat(Enumerable.Repeat("Extract every sub-item of the standard. ", 50));
+
+        Assert.InRange(counter.CountTokens(english), english.Length / 6, english.Length / 3);
+    }
+
+    [Fact]
+    public void CountTokens_ChatMessage_CountsItsTextOnce()
+    {
+        // message.Text is the concatenation of its TextContent items — counting both counted the text twice.
+        var counter = new ContextTokenCounter();
+        var text = string.Concat(Enumerable.Repeat("word ", 200));
+
+        var tokens = counter.CountTokens(new ChatMessage(ChatRole.User, text));
+
+        Assert.InRange(tokens - counter.CountTokens(text), 0, 10);
+    }
+
+    [Fact]
     public void MaxContextTokens_Gpt4o_Returns128000()
     {
         var counter = new ContextTokenCounter("gpt-4o");

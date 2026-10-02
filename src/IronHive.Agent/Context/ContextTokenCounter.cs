@@ -1,3 +1,4 @@
+using IndexThinking.Tokenization;
 using Microsoft.Extensions.AI;
 using TokenMeter;
 
@@ -6,6 +7,12 @@ namespace IronHive.Agent.Context;
 /// <summary>
 /// Token counter for chat messages using character-based estimation and TokenMeter model catalog.
 /// </summary>
+/// <remarks>
+/// Text is estimated per script with IndexThinking's <see cref="ApproximateTokenCounter"/>: about four characters per token
+/// for Latin text, and one to one and a half for Korean, Japanese and Chinese — a single four-characters-per-token rule
+/// would count CJK text at a third or a quarter of its size, and every budget measured with it would let that much more
+/// through.
+/// </remarks>
 public class ContextTokenCounter : IContextTokenCounter
 {
     private int _maxContextTokens;
@@ -54,12 +61,8 @@ public class ContextTokenCounter : IContextTokenCounter
     {
         ArgumentNullException.ThrowIfNull(message);
 
+        // Text is counted from its TextContent items below; message.Text is their concatenation, not more text.
         var tokens = MessageOverhead;
-
-        if (!string.IsNullOrEmpty(message.Text))
-        {
-            tokens += EstimateTokens(message.Text);
-        }
 
         foreach (var content in message.Contents)
         {
@@ -106,7 +109,9 @@ public class ContextTokenCounter : IContextTokenCounter
         return tokens + 10;
     }
 
-    private static int EstimateTokens(string text) => (text.Length + 3) / 4;
+    private static readonly ApproximateTokenCounter Estimator = new();
+
+    private static int EstimateTokens(string text) => Estimator.Count(text);
 
     public static ContextTokenCounter ForGpt4o() => new("gpt-4o", 128000);
     public static ContextTokenCounter ForClaude35Sonnet() => new("claude-3.5-sonnet", 200000);
