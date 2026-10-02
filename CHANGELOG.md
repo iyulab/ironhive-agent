@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.36.2] - 2026-10-02
+
+### Changed
+- Re-pinned sibling package(s) `IronProw.Core` 0.12.1 -> 0.12.2, `MemoryIndexer` 0.20.2 -> 0.20.3. No source changes.
+
 ## [0.36.1] - 2026-10-02
 
 ### Fixed
