@@ -225,6 +225,8 @@ public class BuiltInToolsTests : IDisposable
         var tools = BuiltInTools.GetAll(_testDir);
 
         // Assert
-        Assert.Equal(9, tools.Count); // ReadFile, WriteFile, DeleteFile, MoveFile, ListDirectory, GlobFiles, GrepFiles, ExecuteCommand, ManageTodo
+        Assert.Equal(
+            ["ReadFile", "WriteFile", "EditFile", "DeleteFile", "MoveFile", "ListDirectory", "GlobFiles", "GrepFiles", "ExecuteCommand", "ManageTodo"],
+            tools.Select(t => t.Name));
     }
 }
