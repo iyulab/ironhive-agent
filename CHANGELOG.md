@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.39.0] - Unreleased
+
+### Changed
+- **A held tool set changes only for a confident match.** With `ToolRetrievalOptions.StickyToolLimit` on, a request's
+  best-scored tool now changes the carried set only when it scores at least the new
+  `ToolRetrievalOptions.StickyChangeScore` (default 0.7, just under the keyword retriever's name weight — the request
+  covers the tool's whole name, or most of its name and description). Before, the best of whatever was left changed it:
+  a generic follow-up such as "What can you help me with?" still has a best-scored tool, typically just above
+  `MinRelevanceScore`, and each such change re-read the whole prompt on a hybrid-memory model. Pins, exact names and
+  aliases change the set as before; a tool below the bar is reported in `Withheld` with its score. **Migration:** set
+  `StickyChangeScore` to `MinRelevanceScore` (or 0) for the 0.37 rule; with `EmbeddingToolRetriever` tune it together
+  with `MinRelevanceScore`, since its scores are `(cosine + 1) / 2`.
+
 ## [0.38.0] - 2026-10-02
 
 ### Added

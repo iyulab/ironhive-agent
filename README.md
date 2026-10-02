@@ -450,7 +450,9 @@ re-read the whole prompt. `McpPluginManager.GetToolsAsync` lists plugins in name
 is sent again **unchanged** for as long as it serves the request. Chat templates and prompt caches put the tools first,
 so any change to the tool list re-reads the prompt after it — and a hybrid or recurrent model (which can only roll back
 to a saved checkpoint) re-reads all of it. The set changes only when the request needs a tool it lacks: a pin, a tool
-the request names exactly or by alias, or the request's best-scored tool. Then the request's whole selection joins it,
+the request names exactly or by alias, or the request's best-scored tool when it is a confident match — it scores at
+least `StickyChangeScore` (default 0.7; a generic follow-up's best match usually sits just above `MinRelevanceScore`,
+and changing the set for it would cost a full re-read). Then the request's whole selection joins it,
 after the carried tools; when that would exceed the limit, the selection starts over (one cache miss). Lower-ranked
 tools a held request would have added are reported in `ToolRetrievalResult.Withheld`, not sent. `AgentLoop` and
 `ThinkingAgentLoop` carry the list themselves (`ClearHistory` and `InitializeHistory` forget it); a caller driving a

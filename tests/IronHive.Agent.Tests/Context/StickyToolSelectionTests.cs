@@ -77,6 +77,43 @@ public class StickyToolSelectionTests
         Assert.Empty(result.Withheld);
     }
 
+    // A generic follow-up still has a best-scored tool — usually just above the floor. Changing the set for
+    // it costs a full re-read on a hybrid-memory model, so only a confident match (StickyChangeScore) may.
+    [Fact]
+    public async Task AWeakBestNewcomer_DoesNotChangeAHeldSet_AndIsWithheldWithItsScore()
+    {
+        const string query = "the directory please";
+        var fresh = await Retrieve(query, Sticky);
+        Assert.Equal("ListDirectory", BestScored(fresh)); // the request alone would select it …
+        var score = Assert.Single(fresh.Selections, s => s.Name == "ListDirectory").Score!.Value;
+        Assert.InRange(score, Sticky.MinRelevanceScore, Sticky.StickyChangeScore); // … as the best of what is left, not a confident match
+
+        var held = await Retrieve(query, Sticky with { StickyTools = ["ReadFile"] });
+
+        Assert.Equal(["ReadFile"], Names(held));
+        var withheld = Assert.Single(held.Withheld, s => s.Name == "ListDirectory");
+        Assert.Equal(score, withheld.Score);
+    }
+
+    [Fact]
+    public async Task AConfidentBestNewcomer_ChangesAHeldSet()
+    {
+        var result = await Retrieve("list the directory", Sticky with { StickyTools = ["ReadFile"] });
+
+        Assert.True(Assert.Single(result.Selections, s => s.Name == "ListDirectory").Score >= Sticky.StickyChangeScore);
+        Assert.Equal("ReadFile", Names(result)[0]);
+        Assert.Contains("ListDirectory", Names(result));
+    }
+
+    [Fact]
+    public async Task AChangeScoreAtTheFloor_LetsAnySelectedBestNewcomerChangeTheSet()
+    {
+        var result = await Retrieve("the directory please", Sticky with { StickyTools = ["ReadFile"], StickyChangeScore = 0f });
+
+        Assert.Equal("ReadFile", Names(result)[0]);
+        Assert.Contains("ListDirectory", Names(result));
+    }
+
     [Fact]
     public async Task ANewPin_ChangesAHeldSet()
     {

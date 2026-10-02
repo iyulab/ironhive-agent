@@ -44,7 +44,8 @@ public record ToolRetrievalOptions
     /// When greater than 0, the set of tools sent earlier in this conversation (<see cref="StickyTools"/>) is sent
     /// again unchanged, in the order first sent, for as long as it serves the request. It changes only when the
     /// request needs a tool it lacks: a pin, a tool the request names exactly or by a declared alias, or the
-    /// request's best-scored tool. Then this request's whole selection joins it, after the carried tools — or,
+    /// request's best-scored tool when that tool scores at least <see cref="StickyChangeScore"/> (a confident match,
+    /// not merely the best of what is left). Then this request's whole selection joins it, after the carried tools — or,
     /// when that would exceed this many tools, the selection starts over from this request alone. Lower-ranked
     /// tools of a request that does not change the set are reported in <see cref="ToolRetrievalResult.Withheld"/>.
     /// <para>
@@ -57,6 +58,24 @@ public record ToolRetrievalOptions
     /// <para>Default: 0 — off; every request is selected on its own.</para>
     /// </summary>
     public int StickyToolLimit { get; init; }
+
+    /// <summary>
+    /// The score a scored tool the carried set lacks must reach before it may change that set; read only when
+    /// <see cref="StickyToolLimit"/> is greater than 0. Below it the request is served by the carried set and the
+    /// tool is reported in <see cref="ToolRetrievalResult.Withheld"/> with its score. Pins, exact names and declared
+    /// aliases change the set whatever this is.
+    /// <para>
+    /// Every change to the tool block re-reads the prompt, so a held set should change for a real need, not for the
+    /// best of what a generic follow-up ("what can you help me with?") happens to touch — such a request still has a
+    /// best-scored tool, usually just above <see cref="MinRelevanceScore"/>. The default sits just under the
+    /// <see cref="KeywordToolRetriever"/> name weight (0.75): a newcomer clears it when the request covers its whole
+    /// name, or most of its name and description. Same scale as <see cref="MinRelevanceScore"/>; with
+    /// <see cref="EmbeddingToolRetriever"/>, whose scores are <c>(cosine + 1) / 2</c>, tune both together. A value at
+    /// or below <see cref="MinRelevanceScore"/> lets any selected best-scored tool change the set, as before 0.39.
+    /// </para>
+    /// <para>Default: 0.7.</para>
+    /// </summary>
+    public float StickyChangeScore { get; init; } = 0.7f;
 
     /// <summary>
     /// The tools sent earlier in this conversation, in the order first sent; read only when

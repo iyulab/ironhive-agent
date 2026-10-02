@@ -15,7 +15,8 @@ namespace IronHive.Agent.Context;
 /// change to the tool list — a reordering, an added tool — is a re-read of the whole prompt after it; a
 /// hybrid or recurrent model (which can only roll back to a saved checkpoint, and none precedes the tools)
 /// re-reads all of it. With sticky selection on, the carried set is therefore held unchanged unless the
-/// request needs something it lacks.
+/// request needs something it lacks — and a scored tool counts as needed only when it is a confident match
+/// (<see cref="ToolRetrievalOptions.StickyChangeScore"/>).
 /// </remarks>
 internal static class ToolSelector
 {
@@ -123,7 +124,7 @@ internal static class ToolSelector
             var carriedSet = new HashSet<string>(carried, StringComparer.OrdinalIgnoreCase);
             var newcomers = selections.Where(s => !carriedSet.Contains(s.Name)).ToList();
 
-            if (!NeedsChange(selections, carriedSet))
+            if (!NeedsChange(selections, carriedSet, options.StickyChangeScore))
             {
                 // Hold: the set sent last time, exactly. This request's other newcomers are reported, not sent.
                 withheld = newcomers;
@@ -184,10 +185,11 @@ internal static class ToolSelector
 
     /// <summary>
     /// Whether this request may change the carried set: a pin, a tool the query names exactly or by a declared alias,
-    /// or the request's best-scored tool is not in it. Anything weaker — a lower-ranked tool of the scored tail, a
-    /// companion of one — is held back, because changing the tool block costs a re-read of the whole prompt.
+    /// or the request's best-scored tool, when it scores at least <paramref name="changeScore"/>, is not in it.
+    /// Anything weaker — a best-scored tool that is only the best of what is left, a lower-ranked tool of the scored
+    /// tail, a companion — is held back, because changing the tool block costs a re-read of the whole prompt.
     /// </summary>
-    private static bool NeedsChange(List<ToolSelection> selections, HashSet<string> carried)
+    private static bool NeedsChange(List<ToolSelection> selections, HashSet<string> carried, float changeScore)
     {
         foreach (var selection in selections)
         {
@@ -202,7 +204,7 @@ internal static class ToolSelector
             .Where(s => s.Reason is ToolSelectionReason.Scored or ToolSelectionReason.Alias)
             .OrderByDescending(s => s.Score ?? 0f)
             .FirstOrDefault();
-        return best is not null && !carried.Contains(best.Name);
+        return best is not null && !carried.Contains(best.Name) && (best.Score ?? 0f) >= changeScore;
     }
 
     /// <summary>
