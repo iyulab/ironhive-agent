@@ -39,6 +39,29 @@ public record ToolRetrievalOptions
     /// <para>Default: 0 — preserves prior behavior, where pins can shrink the scored tail to zero.</para>
     /// </summary>
     public int MinScoredSlots { get; init; }
+
+    /// <summary>
+    /// When greater than 0, tools already sent in this conversation (<see cref="StickyTools"/>) stay in the
+    /// selection, in the order they were first sent, with newly selected tools after them — as long as the
+    /// whole set fits this many tools. When it would not, the selection starts over from this request alone.
+    /// <para>
+    /// For a prefix-cached server (llama-server, vLLM) whose chat template renders tools before the system
+    /// text: a selection that changes with every message makes the server re-read the whole prompt on every
+    /// message; a set that only grows at its tail is re-read from the first new tool, and not at all while
+    /// it holds. Set it above <see cref="MaxTools"/> plus the pins, or nothing will ever fit. Leave it at 0
+    /// for a remote API that bills every prompt token.
+    /// </para>
+    /// <para>Default: 0 — off; every request is selected on its own.</para>
+    /// </summary>
+    public int StickyToolLimit { get; init; }
+
+    /// <summary>
+    /// The tools sent earlier in this conversation, in the order first sent; read only when
+    /// <see cref="StickyToolLimit"/> is greater than 0. The agent loops fill it from their own previous
+    /// request. A caller driving an <see cref="IToolRetriever"/> directly passes the names of the previous
+    /// result's <see cref="ToolRetrievalResult.SelectedTools"/>. Names no longer in the catalog are dropped.
+    /// </summary>
+    public IReadOnlyList<string> StickyTools { get; init; } = [];
 }
 
 /// <summary>
@@ -49,7 +72,9 @@ public record ToolRetrievalResult
     /// <summary>
     /// The selected tools, in the order they are sent. The retrievers in this library send them ordinal by name,
     /// so the same set always serialises identically — a prefix-cached server keeps its prompt cache while the set
-    /// holds. The ranking that chose them is in <see cref="Selections"/>.
+    /// holds. With <see cref="ToolRetrievalOptions.StickyToolLimit"/> on, the tools carried from earlier requests
+    /// come first, in the order first sent, and the rest follow ordinal by name. The ranking that chose them is in
+    /// <see cref="Selections"/>.
     /// </summary>
     public required IList<AITool> SelectedTools { get; init; }
 
@@ -96,6 +121,12 @@ public enum ToolSelectionReason
     /// the scored budget.
     /// </summary>
     Companion = 5,
+
+    /// <summary>
+    /// Sent earlier in the conversation and kept in the selection by <see cref="ToolRetrievalOptions.StickyToolLimit"/>,
+    /// without being selected again for this request.
+    /// </summary>
+    Carried = 6,
 }
 
 /// <summary>

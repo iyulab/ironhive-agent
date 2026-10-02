@@ -446,6 +446,22 @@ query, or the order of the catalog. A prefix-cached server (llama-server, vLLM) 
 set holds — with a chat template that renders tools before the system text, even a reordering of the same set would
 re-read the whole prompt. `McpPluginManager.GetToolsAsync` lists plugins in name order for the same reason.
 
+**Sticky selection** (opt-in, `ToolRetrievalOptions.StickyToolLimit`): tools a conversation already sent stay
+selected and are sent first, in the order first sent, with newly selected tools after them — so a prefix-cached
+server re-reads from the first new tool instead of from the top on every message. When the carried tools and the new
+selection together exceed the limit, the selection starts over (one cache miss). `AgentLoop` and `ThinkingAgentLoop`
+carry the list themselves (`ClearHistory` and `InitializeHistory` forget it); a caller driving a retriever directly
+passes the previous result's tool names in `StickyTools`. Carried-only tools appear in `Selections` as `Carried`.
+Leave it off (0, the default) for a remote API that bills every prompt token.
+
+```csharp
+var options = new AgentOptions
+{
+    Tools = tools,
+    ToolRetrievalOptions = new ToolRetrievalOptions { MaxTools = 8, StickyToolLimit = 24 },
+};
+```
+
 A tool declares **retrieval hints** in `AITool.AdditionalProperties`, so they travel with the tool however it
 was created:
 

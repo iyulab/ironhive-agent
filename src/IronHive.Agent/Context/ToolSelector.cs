@@ -113,12 +113,54 @@ internal static class ToolSelector
             }
         }
 
+        // 5. Tools sent earlier in the conversation, first-sent order, while the whole set fits the limit.
+        var carried = Carry(options, byName, selected);
+        foreach (var name in carried)
+        {
+            if (selectedNames.Add(name))
+            {
+                Add(byName[name], name, ToolSelectionReason.Carried, scores.TryGetValue(name, out var score) ? score : null);
+            }
+        }
+
+        var carriedOrder = new HashSet<string>(carried, StringComparer.OrdinalIgnoreCase);
+        var wire = carried.Select(name => selected.First(tool => string.Equals(tool.Name, name, StringComparison.OrdinalIgnoreCase)))
+            .Concat(selected.Where(tool => !carriedOrder.Contains(tool.Name)).OrderBy(tool => tool.Name, StringComparer.Ordinal))
+            .ToList();
+
         return new ToolRetrievalResult
         {
-            SelectedTools = selected.OrderBy(tool => tool.Name, StringComparer.Ordinal).ToList(),
+            SelectedTools = wire,
             RelevanceScores = scores,
             Selections = selections,
         };
+    }
+
+    /// <summary>
+    /// The carried tools still in the catalog, in first-sent order — or none, when sticky selection is off or the
+    /// carried tools and this request's selection together would exceed <see cref="ToolRetrievalOptions.StickyToolLimit"/>
+    /// (the selection then starts over from this request).
+    /// </summary>
+    private static List<string> Carry(
+        ToolRetrievalOptions options, Dictionary<string, AITool> byName, List<AITool> selected)
+    {
+        if (options.StickyToolLimit <= 0 || options.StickyTools is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var carried = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in options.StickyTools)
+        {
+            if (byName.TryGetValue(name, out var tool) && seen.Add(tool.Name))
+            {
+                carried.Add(tool.Name);
+            }
+        }
+
+        var added = selected.Count(tool => !seen.Contains(tool.Name));
+        return carried.Count + added <= options.StickyToolLimit ? carried : [];
     }
 
     /// <summary>

@@ -6,6 +6,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.36.0] - Unreleased
 
+### Added
+- **Sticky tool selection for prefix-cached servers** (opt-in, `ToolRetrievalOptions.StickyToolLimit`). Tools a
+  conversation already sent stay selected and go first, in the order first sent; newly selected tools follow. A local
+  server whose chat template renders tools before the system text then re-reads from the first new tool instead of the
+  whole prompt on every message. Over the limit the selection starts over. `AgentLoop` and `ThinkingAgentLoop` keep the
+  list per conversation; direct retriever callers pass it in `ToolRetrievalOptions.StickyTools`. New
+  `ToolSelectionReason.Carried` marks a tool kept only for that reason.
+
 ### Changed
 - **Selected tools are sent in a stable order: ordinal by name.** `KeywordToolRetriever` and `EmbeddingToolRetriever`
   used to return `SelectedTools` in selection order (pins, exact names, the scored tail by score, companions), so the

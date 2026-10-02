@@ -20,6 +20,7 @@ public class AgentLoop : IAgentLoop
     private readonly ContextManager? _contextManager;
     private readonly TurnGuards _guards;
     private readonly IToolRetriever? _toolRetriever;
+    private readonly StickyToolSelection _stickyTools = new();
     private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly List<ChatMessage> _history = [];
     private readonly HostToolResultStage _hostResults;
@@ -390,8 +391,10 @@ public class AgentLoop : IAgentLoop
             var query = GetLatestUserQuery();
             if (!string.IsNullOrWhiteSpace(query))
             {
+                var retrievalOptions = _stickyTools.Apply(_options.ToolRetrievalOptions);
                 var result = await _toolRetriever.RetrieveAsync(
-                    query, tools, _options.ToolRetrievalOptions, cancellationToken);
+                    query, tools, retrievalOptions, cancellationToken);
+                _stickyTools.Record(retrievalOptions, result);
                 tools = result.SelectedTools;
             }
         }
@@ -433,6 +436,7 @@ public class AgentLoop : IAgentLoop
     public void ClearHistory()
     {
         _history.Clear();
+        _stickyTools.Clear();
 
         if (!string.IsNullOrWhiteSpace(_options.SystemPrompt))
         {
@@ -466,6 +470,7 @@ public class AgentLoop : IAgentLoop
         // Keep the system prompt at the beginning
         var systemPrompt = _history.FirstOrDefault(m => m.Role == ChatRole.System);
         _history.Clear();
+        _stickyTools.Clear();
 
         if (systemPrompt is not null)
         {
