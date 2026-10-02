@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.39.1] - 2026-10-02
+
+### Changed
+- Re-pinned sibling package(s) `IndexThinking` 0.23.1 -> 0.24.0, `Ironbees.Autonomous` 0.21.11 -> 0.21.12, `Ironbees.Core` 0.21.11 -> 0.21.12, `IronHive.Abstractions` 0.46.1 -> 0.47.0, `IronProw.Core` 0.13.0 -> 0.13.1, `MemoryIndexer` 0.20.3 -> 0.21.0. No source changes.
+
 ## [0.39.0] - 2026-10-02
 
 ### Changed
