@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.38.0] - Unreleased
+## [0.38.0] - 2026-10-02
 
 ### Added
 - **`EditFile` built-in tool — change part of a file without rewriting it.** `EditFile(path, oldText, newText,
