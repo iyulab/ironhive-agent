@@ -184,7 +184,9 @@ public class ToolProvider
     /// tool-call policy judges it as a delete (<c>delete_file</c>).
     /// </remarks>
     /// <param name="path">Relative or absolute path to the file to delete.</param>
-    [Description("Delete a file. Does not delete directories.")]
+    [Description("Delete one file, the one the request identifies. Does not delete directories. If the request does not say " +
+                 "which file is meant - the name is not at the given path, or several files could match - delete nothing: " +
+                 "tell the user which files match and ask which one to delete.")]
     public string DeleteFile(
         [Description("Path to the file to delete (relative to working directory or absolute)")] string path)
     {
@@ -224,7 +226,8 @@ public class ToolProvider
     /// <param name="source">Relative or absolute path of the file to move.</param>
     /// <param name="destination">Relative or absolute path the file moves to, including its file name.</param>
     /// <param name="overwrite">Replace a file already at <paramref name="destination"/>.</param>
-    [Description("Move or rename a file. Refuses to replace an existing file unless overwrite is true.")]
+    [Description("Move or rename one file, the one the request identifies. Refuses to replace an existing file unless " +
+                 "overwrite is true. If the request does not say which file is meant, move nothing and ask.")]
     public string MoveFile(
         [Description("Path of the file to move (relative to working directory or absolute)")] string source,
         [Description("New path of the file, including its file name (relative to working directory or absolute)")] string destination,

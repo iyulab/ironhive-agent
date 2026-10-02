@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.36.1] - Unreleased
+
+### Fixed
+- **`DeleteFile` and `MoveFile` no longer invite a guess when the request is ambiguous.** Their descriptions now tell
+  the model to act on the one file the request identifies and, when the name is not at the given path or several files
+  could match, to change nothing and ask which one. Measured on a 27B model asked to "Delete temp.txt." with two
+  candidates: 3 of 12 runs deleted both before, 0 of 12 after; a rename that needs the tools still uses them.
+
 ## [0.36.0] - 2026-10-02
 
 ### Added
