@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.36.0] - Unreleased
+## [0.36.0] - 2026-10-02
 
 ### Added
 - **Sticky tool selection for prefix-cached servers** (opt-in, `ToolRetrievalOptions.StickyToolLimit`). Tools a
