@@ -6,7 +6,7 @@
     <!-- IronHive (LLM abstraction) -->
     <PackageVersion Include="IronHive.Abstractions" Version="0.48.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
-    <PackageVersion Include="IronProw.Core" Version="0.13.6" />
+    <PackageVersion Include="IronProw.Core" Version="0.13.7" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
     <PackageVersion Include="Ironbees.Core" Version="0.21.13" />
     <PackageVersion Include="Ironbees.Autonomous" Version="0.21.13" />

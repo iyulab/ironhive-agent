@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.42.5] - 2026-10-04
+
+### Changed
+- Re-pinned sibling package(s) `IronProw.Core` 0.13.6 -> 0.13.7. No source changes.
+
 ## [0.42.4] - 2026-10-03
 
 ### Changed

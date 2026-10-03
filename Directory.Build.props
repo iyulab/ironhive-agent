@@ -28,7 +28,7 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.42.4</Version>
+    <Version>0.42.5</Version>
   </PropertyGroup>
 
   <!-- Ship the XML documentation with the package: without this the nupkg
