@@ -32,6 +32,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `[Masked: tool result, N chars, ~M lines]`; it now repeats the call's arguments (cut at 200 characters) and says the
   content is no longer visible and that the tool can be called again with the same arguments — a model that needs it
   re-reads instead of guessing. This applies to masking across user turns too.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.47.0 -> 0.48.0.
 
 - **A built-in tool that fails throws instead of returning "Error…" text.** `ReadFile`, `WriteFile`, `EditFile`,
   `DeleteFile`, `MoveFile`, `ListDirectory`, `GlobFiles`, `GrepFiles`, `ExecuteCommand` and `ManageTodo` returned
