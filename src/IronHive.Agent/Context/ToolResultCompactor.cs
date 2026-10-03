@@ -131,7 +131,7 @@ public class ToolResultCompactor
         {
             if (content is FunctionResultContent frc)
             {
-                var resultText = frc.Result?.ToString() ?? string.Empty;
+                var resultText = ToolResultText.Of(frc.Result);
                 if (resultText.Length > _maxResultChars)
                 {
                     needsCompaction = true;
@@ -151,7 +151,7 @@ public class ToolResultCompactor
         {
             if (content is FunctionResultContent frc)
             {
-                var resultText = frc.Result?.ToString() ?? string.Empty;
+                var resultText = ToolResultText.Of(frc.Result);
                 if (resultText.Length > _maxResultChars)
                 {
                     var compaction = Compact(resultText);

@@ -122,7 +122,7 @@ public static class AdvisorTool
                             .AppendLine(")");
                         break;
                     case FunctionResultContent result:
-                        body.Append("<- ").AppendLine(Cut(result.Result?.ToString() ?? "(no result)", maxToolResultChars));
+                        body.Append("<- ").AppendLine(Cut(result.Result is null ? "(no result)" : IronHive.Agent.Context.ToolResultText.Of(result.Result), maxToolResultChars));
                         break;
                 }
             }

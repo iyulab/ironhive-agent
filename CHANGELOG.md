@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.43.0] - Unreleased
+
+### Fixed
+- **A tool result that is content — an MCP tool returning an image — is measured, masked, compacted and recorded as
+  its text with the image named, not as a type name.** The MCP client hands the loop an image result as a list of
+  text and image content; the token counter, observation masking, result compaction, the advisor's transcript and
+  `ToolCallResult.Result` all read a result through `ToString()`, which for that list is
+  `System.Collections.Generic.List`1[…]`. A masked or compacted image result therefore lost its text, the turn
+  record named a type, and the budget was charged for the type name instead of the image.
+- **`McpPluginManager.CallToolAsync` drops no images.** It kept the text blocks only; `McpToolResult.Images` now carries
+  the result's images (decoded, in order). A guard replacement stands for the whole result, so its images are not kept.
+
+### Added
+- **`ToolResultText.Of(result)`** (`IronHive.Agent.Context`) — the text of a function result as the loop reads it:
+  text parts, images as `[image image/png, 12.3 KB]`, never the bytes. `ToolResultText.ImageCount`, `ImageTokens`.
+- **`McpToolResult.Images`**.
+
 ## [0.42.5] - 2026-10-04
 
 ### Changed

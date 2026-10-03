@@ -93,7 +93,8 @@ public class ContextTokenCounter : IContextTokenCounter
         {
             TextContent text => EstimateTokens(text.Text ?? string.Empty),
             FunctionCallContent func => CountFunctionCallTokens(func),
-            FunctionResultContent result => EstimateTokens(result.Result?.ToString() ?? string.Empty),
+            FunctionResultContent result => EstimateTokens(ToolResultText.Of(result.Result))
+                + (ToolResultText.ImageCount(result.Result) * ToolResultText.ImageTokens),
             _ when content.GetType().Name.Contains("Image", StringComparison.OrdinalIgnoreCase) => 85,
             _ => 0
         };

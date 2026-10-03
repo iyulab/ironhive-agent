@@ -164,6 +164,11 @@ public record McpToolResult
     public string? Content { get; init; }
 
     /// <summary>
+    /// The images the result carried, in order (its <c>image</c> blocks). <see cref="Content"/> holds the text only.
+    /// </summary>
+    public IReadOnlyList<DataContent> Images { get; init; } = [];
+
+    /// <summary>
     /// Whether the tool execution resulted in an error.
     /// </summary>
     public bool IsError { get; init; }

@@ -83,6 +83,28 @@ public class McpServerE2ETests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ImageTool_ListedThroughTheManager_ReturnsTheImageAsContent()
+    {
+        SkipIfNotAvailable();
+
+        await _manager!.ConnectAsync(EverythingServerName, CreateEverythingServerConfig(), TestContext.Current.CancellationToken);
+        var tools = await _manager.GetToolsAsync(EverythingServerName, TestContext.Current.CancellationToken);
+        var imageTool = tools.OfType<Microsoft.Extensions.AI.AIFunction>()
+            .Single(t => t.Name.Contains("image", StringComparison.OrdinalIgnoreCase) && t.Name.Contains("tiny", StringComparison.OrdinalIgnoreCase));
+
+        var result = await imageTool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var direct = await _manager.CallToolAsync(EverythingServerName, imageTool.Name, new Dictionary<string, object?>(), TestContext.Current.CancellationToken);
+
+        // The MCP client tool returns the image as content (not a JSON envelope) — the shape the IChatClient bridge
+        // carries as an image, and the shape the context machinery must read (ToolResultText).
+        var parts = Assert.IsAssignableFrom<IEnumerable<Microsoft.Extensions.AI.AIContent>>(result);
+        var image = Assert.Single(parts.OfType<Microsoft.Extensions.AI.DataContent>());
+        Assert.StartsWith("image/", image.MediaType, StringComparison.Ordinal);
+        Assert.NotEmpty(image.Data.ToArray());
+        Assert.Equal(image.Data.ToArray(), Assert.Single(direct.Images).Data.ToArray());
+    }
+
+    [Fact]
     public async Task CallEchoTool_ReturnsExpectedResult()
     {
         SkipIfNotAvailable();

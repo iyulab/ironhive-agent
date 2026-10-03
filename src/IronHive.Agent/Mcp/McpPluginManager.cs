@@ -263,6 +263,8 @@ public class McpPluginManager : IMcpPluginManager
                 return new McpToolResult
                 {
                     Content = resultVerdict.Replacement ?? content,
+                    // A replacement stands for the whole result; the images it was judged with do not survive it.
+                    Images = resultVerdict.Replacement is null ? ExtractImages(result) : [],
                     IsError = result.IsError ?? false,
                     StructuredContent = result.StructuredContent
                 };
@@ -284,6 +286,7 @@ public class McpPluginManager : IMcpPluginManager
             return new McpToolResult
             {
                 Content = ExtractTextContent(result),
+                Images = ExtractImages(result),
                 IsError = result.IsError ?? false,
                 StructuredContent = result.StructuredContent
             };
@@ -292,6 +295,33 @@ public class McpPluginManager : IMcpPluginManager
         {
             return McpToolResult.Error($"Tool call failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The result's image blocks, decoded, in order. A block whose data is not base64 or that names no MIME type is
+    /// skipped — <see cref="McpToolResult.Content"/> keeps the text either way.
+    /// </summary>
+    private static List<DataContent> ExtractImages(CallToolResult result)
+    {
+        var images = new List<DataContent>();
+        foreach (var image in result.Content.OfType<ImageContentBlock>())
+        {
+            if (string.IsNullOrWhiteSpace(image.MimeType))
+            {
+                continue;
+            }
+
+            try
+            {
+                images.Add(new DataContent(image.DecodedData, image.MimeType));
+            }
+            catch (FormatException)
+            {
+                // Not base64: nothing to carry.
+            }
+        }
+
+        return images;
     }
 
     private static string ExtractTextContent(ModelContextProtocol.Protocol.CallToolResult result)

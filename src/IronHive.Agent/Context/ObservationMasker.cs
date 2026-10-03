@@ -258,7 +258,7 @@ public class ObservationMasker
         return maskedContents is null ? toolMessage : new ChatMessage(ChatRole.Tool, maskedContents);
     }
 
-    private static string ResultText(FunctionResultContent frc) => frc.Result?.ToString() ?? string.Empty;
+    private static string ResultText(FunctionResultContent frc) => ToolResultText.Of(frc.Result);
 
     /// <summary>
     /// The text that replaces a masked result: the call that produced it, how large it was, and that it can be fetched

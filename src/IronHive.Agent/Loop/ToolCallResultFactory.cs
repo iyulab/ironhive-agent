@@ -92,7 +92,7 @@ public static class ToolCallResultFactory
                     CallId = call.CallId,
                     ToolName = call.Name,
                     Arguments = arguments,
-                    Result = functionResult.Result?.ToString() ?? string.Empty,
+                    Result = IronHive.Agent.Context.ToolResultText.Of(functionResult.Result),
                     Success = functionResult.Exception is null && !refused
                 });
                 continue;
