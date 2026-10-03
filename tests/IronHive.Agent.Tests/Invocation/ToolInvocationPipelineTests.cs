@@ -541,7 +541,7 @@ public class ToolInvocationPipelineTests
         using var sp = services.BuildServiceProvider();
 
         sp.GetRequiredService<ToolInvocationPipeline>().InvocationMiddleware.Select(m => m.GetType()).Should().Equal(
-            typeof(ArgumentParseFailureMiddleware), typeof(RepeatedCallGuardMiddleware), typeof(RepeatedErrorGuardMiddleware),
+            typeof(ArgumentParseFailureMiddleware), typeof(RepeatedCallGuardMiddleware), typeof(RepeatedResultGuardMiddleware), typeof(RepeatedErrorGuardMiddleware),
             typeof(ApprovalGateMiddleware));
         sp.GetRequiredService<ToolInvocationOptions>().MaxRepeatedCalls.Should().Be(7);
     }

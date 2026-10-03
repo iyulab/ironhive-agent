@@ -53,7 +53,8 @@ public sealed class ToolInvocationPipeline
 
     /// <summary>
     /// The loop guards a container registers by default: <see cref="ArgumentParseFailureMiddleware"/>,
-    /// <see cref="RepeatedCallGuardMiddleware"/> and <see cref="RepeatedErrorGuardMiddleware"/>, in that order.
+    /// <see cref="RepeatedCallGuardMiddleware"/>, <see cref="RepeatedResultGuardMiddleware"/> and
+    /// <see cref="RepeatedErrorGuardMiddleware"/>, in that order.
     /// </summary>
     /// <param name="options">Their thresholds; defaults when null.</param>
     public static ToolInvocationPipeline CreateDefault(ToolInvocationOptions? options = null) =>
@@ -61,6 +62,7 @@ public sealed class ToolInvocationPipeline
         [
             new ArgumentParseFailureMiddleware(options),
             new RepeatedCallGuardMiddleware(options),
+            new RepeatedResultGuardMiddleware(options),
             new RepeatedErrorGuardMiddleware(options),
         ]);
 

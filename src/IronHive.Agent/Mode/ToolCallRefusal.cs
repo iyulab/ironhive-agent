@@ -24,7 +24,13 @@ public enum ToolCallRefusalKind
     RepeatedCall,
 
     /// <summary>The tool failed with the same error several times in a row, and the request was ended.</summary>
-    RepeatedError
+    RepeatedError,
+
+    /// <summary>
+    /// The call returned a result the model had already received on several separate visits, and the request was ended —
+    /// typically a working set larger than the context budget, re-read in rotation as masking pushes it out.
+    /// </summary>
+    RepeatedResult
 }
 
 /// <summary>
@@ -49,6 +55,7 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.InvalidArguments => $"Tool call not run: its arguments could not be parsed ({Reason})",
         ToolCallRefusalKind.RepeatedCall => $"Tool call not run: {Reason}",
         ToolCallRefusalKind.RepeatedError => $"Tool call stopped: {Reason}",
+        ToolCallRefusalKind.RepeatedResult => $"Tool call stopped: {Reason}",
         _ => $"Tool call refused: {Reason}"
     };
 

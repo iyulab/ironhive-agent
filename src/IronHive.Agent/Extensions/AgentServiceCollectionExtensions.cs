@@ -100,6 +100,7 @@ public static class AgentServiceCollectionExtensions
         }
         services.AddToolInvocationMiddleware<ArgumentParseFailureMiddleware>();
         services.AddToolInvocationMiddleware<RepeatedCallGuardMiddleware>();
+        services.AddToolInvocationMiddleware<RepeatedResultGuardMiddleware>();
         services.AddToolInvocationMiddleware<RepeatedErrorGuardMiddleware>();
 
         // IPlanExecutor is not registered by default — consumers should register it

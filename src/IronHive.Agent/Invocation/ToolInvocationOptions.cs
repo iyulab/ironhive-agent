@@ -43,6 +43,17 @@ public sealed class ToolInvocationOptions
     public int MaxRepeatedErrors { get; set; } = 3;
 
     /// <summary>
+    /// On how many separate visits the same tool may return the same result to identical arguments before the request is
+    /// ended (<c>FunctionInvocationContext.Terminate</c>; the turn ends as <c>TurnStopReason.ToolTerminated</c> on a
+    /// <see cref="IronHive.Agent.Mode.ToolCallRefusal"/> of kind <c>RepeatedResult</c>). A visit is a run of identical
+    /// calls with other calls before it; consecutive identical calls are the repeated-call guard's. A model that keeps
+    /// coming back for content it already has is usually re-reading what masking pushed out — the working set does not
+    /// fit <c>CompactionConfig.ObservationMaskingProtectedTokens</c> — and once it stops re-reading it writes from memory.
+    /// A re-read whose result changed does not count. 0 turns the guard off. Default: 3.
+    /// </summary>
+    public int MaxRepeatedResults { get; set; } = 3;
+
+    /// <summary>
     /// Recognises a failure a tool reports as its result instead of throwing: returns the error text when the result is
     /// a failure, or null when it is not. The loop guards count such a result as a failure keyed by this text — the
     /// repeated-error guard ends the request on the same text <see cref="MaxRepeatedErrors"/> times in a row, and the

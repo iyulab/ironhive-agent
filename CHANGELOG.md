@@ -6,6 +6,17 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.42.0] - Unreleased
 
+### Added
+- **A request ends when the model keeps coming back for a result it already has.** `RepeatedResultGuardMiddleware`, in
+  the default pipeline (`AddIronHiveAgent`, `ToolInvocationPipeline.CreateDefault()`), ends the request when the same tool
+  returns the same result to identical arguments on `ToolInvocationOptions.MaxRepeatedResults` (default 3) separate
+  visits, with other calls in between. The turn ends as `TurnStopReason.ToolTerminated` on a `ToolCallRefusal` of the new
+  kind `RepeatedResult`, whose message names the likely cause. This is the shape of a working set larger than
+  `ObservationMaskingProtectedTokens`: each read pushed an older one out, the model re-read them in rotation until the
+  step limit, and once it stopped re-reading it wrote from memory. Consecutive repeats stay with the repeated-call guard,
+  and a re-read whose result changed does not count. Set `MaxRepeatedResults = 0` to turn it off. A host that builds its
+  own pipeline adds `new RepeatedResultGuardMiddleware(options)` after `RepeatedCallGuardMiddleware`.
+
 ### Changed
 - **Masking inside one turn is driven by size, so short results no longer push out the reads still in use.**
   `CompactionConfig.ObservationMaskingProtectedRounds` counted tool rounds: in a turn that read several sources and then

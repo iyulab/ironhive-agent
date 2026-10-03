@@ -318,6 +318,7 @@ Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocatio
 |---|---|---|
 | `ArgumentParseFailureMiddleware` | a call whose arguments could not be parsed is not run; the model reads the parse error | `RefuseUnparseableArguments` (true) |
 | `RepeatedCallGuardMiddleware` | the same tool with identical arguments, after that many successful runs in a row, is not run again; the `MaxRefusedRepeats`-th refusal in a row of that call ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedCall` refusal), so a stuck model does not spend the step budget | `MaxRepeatedCalls` (3; 0 = off) · `MaxRefusedRepeats` (2; 0 = keep refusing) |
+| `RepeatedResultGuardMiddleware` | the same tool returning the same result to identical arguments on that many separate visits (other calls in between) ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedResult` refusal that names the cause) — the shape of a working set larger than the masking budget (`ObservationMaskingProtectedTokens`), re-read in rotation until the step limit or written from memory; consecutive repeats are the call guard's, a changed result does not count | `MaxRepeatedResults` (3; 0 = off) |
 | `RepeatedErrorGuardMiddleware` | the same tool failing with the same error that many times in a row ends the request (`Terminate`) with a result, not an exception | `MaxRepeatedErrors` (3; 0 = off) |
 
 A failure is a call that throws **or a result that reports one**: an MCP result with `isError: true` is recognised out of
