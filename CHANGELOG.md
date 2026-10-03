@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.48.0 -> 0.49.0.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.13 -> 0.21.14, `Ironbees.Core` 0.21.13 -> 0.21.14, `IronProw.Core` 0.13.7 -> 0.13.8, `MemoryIndexer` 0.21.0 -> 0.22.0.
 
 ### Fixed
 - **A tool result that is content — an MCP tool returning an image — is measured, masked, compacted and recorded as
