@@ -30,8 +30,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   out, carrying what it printed so far), so `RepeatedErrorGuardMiddleware` ends the request when the same failure
   repeats. The model reads the message when `IncludeDetailedErrors` is set. A path outside `AllowedRoots` is still a
   refusal returned as text. **Breaking** — **Migration:** code that calls `ToolProvider`/`TodoTool` methods directly
-  and reads an "Error…" result catches the exception instead; set `IncludeDetailedErrors = true` on the
-  function-invoking client if the model should see why a tool failed.
+  and reads an "Error…" result catches the exception instead.
+- **`UseToolInvocationPipeline` sends a failing tool's message to the model by default.** It sets
+  `FunctionInvokingChatClient.IncludeDetailedErrors = true` (Microsoft.Extensions.AI's default is `false`, which tells
+  the model only "Function failed"), so a model whose call failed — a wrong path, an `oldText` that is not unique — can
+  correct it instead of retrying blind. This matches the Ironbees adapter, which always passed the message. Tools you
+  register yourself are covered too: an exception whose message must not reach the model should be caught in the tool,
+  or turn the default off with `UseToolInvocationPipeline(configure: c => c.IncludeDetailedErrors = false)`.
 
 ### Fixed
 - **Token estimates count Korean, Japanese and Chinese text at its own density, and count a message's text once.**

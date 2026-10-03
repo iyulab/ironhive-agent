@@ -21,7 +21,7 @@ namespace IronHive.Agent.Delegation;
 /// (<see cref="DelegationOptions.MaxDepth"/>), concurrency, the parent's usage limit, and the tool-turn limit. A
 /// refused delegation returns a result that says so — the calling model reads it and can take another route. A
 /// delegated run that fails throws, naming the agent and the cause: the tool loop reports it to the model like any
-/// failing tool (its message, with <c>IncludeDetailedErrors</c>), and <c>RepeatedErrorGuardMiddleware</c> ends the
+/// failing tool (with its message — the default under <c>UseToolInvocationPipeline</c>), and <c>RepeatedErrorGuardMiddleware</c> ends the
 /// request when the same failure repeats — a failure the model cannot fix by rewording the task (no such model, the
 /// provider down) is otherwise retried until the loop's iteration cap. Cancellation propagates.</para>
 /// </remarks>

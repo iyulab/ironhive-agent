@@ -12,8 +12,9 @@ namespace IronHive.Agent.Tools;
 /// Built-in tools for the agent, registered via AIFunctionFactory.
 /// </summary>
 /// <remarks>
-/// A tool that fails throws: the function-invoking client reports the failure to the model (with its message when
-/// <c>IncludeDetailedErrors</c> is set), and the library's loop guards count it as a failure — the repeated-error guard
+/// A tool that fails throws: the function-invoking client reports the failure to the model — with its message under
+/// <c>UseToolInvocationPipeline</c> and in the Ironbees adapter; a plain <c>UseFunctionInvocation()</c> needs
+/// <c>IncludeDetailedErrors</c> — and the library's loop guards count it as a failure — the repeated-error guard
 /// ends a request that keeps failing the same way. A refusal by policy (a path outside
 /// <see cref="FileToolOptions.AllowedRoots"/>) is not a failure and is returned as text.
 /// </remarks>

@@ -17,7 +17,9 @@ public static class ToolInvocationPipelineChatClientBuilderExtensions
     /// <param name="configure">
     /// Configures the function-invoking client (iteration and error limits, detailed errors). The
     /// <see cref="FunctionInvokingChatClient.FunctionInvoker"/> belongs to the pipeline — setting it here throws; add an
-    /// <see cref="IToolInvocationMiddleware"/> instead.
+    /// <see cref="IToolInvocationMiddleware"/> instead. <see cref="FunctionInvokingChatClient.IncludeDetailedErrors"/>
+    /// is already <see langword="true"/> (a failing tool's message reaches the model); set it to
+    /// <see langword="false"/> here to send only a generic failure.
     /// </param>
     /// <exception cref="InvalidOperationException">
     /// When the client is built: the services it is built with hold no <see cref="ToolInvocationPipeline"/>.
@@ -47,7 +49,8 @@ public static class ToolInvocationPipelineChatClientBuilderExtensions
     /// <param name="pipeline">The pipeline; <see cref="ToolInvocationPipeline.CreateDefault"/> for the default loop guards only.</param>
     /// <param name="configure">
     /// Configures the function-invoking client. The <see cref="FunctionInvokingChatClient.FunctionInvoker"/> belongs to
-    /// the pipeline — setting it here throws.
+    /// the pipeline — setting it here throws. <see cref="FunctionInvokingChatClient.IncludeDetailedErrors"/> is already
+    /// <see langword="true"/>; set it to <see langword="false"/> here to send only a generic failure.
     /// </param>
     public static ChatClientBuilder UseToolInvocationPipeline(
         this ChatClientBuilder builder,
@@ -66,7 +69,12 @@ public static class ToolInvocationPipelineChatClientBuilderExtensions
         IServiceProvider services,
         Action<FunctionInvokingChatClient>? configure)
     {
-        var client = new PipelineFunctionInvokingChatClient(inner, pipeline, services.GetService<ILoggerFactory>(), services);
+        var client = new PipelineFunctionInvokingChatClient(inner, pipeline, services.GetService<ILoggerFactory>(), services)
+        {
+            // The library's tools report failure by throwing; without the message the model reads only "Function failed"
+            // and cannot correct the call (a wrong path, a non-unique edit). Set before configure, so a host can turn it off.
+            IncludeDetailedErrors = true,
+        };
         configure?.Invoke(client);
         if (client.FunctionInvoker is not null)
         {

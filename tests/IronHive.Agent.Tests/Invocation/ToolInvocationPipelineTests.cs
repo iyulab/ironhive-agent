@@ -248,6 +248,38 @@ public class ToolInvocationPipelineTests
         response.ToolCalls.Should().NotBeEmpty();
     }
 
+    [Fact]
+    public async Task A_failing_tool_s_message_reaches_the_model_by_default()
+    {
+        // The library's tools report failure by throwing; the model has to read why to correct the call.
+        var (loop, mock, _) = Build(
+            ToolInvocationPipeline.CreateDefault(),
+            m => m.EnqueueToolCallResponse("Broken", """{"query":"q"}""").EnqueueResponse("done"));
+
+        await loop.RunAsync("go", Ct);
+
+        ResultsTheModelRead(mock).Single().Result.Should().BeOfType<string>()
+            .Which.Should().Contain("disk offline");
+    }
+
+    [Fact]
+    public async Task A_host_that_turns_detailed_errors_off_sends_only_a_generic_failure()
+    {
+        var probe = new Probe();
+        var mock = new MockChatClient();
+        mock.EnqueueToolCallResponse("Broken", """{"query":"q"}""").EnqueueResponse("done");
+        var client = mock.AsBuilder()
+            .UseToolInvocationPipeline(ToolInvocationPipeline.CreateDefault(), c => c.IncludeDetailedErrors = false)
+            .Build();
+        var loop = new AgentLoop(client, new AgentOptions { Tools = [AIFunctionFactory.Create(probe.Broken, "Broken")] });
+
+        await loop.RunAsync("go", Ct);
+
+        probe.Invocations.Should().Be(1);
+        ResultsTheModelRead(mock).Single().Result.Should().BeOfType<string>()
+            .Which.Should().NotContain("disk offline");
+    }
+
     /// <summary>
     /// A real MCP client tool over a session that answers every <c>tools/call</c> with <c>isError: true</c> — the tool
     /// returns the failure as its result and never throws.
