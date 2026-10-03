@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.43.0] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.48.0 -> 0.49.0.
+
 ### Fixed
 - **A tool result that is content — an MCP tool returning an image — is measured, masked, compacted and recorded as
   its text with the image named, not as a type name.** The MCP client hands the loop an image result as a list of
