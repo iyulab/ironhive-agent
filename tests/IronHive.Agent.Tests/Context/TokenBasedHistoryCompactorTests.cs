@@ -152,33 +152,40 @@ public class TokenBasedHistoryCompactorTests
     #region Tool Output Protection
 
     [Fact]
-    public async Task CompactAsync_ToolMessagesMarkedAsImportant()
+    public async Task CompactAsync_KeepsAProtectedToolCallWithItsResult_AndSummarizesOtherToolGroups()
     {
-        // Arrange
+        // A protected tool's call and result stay whole and together; an unprotected tool's call and result are left
+        // out together (here: no summarizer, so a marker), never one without the other.
         var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
         var config = new CompactionConfig
         {
             ProtectRecentTokens = 200,
             MinimumPruneTokens = 100,
-            ProtectedToolOutputs = ["read_file", "grep"]
+            ProtectedToolOutputs = ["ReadFile"]
         };
         var compactor = new TokenBasedHistoryCompactor(tokenCounter, config);
 
         var history = new List<ChatMessage>
         {
             new(ChatRole.User, "Read the file"),
-            new(ChatRole.Tool, "File contents here..."), // Tool output
-            new(ChatRole.User, "What did it say?"),
+            new(ChatRole.Assistant, [new FunctionCallContent("r1", "ReadFile", new Dictionary<string, object?> { ["path"] = "a.txt" })]),
+            new(ChatRole.Tool, [new FunctionResultContent("r1", "File contents here...")]),
+            new(ChatRole.Assistant, [new FunctionCallContent("l1", "ListDirectory")]),
+            new(ChatRole.Tool, [new FunctionResultContent("l1", "a.txt b.txt")]),
             new(ChatRole.Assistant, "The file contains..."),
-            new(ChatRole.User, "Recent message"),
+            new(ChatRole.User, "What did it say?"),
+            new(ChatRole.Assistant, "It said..."),
         };
 
-        // Act
-        var result = await compactor.CompactAsync(history, targetTokens: 350, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await compactor.CompactAsync(history, targetTokens: 600, cancellationToken: TestContext.Current.CancellationToken);
 
-        // Assert: Tool output should be preserved (marked as important)
-        var toolMessages = result.CompactedHistory.Where(m => m.Role == ChatRole.Tool).ToList();
-        Assert.NotEmpty(toolMessages);
+        var contents = result.CompactedHistory.SelectMany(m => m.Contents).ToList();
+        Assert.Contains(contents, c => c is FunctionCallContent { CallId: "r1" });
+        Assert.Contains(contents, c => c is FunctionResultContent { CallId: "r1" });
+        Assert.DoesNotContain(contents, c => c is FunctionCallContent { CallId: "l1" });
+        Assert.DoesNotContain(contents, c => c is FunctionResultContent { CallId: "l1" });
+        Assert.Contains(result.CompactedHistory, m => m.Role == ChatRole.User && m.Text == "Read the file");
+        Assert.Contains(result.CompactedHistory, m => m.Text?.Contains("omitted", StringComparison.Ordinal) == true);
     }
 
     #endregion

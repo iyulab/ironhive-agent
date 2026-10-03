@@ -1,10 +1,10 @@
-using System.Text;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
 
 /// <summary>
-/// Token-based history compactor that protects recent tokens and important tool outputs.
+/// Token-based history compactor that protects recent tokens, user messages and the outputs of
+/// <see cref="CompactionConfig.ProtectedToolOutputs"/>, and summarizes the rest.
 /// </summary>
 public class TokenBasedHistoryCompactor : HistoryCompactorBase
 {
@@ -35,10 +35,9 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
             return CreateNoOpResult(history, originalTokens);
         }
 
-        // Split history into protected and prunable regions
+        // Split history into protected and prunable regions, on group boundaries
         var (systemMessages, conversationMessages) = SplitSystemMessages(history);
-        var protectedRegion = GetProtectedRecentMessages(conversationMessages);
-        var prunableRegion = GetPrunableMessages(conversationMessages, protectedRegion.Count);
+        var (prunableRegion, protectedRegion) = SplitRecent(conversationMessages, _config.ProtectRecentTokens);
 
         // Calculate token budgets
         var systemTokens = TokenCounter.CountTokens(systemMessages);
@@ -81,35 +80,13 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
         return (system, conversation);
     }
 
-    private List<ChatMessage> GetProtectedRecentMessages(List<ChatMessage> conversation)
-    {
-        var protectedTokens = _config.ProtectRecentTokens;
-        var result = new List<ChatMessage>();
-        var currentTokens = 0;
-
-        // Work backwards from the end to protect recent messages
-        for (var i = conversation.Count - 1; i >= 0; i--)
-        {
-            var messageTokens = TokenCounter.CountTokens(conversation[i]);
-
-            if (currentTokens + messageTokens > protectedTokens)
-            {
-                break;
-            }
-
-            result.Insert(0, conversation[i]);
-            currentTokens += messageTokens;
-        }
-
-        return result;
-    }
-
-    private static List<ChatMessage> GetPrunableMessages(List<ChatMessage> conversation, int protectedCount)
-    {
-        var prunableCount = conversation.Count - protectedCount;
-        return conversation.Take(prunableCount).ToList();
-    }
-
+    /// <summary>
+    /// Keeps the important groups of the prunable region whole and replaces the rest with a summary (or, without a
+    /// summarizer, a marker naming how many messages were left out). Important: user messages — small, and the one
+    /// thing that cannot be fetched again — and the tool groups of <see cref="CompactionConfig.ProtectedToolOutputs"/>.
+    /// When the important groups alone exceed the target, the oldest protected tool groups, then the oldest user
+    /// messages, join the summary, so a compaction reaches its target instead of firing again on the next turn.
+    /// </summary>
     private async Task<List<ChatMessage>> CompactPrunableAsync(
         List<ChatMessage> prunable,
         int targetTokens,
@@ -135,181 +112,81 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
             return prunable;
         }
 
-        // Separate important tool outputs (protected from aggressive summarization)
-        var (importantMessages, regularMessages) = SeparateImportantMessages(prunable);
+        var groups = GroupMessages(prunable);
+        var important = groups.Select(IsImportantGroup).ToArray();
 
-        // Try LLM summarization for regular messages if available
+        // Leave room for the summary of what is not kept.
+        var keepBudget = Math.Max(0, targetTokens - SummaryFloorTokens);
+        DemoteUntilWithin(groups, important, keepBudget, isToolGroup: true);
+        DemoteUntilWithin(groups, important, keepBudget, isToolGroup: false);
+
+        var regular = groups.Where((_, g) => !important[g]).SelectMany(x => x).ToList();
+        var importantTokens = groups.Where((_, g) => important[g]).Sum(g => TokenCounter.CountTokens(g));
+        var summary = await SummarizeOrMarkAsync(regular, Math.Max(SummaryFloorTokens, targetTokens - importantTokens), cancellationToken);
+
+        var result = new List<ChatMessage>();
+        result.AddRange(summary);
+        for (var g = 0; g < groups.Count; g++)
+        {
+            if (important[g])
+            {
+                result.AddRange(groups[g]);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Smallest budget a summary of the left-out messages is given.</summary>
+    private const int SummaryFloorTokens = 100;
+
+    private void DemoteUntilWithin(List<List<ChatMessage>> groups, bool[] important, int budget, bool isToolGroup)
+    {
+        var kept = groups.Where((_, g) => important[g]).Sum(g => TokenCounter.CountTokens(g));
+        for (var g = 0; g < groups.Count && kept > budget; g++)
+        {
+            if (important[g] && IsToolGroup(groups[g]) == isToolGroup)
+            {
+                important[g] = false;
+                kept -= TokenCounter.CountTokens(groups[g]);
+            }
+        }
+    }
+
+    private async Task<List<ChatMessage>> SummarizeOrMarkAsync(
+        List<ChatMessage> regular, int summaryTokens, CancellationToken cancellationToken)
+    {
+        if (regular.Count == 0)
+        {
+            return [];
+        }
+
         if (Summarizer is not null)
         {
-            return await SummarizeImportantWithLlmAsync(
-                importantMessages,
-                regularMessages,
-                targetTokens,
-                cancellationToken);
-        }
-
-        // Fallback: Simple truncation
-        return TruncateMessagesWithImportant(importantMessages, regularMessages, targetTokens);
-    }
-
-    private (List<ChatMessage> important, List<ChatMessage> regular) SeparateImportantMessages(
-        List<ChatMessage> messages)
-    {
-        var important = new List<ChatMessage>();
-        var regular = new List<ChatMessage>();
-
-        foreach (var message in messages)
-        {
-            if (IsImportantMessage(message))
+            try
             {
-                important.Add(message);
+                return await SummarizeWithLlmAsync(regular, summaryTokens, cancellationToken);
             }
-            else
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                regular.Add(message);
+                // LLM summarization failed — the marker below is the intentional fallback
             }
         }
 
-        return (important, regular);
+        return [new ChatMessage(ChatRole.System, $"[{regular.Count} earlier messages omitted]")];
     }
 
-    private bool IsImportantMessage(ChatMessage message)
+    private bool IsImportantGroup(List<ChatMessage> group)
     {
-        // Check if this is a tool response from a protected tool
-        if (message.Role == ChatRole.Tool)
+        if (group.Count == 1 && group[0].Role == ChatRole.User)
         {
-            return true; // Tool outputs are generally important
+            return true;
         }
 
-        // Check for tool calls in assistant messages
-        if (message.Role == ChatRole.Assistant && message.Contents is not null)
-        {
-            foreach (var content in message.Contents)
-            {
-                if (content is FunctionCallContent functionCall)
-                {
-                    if (_config.ProtectedToolOutputs.Contains(functionCall.Name, StringComparer.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
+        return group[0].Contents.OfType<FunctionCallContent>()
+            .Any(call => _config.ProtectedToolOutputs.Contains(call.Name, StringComparer.OrdinalIgnoreCase));
     }
 
-    private async Task<List<ChatMessage>> SummarizeImportantWithLlmAsync(
-        List<ChatMessage> important,
-        List<ChatMessage> regular,
-        int targetTokens,
-        CancellationToken cancellationToken)
-    {
-        var importantTokens = TokenCounter.CountTokens(important);
-        var regularTargetTokens = Math.Max(0, targetTokens - importantTokens);
-
-        // If no room for regular messages, just return important ones
-        if (regularTargetTokens <= 100)
-        {
-            return CreateSummaryWithImportant(important, []);
-        }
-
-        // Summarize regular messages
-        var conversationText = new StringBuilder();
-        foreach (var message in regular)
-        {
-            conversationText.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"[{message.Role}]: {message.Text}");
-        }
-
-        var summarizationPrompt = $"""
-            Summarize the following conversation history concisely.
-            Preserve key information: decisions made, tasks completed, important context.
-            Keep the summary under {regularTargetTokens / 4} tokens.
-
-            Conversation:
-            {conversationText}
-
-            Summary:
-            """;
-
-        try
-        {
-            var response = await Summarizer!.GetResponseAsync(summarizationPrompt, cancellationToken: cancellationToken);
-            var summary = response.Text ?? string.Empty;
-
-            return CreateSummaryWithImportant(important, summary);
-        }
-        catch (Exception)
-        {
-            // LLM summarization failed — fallback to truncation is intentional
-            return TruncateMessagesWithImportant(important, regular, targetTokens);
-        }
-    }
-
-    private static List<ChatMessage> CreateSummaryWithImportant(List<ChatMessage> important, string summary)
-    {
-        var result = new List<ChatMessage>();
-
-        if (!string.IsNullOrWhiteSpace(summary))
-        {
-            result.Add(new ChatMessage(ChatRole.System, $"[Previous conversation summary]: {summary}"));
-        }
-
-        // Add key tool results back
-        foreach (var msg in important)
-        {
-            result.Add(msg);
-        }
-
-        return result;
-    }
-
-    private static List<ChatMessage> CreateSummaryWithImportant(List<ChatMessage> important, List<ChatMessage> summarized)
-    {
-        var result = new List<ChatMessage>();
-
-        if (summarized.Count > 0)
-        {
-            result.Add(new ChatMessage(ChatRole.System, "[Earlier conversation omitted]"));
-        }
-
-        result.AddRange(important);
-        return result;
-    }
-
-    private List<ChatMessage> TruncateMessagesWithImportant(
-        List<ChatMessage> important,
-        List<ChatMessage> regular,
-        int targetTokens)
-    {
-        var importantTokens = TokenCounter.CountTokens(important);
-        var regularTargetTokens = Math.Max(0, targetTokens - importantTokens);
-
-        var result = new List<ChatMessage>();
-
-        // Add truncation marker
-        if (regular.Count > 0)
-        {
-            result.Add(new ChatMessage(ChatRole.System, $"[{regular.Count} earlier messages omitted]"));
-        }
-
-        // Keep important messages
-        result.AddRange(important);
-
-        // Add regular messages from the end if there's room
-        var currentTokens = TokenCounter.CountTokens(result);
-        for (var i = regular.Count - 1; i >= 0 && currentTokens < targetTokens; i--)
-        {
-            var messageTokens = TokenCounter.CountTokens(regular[i]);
-            if (currentTokens + messageTokens > targetTokens)
-            {
-                break;
-            }
-
-            result.Insert(1, regular[i]); // After the truncation marker
-            currentTokens += messageTokens;
-        }
-
-        return result;
-    }
+    private static bool IsToolGroup(List<ChatMessage> group) =>
+        group[0].Contents.OfType<FunctionCallContent>().Any();
 }

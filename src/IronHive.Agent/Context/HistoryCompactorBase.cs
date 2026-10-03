@@ -6,6 +6,12 @@ namespace IronHive.Agent.Context;
 /// <summary>
 /// Base class for history compactors providing common functionality.
 /// </summary>
+/// <remarks>
+/// A tool call and its result move together: an assistant message that calls tools and the tool messages that answer
+/// it form one group (<see cref="GroupMessages"/>), and the protected recent region is cut on group boundaries
+/// (<see cref="SplitRecent"/>). Every result also passes <see cref="RemoveUnpairedToolContent"/>, so no compactor
+/// returns a tool result without its call, or a call without its result, before the end of the history.
+/// </remarks>
 public abstract class HistoryCompactorBase : IHistoryCompactor
 {
     private readonly IContextTokenCounter _tokenCounter;
@@ -56,6 +62,7 @@ public abstract class HistoryCompactorBase : IHistoryCompactor
         int originalTokens,
         int messagesCompacted)
     {
+        compacted = RemoveUnpairedToolContent(compacted);
         return new CompactionResult
         {
             CompactedHistory = compacted,
@@ -122,17 +129,18 @@ public abstract class HistoryCompactorBase : IHistoryCompactor
         var result = new List<ChatMessage>();
         var currentTokens = 0;
 
-        // Keep messages from the end until we hit the target
-        for (var i = messages.Count - 1; i >= 0; i--)
+        // Keep whole groups (a tool call with its results) from the end until we hit the target
+        var groups = GroupMessages(messages);
+        for (var g = groups.Count - 1; g >= 0; g--)
         {
-            var messageTokens = TokenCounter.CountTokens(messages[i]);
-            if (currentTokens + messageTokens > targetTokens)
+            var groupTokens = TokenCounter.CountTokens(groups[g]);
+            if (currentTokens + groupTokens > targetTokens)
             {
                 break;
             }
 
-            result.Insert(0, messages[i]);
-            currentTokens += messageTokens;
+            result.InsertRange(0, groups[g]);
+            currentTokens += groupTokens;
         }
 
         // Add marker if we truncated
@@ -144,4 +152,118 @@ public abstract class HistoryCompactorBase : IHistoryCompactor
 
         return result;
     }
+
+    /// <summary>
+    /// Splits messages into the units compaction moves: an assistant message that calls tools together with the tool
+    /// messages that answer those calls, or a single message. A unit is kept, summarized or dropped whole.
+    /// </summary>
+    protected static List<List<ChatMessage>> GroupMessages(IReadOnlyList<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+
+        var groups = new List<List<ChatMessage>>();
+        for (var i = 0; i < messages.Count; i++)
+        {
+            var message = messages[i];
+            var group = new List<ChatMessage> { message };
+            var callIds = CallIds(message);
+            if (message.Role == ChatRole.Assistant && callIds.Count > 0)
+            {
+                while (i + 1 < messages.Count
+                       && messages[i + 1].Role == ChatRole.Tool
+                       && messages[i + 1].Contents.OfType<FunctionResultContent>().Any(r => callIds.Contains(r.CallId)))
+                {
+                    group.Add(messages[++i]);
+                }
+            }
+
+            groups.Add(group);
+        }
+
+        return groups;
+    }
+
+    /// <summary>
+    /// Splits the conversation into the prunable older part and the protected recent part: whole groups from the newest
+    /// back while they fit <paramref name="protectTokens"/>. The newest group is always protected — it holds the request
+    /// being answered.
+    /// </summary>
+    protected (List<ChatMessage> Prunable, List<ChatMessage> Protected) SplitRecent(
+        IReadOnlyList<ChatMessage> conversation, int protectTokens)
+    {
+        var groups = GroupMessages(conversation);
+        var protectedStart = groups.Count;
+        var used = 0;
+        for (var g = groups.Count - 1; g >= 0; g--)
+        {
+            var tokens = TokenCounter.CountTokens(groups[g]);
+            if (g < groups.Count - 1 && used + tokens > protectTokens)
+            {
+                break;
+            }
+
+            used += tokens;
+            protectedStart = g;
+        }
+
+        return ([.. groups.Take(protectedStart).SelectMany(x => x)], [.. groups.Skip(protectedStart).SelectMany(x => x)]);
+    }
+
+    /// <summary>
+    /// Removes tool results whose call is not in <paramref name="messages"/>, and tool calls whose result is not — except
+    /// calls in the last message, which may still be waiting for their results. A message left empty is dropped. Returns
+    /// <paramref name="messages"/> itself when nothing is unpaired.
+    /// </summary>
+    protected static IReadOnlyList<ChatMessage> RemoveUnpairedToolContent(IReadOnlyList<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+
+        var calls = new HashSet<string>(StringComparer.Ordinal);
+        var results = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var message in messages)
+        {
+            foreach (var content in message.Contents)
+            {
+                if (content is FunctionCallContent call && call.CallId is not null)
+                {
+                    calls.Add(call.CallId);
+                }
+                else if (content is FunctionResultContent result && result.CallId is not null)
+                {
+                    results.Add(result.CallId);
+                }
+            }
+        }
+
+        bool Unpaired(AIContent content, bool isLast) => content switch
+        {
+            FunctionResultContent result => result.CallId is not null && !calls.Contains(result.CallId),
+            FunctionCallContent call => !isLast && call.CallId is not null && !results.Contains(call.CallId),
+            _ => false,
+        };
+
+        List<ChatMessage>? cleaned = null;
+        for (var i = 0; i < messages.Count; i++)
+        {
+            var message = messages[i];
+            var isLast = i == messages.Count - 1;
+            if (!message.Contents.Any(c => Unpaired(c, isLast)))
+            {
+                cleaned?.Add(message);
+                continue;
+            }
+
+            cleaned ??= [.. messages.Take(i)];
+            var kept = message.Contents.Where(c => !Unpaired(c, isLast)).ToList();
+            if (kept.Count > 0)
+            {
+                cleaned.Add(new ChatMessage(message.Role, kept) { AuthorName = message.AuthorName, MessageId = message.MessageId });
+            }
+        }
+
+        return cleaned ?? messages;
+    }
+
+    private static HashSet<string> CallIds(ChatMessage message) =>
+        [.. message.Contents.OfType<FunctionCallContent>().Select(c => c.CallId).OfType<string>()];
 }

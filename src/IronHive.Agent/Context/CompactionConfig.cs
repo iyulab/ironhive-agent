@@ -19,10 +19,13 @@ public class CompactionConfig
     public int MinimumPruneTokens { get; set; } = 20_000;
 
     /// <summary>
-    /// Tool outputs that should be protected from aggressive summarization.
-    /// These tools' outputs will be preserved more carefully during compaction.
+    /// Tools whose calls and results the token-based compactor keeps whole (compared without regard to case); the calls
+    /// and results of other tools are summarized with the rest of the older conversation — the model can call them again.
+    /// User messages are always kept. When what is kept still exceeds the target, the oldest of these groups are
+    /// summarized too. Default: the built-in file-reading tools (<c>ReadFile</c>, <c>GrepFiles</c>, <c>GlobFiles</c>) and
+    /// their snake_case spellings.
     /// </summary>
-    public List<string> ProtectedToolOutputs { get; set; } = ["read_file", "grep", "glob"];
+    public List<string> ProtectedToolOutputs { get; set; } = ["ReadFile", "GrepFiles", "GlobFiles", "read_file", "grep", "glob"];
 
     /// <summary>
     /// Target compression ratio when compacting (0.0-1.0).

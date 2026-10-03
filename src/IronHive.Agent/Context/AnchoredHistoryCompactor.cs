@@ -43,8 +43,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         }
 
         var (systemMessages, conversationMessages) = SplitSystemMessages(history);
-        var protectedRegion = GetProtectedRecentMessages(conversationMessages);
-        var prunableRegion = GetPrunableMessages(conversationMessages, protectedRegion.Count);
+        var (prunableRegion, protectedRegion) = SplitRecent(conversationMessages, _config.ProtectRecentTokens);
 
         var systemTokens = TokenCounter.CountTokens(systemMessages);
         var protectedTokens = TokenCounter.CountTokens(protectedRegion);
@@ -98,33 +97,6 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         }
 
         return (system, conversation);
-    }
-
-    private List<ChatMessage> GetProtectedRecentMessages(List<ChatMessage> conversation)
-    {
-        var protectedTokens = _config.ProtectRecentTokens;
-        var result = new List<ChatMessage>();
-        var currentTokens = 0;
-
-        for (var i = conversation.Count - 1; i >= 0; i--)
-        {
-            var messageTokens = TokenCounter.CountTokens(conversation[i]);
-            if (currentTokens + messageTokens > protectedTokens)
-            {
-                break;
-            }
-
-            result.Insert(0, conversation[i]);
-            currentTokens += messageTokens;
-        }
-
-        return result;
-    }
-
-    private static List<ChatMessage> GetPrunableMessages(List<ChatMessage> conversation, int protectedCount)
-    {
-        var prunableCount = conversation.Count - protectedCount;
-        return conversation.Take(prunableCount).ToList();
     }
 
     #endregion

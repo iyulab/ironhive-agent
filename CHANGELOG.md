@@ -57,6 +57,19 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `ApproximateTokenCounter`. A message's text was also counted twice (its `Text` and again from its `TextContent`);
   it is counted once, so user and assistant text now reads at about half its previous count (tool results were counted
   once already), and a conversation of mostly text compacts later than before.
+- **Compaction no longer leaves a tool result without its call, or drops what the user said without a trace.** The
+  default token-based compactor kept every tool result but kept a tool call only when its tool was in
+  `ProtectedToolOutputs` — whose defaults (`read_file`, `grep`, `glob`) matched none of the built-in tools — so the
+  compacted history carried results with no call before them. When those results filled the target it also dropped
+  the older user and assistant messages with no summary and no marker, though a summarizer was configured: a decision
+  the user made early in a session was gone, and the model said it had never been told. Compactors now move an
+  assistant message that calls tools together with the results that answer it, cut the protected recent region
+  between such groups, and drop any unpaired call or result from what they return. The token-based compactor keeps
+  user messages and the groups of `ProtectedToolOutputs`, summarizes the rest (or, without a summarizer, says how many
+  messages it left out), and when the kept groups alone exceed the target the oldest protected tool groups, then the
+  oldest user messages, join the summary so the compaction reaches its target. `ProtectedToolOutputs` defaults now
+  include the built-in names (`ReadFile`, `GrepFiles`, `GlobFiles`); results of other tools are summarized — the
+  model can call them again.
 
 ## [0.41.0] - 2026-10-03
 
