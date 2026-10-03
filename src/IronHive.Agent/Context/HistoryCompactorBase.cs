@@ -264,6 +264,49 @@ public abstract class HistoryCompactorBase : IHistoryCompactor
         return cleaned ?? messages;
     }
 
+    /// <summary>Smallest budget a summary of the left-out messages is given.</summary>
+    protected const int SummaryFloorTokens = 100;
+
+    /// <summary>
+    /// Whether <paramref name="group"/> is a single user message — small, and the one thing in a history that cannot be
+    /// fetched again, so compactors keep it verbatim rather than summarize it.
+    /// </summary>
+    protected static bool IsUserMessageGroup(IReadOnlyList<ChatMessage> group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        return group.Count == 1 && group[0].Role == ChatRole.User;
+    }
+
+    /// <summary>
+    /// Stops keeping the oldest kept groups that match <paramref name="eligible"/>, one at a time, until the kept groups
+    /// fit <paramref name="budget"/> — so a compaction reaches its target instead of firing again on the next turn.
+    /// </summary>
+    protected void DemoteOldestUntilWithin(
+        IReadOnlyList<List<ChatMessage>> groups, bool[] keep, int budget, Func<List<ChatMessage>, bool> eligible)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(keep);
+        ArgumentNullException.ThrowIfNull(eligible);
+
+        var kept = KeptTokens(groups, keep);
+        for (var g = 0; g < groups.Count && kept > budget; g++)
+        {
+            if (keep[g] && eligible(groups[g]))
+            {
+                keep[g] = false;
+                kept -= TokenCounter.CountTokens(groups[g]);
+            }
+        }
+    }
+
+    /// <summary>Total tokens of the groups <paramref name="keep"/> marks.</summary>
+    protected int KeptTokens(IReadOnlyList<List<ChatMessage>> groups, bool[] keep)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(keep);
+        return groups.Where((_, g) => keep[g]).Sum(g => TokenCounter.CountTokens(g));
+    }
+
     private static HashSet<string> CallIds(ChatMessage message) =>
         [.. message.Contents.OfType<FunctionCallContent>().Select(c => c.CallId).OfType<string>()];
 }

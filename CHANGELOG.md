@@ -48,6 +48,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   correct it instead of retrying blind. This matches the Ironbees adapter, which always passed the message. Tools you
   register yourself are covered too: an exception whose message must not reach the model should be caught in the tool,
   or turn the default off with `UseToolInvocationPipeline(configure: c => c.IncludeDetailedErrors = false)`.
+- **The anchored compactor keeps user messages word for word.** With `UseAnchoredCompaction`, the state block and the
+  summary replaced everything older than the protected region, user messages included — and a summary can change what
+  the user said: an instruction meant for one turn ("do not write any file yet") came back as a standing rule, and the
+  model refused a later request to write. User messages now stay verbatim, in order; the state block and the summary
+  stand in only for assistant replies and tool calls with their results. When the user messages alone exceed the
+  target, the oldest join the summary first, as in the token-based compactor. Without a summarizer (or when it fails)
+  the newest of the rest that fit are kept alongside them. A cancelled summarization now cancels the compaction instead
+  of falling back to truncation.
 
 ### Fixed
 - **Token estimates count Korean, Japanese and Chinese text at its own density, and count a message's text once.**

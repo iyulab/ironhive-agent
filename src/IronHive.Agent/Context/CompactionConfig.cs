@@ -116,7 +116,8 @@ public class CompactionConfig
     /// <summary>
     /// Whether to use anchored compaction, which preserves structured state information
     /// (goal, modified files, errors, decisions) across compaction rounds.
-    /// Prevents silent information drift during LLM-based summarization.
+    /// Prevents silent information drift during LLM-based summarization. User messages are kept verbatim; the state
+    /// block and the summary stand in for the rest.
     /// When true, overrides UseTokenBasedCompaction for the compactor selection.
     /// </summary>
     public bool UseAnchoredCompaction { get; set; }

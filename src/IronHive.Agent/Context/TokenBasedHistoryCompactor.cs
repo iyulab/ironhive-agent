@@ -117,11 +117,11 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
 
         // Leave room for the summary of what is not kept.
         var keepBudget = Math.Max(0, targetTokens - SummaryFloorTokens);
-        DemoteUntilWithin(groups, important, keepBudget, isToolGroup: true);
-        DemoteUntilWithin(groups, important, keepBudget, isToolGroup: false);
+        DemoteOldestUntilWithin(groups, important, keepBudget, IsToolGroup);
+        DemoteOldestUntilWithin(groups, important, keepBudget, group => !IsToolGroup(group));
 
         var regular = groups.Where((_, g) => !important[g]).SelectMany(x => x).ToList();
-        var importantTokens = groups.Where((_, g) => important[g]).Sum(g => TokenCounter.CountTokens(g));
+        var importantTokens = KeptTokens(groups, important);
         var summary = await SummarizeOrMarkAsync(regular, Math.Max(SummaryFloorTokens, targetTokens - importantTokens), cancellationToken);
 
         var result = new List<ChatMessage>();
@@ -135,22 +135,6 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
         }
 
         return result;
-    }
-
-    /// <summary>Smallest budget a summary of the left-out messages is given.</summary>
-    private const int SummaryFloorTokens = 100;
-
-    private void DemoteUntilWithin(List<List<ChatMessage>> groups, bool[] important, int budget, bool isToolGroup)
-    {
-        var kept = groups.Where((_, g) => important[g]).Sum(g => TokenCounter.CountTokens(g));
-        for (var g = 0; g < groups.Count && kept > budget; g++)
-        {
-            if (important[g] && IsToolGroup(groups[g]) == isToolGroup)
-            {
-                important[g] = false;
-                kept -= TokenCounter.CountTokens(groups[g]);
-            }
-        }
     }
 
     private async Task<List<ChatMessage>> SummarizeOrMarkAsync(
@@ -178,7 +162,7 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
 
     private bool IsImportantGroup(List<ChatMessage> group)
     {
-        if (group.Count == 1 && group[0].Role == ChatRole.User)
+        if (IsUserMessageGroup(group))
         {
             return true;
         }

@@ -9,6 +9,12 @@ namespace IronHive.Agent.Context;
 /// Prevents "silent information drift" by maintaining key facts (goals, modified files,
 /// errors encountered, key decisions) across multiple compaction rounds.
 /// </summary>
+/// <remarks>
+/// User messages are kept verbatim: the state block and the summary stand in for the rest (assistant replies, tool calls
+/// and their results). A summary can change what a user said — an instruction for one turn read back as a standing rule —
+/// and a user message cannot be fetched again. When the user messages alone exceed the target, the oldest join the
+/// summary first.
+/// </remarks>
 public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 {
     /// <summary>Marker for the start of a conversation state block.</summary>
@@ -125,28 +131,56 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
             return prunable;
         }
 
-        // Extract new anchors from messages (rule-based)
-        var newAnchors = ExtractAnchorsFromMessages(prunable);
+        // Extract new anchors from messages (rule-based) and merge them with the previous round's
+        var merged = MergeAnchors(existingAnchors, ExtractAnchorsFromMessages(prunable));
+        var stateBlock = merged.HasContent ? merged.FormatStateBlock(_config.MaxAnchorStateChars) : string.Empty;
+        var stateBlockTokens = stateBlock.Length > 0 ? TokenCounter.CountTokens(stateBlock) : 0;
 
-        // Merge existing + new
-        var merged = MergeAnchors(existingAnchors, newAnchors);
+        // Keep user messages verbatim; the oldest join the summary when they alone exceed the target
+        var groups = GroupMessages([.. prunable.Where(m => !IsStateBlock(m))]);
+        var keep = groups.Select(IsUserMessageGroup).ToArray();
+        DemoteOldestUntilWithin(groups, keep, Math.Max(0, targetTokens - stateBlockTokens - SummaryFloorTokens), _ => true);
+        var restTargetTokens = Math.Max(0, targetTokens - stateBlockTokens - KeptTokens(groups, keep));
 
-        // Try LLM-based anchored summarization
-        if (Summarizer is not null)
+        // Try LLM-based anchored summarization of the rest
+        var rest = groups.Where((_, g) => !keep[g]).SelectMany(x => x).ToList();
+        if (Summarizer is not null && rest.Count > 0)
         {
             try
             {
-                return await SummarizeWithAnchorsAsync(
-                    prunable, merged, targetTokens, cancellationToken);
+                var summary = await SummarizeAsync(rest, Math.Max(SummaryFloorTokens, restTargetTokens), cancellationToken);
+                return Assemble(stateBlock, summary, groups, keep);
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Fallback on LLM failure — intentional
             }
         }
 
-        // Fallback: anchor state block + truncation
-        return BuildAnchorTruncation(prunable, merged, targetTokens);
+        // Fallback: anchor state block + the newest of the rest that fits, user messages in place
+        return BuildAnchorTruncation(stateBlock, groups, keep, restTargetTokens);
+    }
+
+    private static bool IsStateBlock(ChatMessage message) =>
+        message.Role == ChatRole.System &&
+        message.Text?.Contains(StateBlockStart, StringComparison.Ordinal) == true;
+
+    private static List<ChatMessage> Assemble(
+        string stateBlock, string summary, List<List<ChatMessage>> groups, bool[] keep)
+    {
+        var result = new List<ChatMessage>();
+        if (stateBlock.Length > 0)
+        {
+            result.Add(new ChatMessage(ChatRole.System, stateBlock));
+        }
+
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            result.Add(new ChatMessage(ChatRole.System, $"[Previous conversation summary]: {summary}"));
+        }
+
+        result.AddRange(groups.Where((_, g) => keep[g]).SelectMany(x => x));
+        return result;
     }
 
     #endregion
@@ -332,32 +366,21 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
     #region Summarization
 
-    private async Task<List<ChatMessage>> SummarizeWithAnchorsAsync(
+    private async Task<string> SummarizeAsync(
         List<ChatMessage> messages,
-        ConversationAnchors anchors,
-        int targetTokens,
+        int summaryTargetTokens,
         CancellationToken cancellationToken)
     {
-        var stateBlock = anchors.HasContent ? anchors.FormatStateBlock(_config.MaxAnchorStateChars) : string.Empty;
-        var stateBlockTokens = stateBlock.Length > 0 ? TokenCounter.CountTokens(stateBlock) : 0;
-        var summaryTargetTokens = Math.Max(100, targetTokens - stateBlockTokens);
-
-        // Build conversation text for summarization (skip existing state blocks)
         var conversationText = new StringBuilder();
         foreach (var message in messages)
         {
-            if (message.Role == ChatRole.System &&
-                message.Text?.Contains(StateBlockStart, StringComparison.Ordinal) == true)
-            {
-                continue;
-            }
-
             conversationText.AppendLine(System.Globalization.CultureInfo.InvariantCulture,
                 $"[{message.Role}]: {message.Text}");
         }
 
         var prompt = $"""
             Summarize the following conversation concisely.
+            The user's messages are kept separately, word for word; do not restate their instructions.
             Preserve ALL of these critical details:
             - Goals and objectives discussed
             - Key decisions made and their rationale
@@ -375,50 +398,48 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
             """;
 
         var response = await Summarizer!.GetResponseAsync(prompt, cancellationToken: cancellationToken);
-        var summary = response.Text ?? string.Empty;
+        return response.Text ?? string.Empty;
+    }
+
+    private List<ChatMessage> BuildAnchorTruncation(
+        string stateBlock,
+        List<List<ChatMessage>> groups,
+        bool[] keep,
+        int restTargetTokens)
+    {
+        // Add the newest groups of the rest while they fit, then keep everything in its original order
+        var include = (bool[])keep.Clone();
+        var used = 0;
+        for (var g = groups.Count - 1; g >= 0; g--)
+        {
+            if (include[g])
+            {
+                continue;
+            }
+
+            var tokens = TokenCounter.CountTokens(groups[g]);
+            if (used + tokens > restTargetTokens)
+            {
+                break;
+            }
+
+            include[g] = true;
+            used += tokens;
+        }
 
         var result = new List<ChatMessage>();
-
         if (stateBlock.Length > 0)
         {
             result.Add(new ChatMessage(ChatRole.System, stateBlock));
         }
 
-        if (!string.IsNullOrWhiteSpace(summary))
+        var omitted = groups.Where((_, g) => !include[g]).Sum(group => group.Count);
+        if (omitted > 0)
         {
-            result.Add(new ChatMessage(ChatRole.System, $"[Previous conversation summary]: {summary}"));
+            result.Add(new ChatMessage(ChatRole.System, $"[{omitted} earlier messages omitted]"));
         }
 
-        return result;
-    }
-
-    private List<ChatMessage> BuildAnchorTruncation(
-        List<ChatMessage> prunable,
-        ConversationAnchors anchors,
-        int targetTokens)
-    {
-        var result = new List<ChatMessage>();
-
-        // Add anchor state block first
-        if (anchors.HasContent)
-        {
-            result.Add(new ChatMessage(ChatRole.System, anchors.FormatStateBlock(_config.MaxAnchorStateChars)));
-        }
-
-        // Calculate remaining budget for truncated messages
-        var usedTokens = TokenCounter.CountTokens(result);
-        var remainingTokens = Math.Max(0, targetTokens - usedTokens);
-
-        // Filter out old state block messages before truncation
-        var filteredPrunable = prunable
-            .Where(m => !(m.Role == ChatRole.System &&
-                          m.Text?.Contains(StateBlockStart, StringComparison.Ordinal) == true))
-            .ToList();
-
-        // Add truncated recent messages from the prunable region
-        var truncated = TruncateFromBeginning(filteredPrunable, remainingTokens);
-        result.AddRange(truncated);
-
+        result.AddRange(groups.Where((_, g) => include[g]).SelectMany(x => x));
         return result;
     }
 

@@ -562,6 +562,115 @@ public class AnchoredHistoryCompactorTests
 
     #endregion
 
+    #region User Messages Verbatim
+
+    private static List<ChatMessage> DecisionHistory() =>
+    [
+        new(ChatRole.User, "Settings: port 8080, retries 3. Do not write any file yet."),
+        new(ChatRole.Assistant, "Noted."),
+        new(ChatRole.User, "Count the error lines in the log."),
+        new(ChatRole.Assistant, "There are 12."),
+        new(ChatRole.User, "And the warnings?"),
+        new(ChatRole.Assistant, "There are 4."),
+        new(ChatRole.User, "Now write config.json with the settings."),
+    ];
+
+    [Fact]
+    public async Task CompactAsync_WithSummarizer_KeepsUserMessagesVerbatimAndOutOfTheSummary()
+    {
+        // A summary once turned a one-turn "do not write any file yet" into a standing rule, and the model then refused to write.
+        var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
+        var config = new CompactionConfig { ProtectRecentTokens = 100, MinimumPruneTokens = 100 };
+        var prompts = new List<string>();
+        var summarizer = Substitute.For<IChatClient>();
+        summarizer.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                prompts.Add(string.Join('\n', call.Arg<IEnumerable<ChatMessage>>().Select(m => m.Text)));
+                return new ChatResponse([new ChatMessage(ChatRole.Assistant, "The assistant counted 12 errors and 4 warnings.")]);
+            });
+        var compactor = new AnchoredHistoryCompactor(tokenCounter, config, summarizer);
+        var history = DecisionHistory();
+
+        var result = await compactor.CompactAsync(history, targetTokens: 600, cancellationToken: TestContext.Current.CancellationToken);
+
+        var users = result.CompactedHistory.Where(m => m.Role == ChatRole.User).Select(m => m.Text).ToList();
+        Assert.Equal(history.Where(m => m.Role == ChatRole.User).Select(m => m.Text), users);
+        Assert.Single(prompts);
+        Assert.DoesNotContain("Do not write any file yet", prompts[0]);
+        Assert.Contains("There are 12.", prompts[0]);
+        Assert.Contains(result.CompactedHistory, m => m.Text?.StartsWith("[Previous conversation summary]", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.CompactedHistory, m => m.Role == ChatRole.Assistant);
+    }
+
+    [Fact]
+    public async Task CompactAsync_NoSummarizer_KeepsUserMessagesVerbatimInOrder()
+    {
+        var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
+        var config = new CompactionConfig { ProtectRecentTokens = 100, MinimumPruneTokens = 100 };
+        var compactor = new AnchoredHistoryCompactor(tokenCounter, config);
+        var history = DecisionHistory();
+
+        var result = await compactor.CompactAsync(history, targetTokens: 600, cancellationToken: TestContext.Current.CancellationToken);
+
+        var users = result.CompactedHistory.Where(m => m.Role == ChatRole.User).Select(m => m.Text).ToList();
+        Assert.Equal(history.Where(m => m.Role == ChatRole.User).Select(m => m.Text), users);
+        Assert.Contains(result.CompactedHistory, m => m.Text?.EndsWith("earlier messages omitted]", StringComparison.Ordinal) == true);
+        Assert.Equal("Now write config.json with the settings.", result.CompactedHistory[^1].Text);
+    }
+
+    [Fact]
+    public async Task CompactAsync_SummarizerFails_KeepsUserMessagesVerbatim()
+    {
+        var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
+        var config = new CompactionConfig { ProtectRecentTokens = 100, MinimumPruneTokens = 100 };
+        var summarizer = Substitute.For<IChatClient>();
+        summarizer.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("LLM unavailable"));
+        var compactor = new AnchoredHistoryCompactor(tokenCounter, config, summarizer);
+        var history = DecisionHistory();
+
+        var result = await compactor.CompactAsync(history, targetTokens: 600, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains(result.CompactedHistory, m => m.Text == "Settings: port 8080, retries 3. Do not write any file yet.");
+    }
+
+    [Fact]
+    public async Task CompactAsync_SummarizerCancelled_Propagates()
+    {
+        var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
+        var config = new CompactionConfig { ProtectRecentTokens = 100, MinimumPruneTokens = 100 };
+        var summarizer = Substitute.For<IChatClient>();
+        summarizer.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new OperationCanceledException());
+        var compactor = new AnchoredHistoryCompactor(tokenCounter, config, summarizer);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            compactor.CompactAsync(DecisionHistory(), targetTokens: 600, cancellationToken: TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CompactAsync_UserMessagesOverTheTarget_OldestJoinTheSummaryAndTheResultConverges()
+    {
+        var tokenCounter = new SimpleTokenCounter(tokensPerMessage: 100);
+        var config = new CompactionConfig { ProtectRecentTokens = 100, MinimumPruneTokens = 100 };
+        var summarizer = Substitute.For<IChatClient>();
+        summarizer.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new ChatResponse([new ChatMessage(ChatRole.Assistant, "summary")]));
+        var compactor = new AnchoredHistoryCompactor(tokenCounter, config, summarizer);
+        var history = Enumerable.Range(1, 20).Select(i => new ChatMessage(ChatRole.User, $"note {i:D2}")).ToList();
+
+        var result = await compactor.CompactAsync(history, targetTokens: 800, cancellationToken: TestContext.Current.CancellationToken);
+
+        // state block + summary + kept user messages within the target; the newest survive, the oldest went to the summary
+        Assert.True(result.CompactedTokens <= 800, $"{result.CompactedTokens} tokens");
+        Assert.Equal("note 20", result.CompactedHistory[^1].Text);
+        Assert.DoesNotContain(result.CompactedHistory, m => m.Text == "note 01");
+        Assert.Contains(result.CompactedHistory, m => m.Text == "note 19");
+    }
+
+    #endregion
+
     #region CompactionConfig Integration
 
     [Fact]
