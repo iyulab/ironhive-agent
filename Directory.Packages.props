@@ -6,10 +6,10 @@
     <!-- IronHive (LLM abstraction) -->
     <PackageVersion Include="IronHive.Abstractions" Version="0.48.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
-    <PackageVersion Include="IronProw.Core" Version="0.13.1" />
+    <PackageVersion Include="IronProw.Core" Version="0.13.2" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.21.12" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.12" />
+    <PackageVersion Include="Ironbees.Core" Version="0.21.13" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.13" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.8" />
     <!-- Microsoft.Extensions.AI -->
