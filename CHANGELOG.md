@@ -17,6 +17,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - `RepeatedResultGuardMiddleware` and `RepeatedCallGuardMiddleware` share one definition of «the same result».
 - The guards' acceptance envelope — the sequences they must stop and must let through, with where each was seen — is
   now one test table (`LoopGuardEnvelopeTests`); a guard change adds its row there.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.19.0 -> 0.19.1, `IndexThinking` 0.24.1 -> 0.24.2, `IronHive.Abstractions` 0.50.0 -> 0.51.0, `TokenMeter` 0.7.8 -> 0.7.9, `WebFlux` 0.19.5 -> 0.19.6.
 
 
 ### Dependencies
