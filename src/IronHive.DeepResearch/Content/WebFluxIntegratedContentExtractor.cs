@@ -160,7 +160,7 @@ public partial class WebFluxIntegratedContentExtractor : DeepResearchContentExtr
         if (extractor == null)
         {
             throw new InvalidOperationException(
-                "WebFlux IContentExtractor가 등록되지 않았습니다. services.AddWebFlux()를 호출하세요.");
+                "WebFlux IContentExtractor is not registered. Call services.AddWebFlux().");
         }
 
         return extractor;
