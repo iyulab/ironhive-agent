@@ -4,7 +4,20 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.47.1] - Unreleased
+## [0.48.0] - Unreleased
+
+### Changed
+- **An identical call repeated with the same answer is still stopped as before; an identical call whose answer moves now
+  runs.** `RepeatedCallGuardMiddleware` counts a run toward `MaxRepeatedCalls` only when it returned what the run after
+  it returned (the text the model sees), for tools without target arguments. A status poll that advances (a download at
+  10 %, 40 %, 70 %…) is progress and is no longer refused on the fourth call; a loop of the same call
+  with the same result stops exactly as before, and a tool with target arguments keeps counting whatever it returns
+  (an image described again with a different question is still the same image). The cost of the line: a tool whose answer differs on every call (a clock) is now bounded
+  by the loop's step budget rather than by this guard.
+- `RepeatedResultGuardMiddleware` and `RepeatedCallGuardMiddleware` share one definition of «the same result».
+- The guards' acceptance envelope — the sequences they must stop and must let through, with where each was seen — is
+  now one test table (`LoopGuardEnvelopeTests`); a guard change adds its row there.
+
 
 ### Dependencies
 - Microsoft.Extensions.AI 10.10.0, Microsoft.Extensions.AI.Abstractions 10.10.1, Microsoft.Extensions.AI.OpenAI 10.10.1, OpenAI 2.14.0; Microsoft.Bcl.Memory 10.0.12.

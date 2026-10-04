@@ -16,6 +16,14 @@ namespace IronHive.Agent.Invocation;
 /// failure, not a successful run. The <see cref="ToolInvocationOptions.MaxRefusedRepeats"/>-th refusal in a row of the
 /// same call also ends the request (<see cref="FunctionInvocationContext.Terminate"/>): the model is stuck, and asking
 /// again would only spend the step budget.
+/// <para>
+/// For a tool without target arguments a run counts toward the streak only when it returned what the run after it
+/// returned (the text the model sees): repeating a call and getting the same answer is repetition, getting a different
+/// one is progress — a status poll that moves, a download that advances. A tool with target arguments keeps counting
+/// whatever it returns, since varying the other arguments is what makes its answers differ (a re-described image).
+/// The cost of that line: a tool whose answer differs on every call (a clock, a random sample) is no longer stopped by
+/// this guard and runs until the loop's step budget.
+/// </para>
 /// </summary>
 /// <remarks>
 /// The streak is read from the conversation (<see cref="FunctionInvocationContext.Messages"/>), not kept in the
@@ -55,6 +63,7 @@ public sealed partial class RepeatedCallGuardMiddleware : IToolInvocationMiddlew
 
         var streak = 0;
         var refused = 0;
+        string? laterText = null;
         for (var i = completed.Count - 1; i >= 0; i--)
         {
             var (call, result) = completed[i];
@@ -76,6 +85,17 @@ public sealed partial class RepeatedCallGuardMiddleware : IToolInvocationMiddlew
             if (result.Exception is not null || result.Result is ToolCallRefusal || ToolResultFailure.Of(result.Result, _options) is not null)
             {
                 break;
+            }
+
+            if (targets.Count == 0)
+            {
+                var text = ToolCallHistory.ResultText(result.Result);
+                if (laterText is not null && !string.Equals(text, laterText, StringComparison.Ordinal))
+                {
+                    break; // the answer changed between these two runs: progress, not repetition
+                }
+
+                laterText = text;
             }
 
             streak++;

@@ -73,7 +73,7 @@ public sealed partial class RepeatedResultGuardMiddleware : IToolInvocationMiddl
             return result;
         }
 
-        var text = Text(result);
+        var text = ToolCallHistory.ResultText(result);
         var visits = 1; // this one
         string? previousKey = null;
         var visitCounted = false;
@@ -113,29 +113,7 @@ public sealed partial class RepeatedResultGuardMiddleware : IToolInvocationMiddl
         earlier.Exception is null
         && earlier.Result is not ToolCallRefusal
         && ToolResultFailure.Of(earlier.Result, _options) is null
-        && string.Equals(Text(earlier.Result), text, StringComparison.Ordinal);
-
-    /// <summary>The result as comparable text: a JSON string unwrapped, other JSON as written, anything else serialized.</summary>
-    private static string Text(object? result) => result switch
-    {
-        null => string.Empty,
-        string s => s,
-        JsonElement { ValueKind: JsonValueKind.String } json => json.GetString() ?? string.Empty,
-        JsonElement json => json.GetRawText(),
-        _ => Serialize(result),
-    };
-
-    private static string Serialize(object value)
-    {
-        try
-        {
-            return JsonSerializer.Serialize(value, AIJsonUtilities.DefaultOptions);
-        }
-        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
-        {
-            return value.ToString() ?? string.Empty;
-        }
-    }
+        && string.Equals(ToolCallHistory.ResultText(earlier.Result), text, StringComparison.Ordinal);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {Tool} returned the same result on {Count} separate visits; ending the request")]
     private static partial void LogEnded(ILogger logger, string tool, int count);

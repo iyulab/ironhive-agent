@@ -44,6 +44,28 @@ internal static class ToolCallHistory
         return completed;
     }
 
+    /// <summary>The result as the model sees it, as comparable text: a JSON string unwrapped, other JSON as written, anything else serialized.</summary>
+    public static string ResultText(object? result) => result switch
+    {
+        null => string.Empty,
+        string s => s,
+        JsonElement { ValueKind: JsonValueKind.String } json => json.GetString() ?? string.Empty,
+        JsonElement json => json.GetRawText(),
+        _ => SerializeResult(result),
+    };
+
+    private static string SerializeResult(object value)
+    {
+        try
+        {
+            return JsonSerializer.Serialize(value, AIJsonUtilities.DefaultOptions);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+        {
+            return value.ToString() ?? string.Empty;
+        }
+    }
+
     /// <summary>
     /// The one definition of "the same call" the loop guards share: a function that keys a call by its tool name and
     /// arguments. Calls of <paramref name="current"/>, when it declares target arguments
