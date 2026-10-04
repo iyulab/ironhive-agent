@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using IronHive.Agent.Invocation;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
@@ -40,18 +41,20 @@ public static class BuiltInTools
         var tools = new ToolProvider(wd, options);
         var todoTool = new TodoTool(wd);
 
+        // Each tool says whether it can change anything (ToolInvocationHints.ReadOnlyKey): the repeated-result guard counts
+        // re-reads, and a command or a write run again is not one.
         return new List<AITool>
         {
-            AIFunctionFactory.Create(tools.ReadFile),
-            AIFunctionFactory.Create(tools.WriteFile),
-            AIFunctionFactory.Create(tools.EditFile),
-            AIFunctionFactory.Create(tools.DeleteFile),
-            AIFunctionFactory.Create(tools.MoveFile),
-            AIFunctionFactory.Create(tools.ListDirectory),
-            AIFunctionFactory.Create(tools.GlobFiles),
-            AIFunctionFactory.Create(tools.GrepFiles),
-            AIFunctionFactory.Create(tools.ExecuteCommand),
-            todoTool.GetAITool()
+            AIFunctionFactory.Create(tools.ReadFile).WithReadOnly(true),
+            AIFunctionFactory.Create(tools.WriteFile).WithReadOnly(false),
+            AIFunctionFactory.Create(tools.EditFile).WithReadOnly(false),
+            AIFunctionFactory.Create(tools.DeleteFile).WithReadOnly(false),
+            AIFunctionFactory.Create(tools.MoveFile).WithReadOnly(false),
+            AIFunctionFactory.Create(tools.ListDirectory).WithReadOnly(true),
+            AIFunctionFactory.Create(tools.GlobFiles).WithReadOnly(true),
+            AIFunctionFactory.Create(tools.GrepFiles).WithReadOnly(true),
+            AIFunctionFactory.Create(tools.ExecuteCommand).WithReadOnly(false),
+            todoTool.GetAITool().WithReadOnly(false)
         };
     }
 

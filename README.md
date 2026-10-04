@@ -318,7 +318,7 @@ Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocatio
 |---|---|---|
 | `ArgumentParseFailureMiddleware` | a call whose arguments could not be parsed is not run; the model reads the parse error | `RefuseUnparseableArguments` (true) |
 | `RepeatedCallGuardMiddleware` | the same tool with identical arguments (or on the same target, for a tool that declares [target arguments](#target-arguments)), after that many successful runs in a row, is not run again; the `MaxRefusedRepeats`-th refusal in a row of that call ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedCall` refusal), so a stuck model does not spend the step budget | `MaxRepeatedCalls` (3; 0 = off) · `MaxRefusedRepeats` (2; 0 = keep refusing) |
-| `RepeatedResultGuardMiddleware` | the same tool returning the same result to identical arguments (or the same target) on that many separate visits (other calls in between) ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedResult` refusal that names the cause) — the shape of a working set larger than the masking budget (`ObservationMaskingProtectedTokens`), re-read in rotation until the step limit or written from memory; consecutive repeats are the call guard's, a changed result does not count | `MaxRepeatedResults` (3; 0 = off) |
+| `RepeatedResultGuardMiddleware` | the same tool returning the same result to identical arguments (or the same target) on that many separate visits — read-only and undeclared tools only (see [Read-only tools](#read-only-tools)) (other calls in between) ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedResult` refusal that names the cause) — the shape of a working set larger than the masking budget (`ObservationMaskingProtectedTokens`), re-read in rotation until the step limit or written from memory; consecutive repeats are the call guard's, a changed result does not count | `MaxRepeatedResults` (3; 0 = off) |
 | `RepeatedErrorGuardMiddleware` | the same tool failing with the same error that many times in a row ends the request (`Terminate`) with a result, not an exception | `MaxRepeatedErrors` (3; 0 = off) |
 
 A failure is a call that throws **or a result that reports one**: an MCP result with `isError: true` is recognised out of
@@ -351,6 +351,14 @@ var describe = AIFunctionFactory.Create(
   a name the tool's input schema does not declare is dropped.
 - Declare targets only where a new value of every other argument still means "the same thing again". A read with an
   `offset` or a paged search moves on with each call and must not declare its `path`/`query` as the target.
+
+### Read-only tools
+
+`tool.WithReadOnly(false)` says a call can change something (a command, a write); `WithReadOnly(true)` says it only
+reads. `RepeatedResultGuardMiddleware` leaves tools declared not read-only alone: re-running a check after an edit and
+getting the same failure is the edit-and-check loop, not a re-read. Undeclared tools are guarded as before. An MCP tool
+answers with its server's `readOnlyHint` (`ToolInvocationHints.IsReadOnly(tool)` finds it through wrappers too), and the
+built-in tools declare it (`ReadFile`, `ListDirectory`, `GlobFiles`, `GrepFiles` read-only; the others not).
 
 ## In-Process Tool-Result Guard (opt-in)
 

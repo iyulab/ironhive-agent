@@ -24,8 +24,11 @@ namespace IronHive.Agent.Invocation;
 /// </para>
 /// <para>
 /// Consecutive identical calls are one visit — <see cref="RepeatedCallGuardMiddleware"/> handles those. A re-read whose
-/// result changed (the file was edited in between) does not count, nor does a failure or a refusal. The history is read
-/// from <see cref="FunctionInvocationContext.Messages"/>, so one instance serves every conversation.
+/// result changed (the file was edited in between) does not count, nor does a failure or a refusal. A tool declared not
+/// read-only (<see cref="ToolInvocationHints.IsReadOnly"/> is <c>false</c> — a command, a write) is not guarded: running
+/// it again after other calls is not a re-read, and the same output (a check that still fails after an edit) is
+/// information. The history is read from <see cref="FunctionInvocationContext.Messages"/>, so one instance serves every
+/// conversation.
 /// </para>
 /// </remarks>
 public sealed partial class RepeatedResultGuardMiddleware : IToolInvocationMiddleware
@@ -48,7 +51,7 @@ public sealed partial class RepeatedResultGuardMiddleware : IToolInvocationMiddl
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(next);
 
-        var max = _options.MaxRepeatedResults;
+        var max = ToolInvocationHints.IsReadOnly(context.Function) == false ? 0 : _options.MaxRepeatedResults;
         var name = context.Function.Name;
         var keyOf = ToolCallHistory.KeyFor(context.Function, out _);
         var key = keyOf(name, context.CallContent?.Arguments ?? context.Arguments);

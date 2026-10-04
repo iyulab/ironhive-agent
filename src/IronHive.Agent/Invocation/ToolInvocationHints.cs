@@ -24,14 +24,62 @@ namespace IronHive.Agent.Invocation;
 /// paging is refused as repetition.
 /// </para>
 /// <para>
-/// A value is either a sequence of strings or one comma-separated string (the form a string-only transport such as MCP
-/// <c>_meta</c> can carry).
+/// <b>Read-only</b> says whether calling the tool can change anything (<see cref="WithReadOnly"/>). A tool declared not
+/// read-only is outside <see cref="RepeatedResultGuardMiddleware"/>: that guard stops a model that keeps fetching content
+/// it already has, and running a command or a write again after other calls is not that — the same output (a check that
+/// still fails) is information. An MCP tool answers with its server's <c>readOnlyHint</c> annotation. A tool that declares
+/// nothing is treated as before.
+/// </para>
+/// <para>
+/// A target-arguments value is either a sequence of strings or one comma-separated string (the form a string-only
+/// transport such as MCP <c>_meta</c> can carry).
 /// </para>
 /// </remarks>
 public static class ToolInvocationHints
 {
     /// <summary>The <see cref="AITool.AdditionalProperties"/> key for a tool's target arguments.</summary>
     public const string TargetArgumentsKey = "ironhive.invocation.target";
+
+    /// <summary>The <see cref="AITool.AdditionalProperties"/> key for whether a tool is read-only (a <see cref="bool"/>).</summary>
+    public const string ReadOnlyKey = "ironhive.invocation.readonly";
+
+    /// <summary>
+    /// Whether <paramref name="tool"/> declares itself read-only (<c>true</c>), able to change state (<c>false</c>), or
+    /// declares nothing (<c>null</c>). <see cref="ReadOnlyKey"/> is read first (a bool, the strings <c>"true"</c>/<c>"false"</c>,
+    /// or a JSON boolean); otherwise an MCP tool's <c>readOnlyHint</c> annotation, found through
+    /// <c>GetService&lt;McpClientTool&gt;()</c> so a wrapped MCP tool still answers.
+    /// </summary>
+    public static bool? IsReadOnly(AITool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        if (tool.AdditionalProperties.TryGetValue(ReadOnlyKey, out var value))
+        {
+            return value switch
+            {
+                bool flag => flag,
+                string text when bool.TryParse(text, out var parsed) => parsed,
+                System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.True } => true,
+                System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.False } => false,
+                _ => null,
+            };
+        }
+
+        return tool.GetService<ModelContextProtocol.Client.McpClientTool>()?.ProtocolTool.Annotations?.ReadOnlyHint;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="tool"/> declaring whether calling it can change anything. The returned tool invokes and
+    /// describes itself exactly as <paramref name="tool"/> does.
+    /// </summary>
+    /// <param name="tool">An <see cref="AIFunction"/> or an <see cref="AIFunctionDeclaration"/>.</param>
+    /// <param name="readOnly"><c>true</c> when a call only reads; <c>false</c> when it can write, run or delete.</param>
+    public static AITool WithReadOnly(this AITool tool, bool readOnly)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        var properties = ToolPropertyOverlay.CopyProperties(tool);
+        properties[ReadOnlyKey] = readOnly;
+        return ToolPropertyOverlay.With(tool, properties, "Invocation hints", nameof(tool));
+    }
 
     /// <summary>The target arguments <paramref name="tool"/> declares, or an empty list.</summary>
     public static IReadOnlyList<string> GetTargetArguments(AITool tool)

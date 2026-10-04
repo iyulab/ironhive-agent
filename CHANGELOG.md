@@ -4,7 +4,22 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.46.1] - Unreleased
+## [0.47.0] - Unreleased
+
+### Changed
+- **The repeated-result guard no longer ends the edit-and-check loop.** `RepeatedResultGuardMiddleware` stops a model
+  that keeps fetching content it already has; it also stopped a model that edited a file and re-ran the same check,
+  when the check printed the same failure three times. A tool declared not read-only (a command, a write) is now
+  outside that guard: running it again after other calls is not a re-read, and the same output is information.
+  Consecutive identical calls are still refused by `RepeatedCallGuardMiddleware`. Tools that declare nothing are
+  guarded as before.
+
+### Added
+- **Tools declare whether they can change anything:** `tool.WithReadOnly(bool)` and
+  `ToolInvocationHints.IsReadOnly(tool)` (`true`, `false`, or `null` when undeclared). An MCP tool answers with its
+  server's `readOnlyHint` annotation, also through a wrapper. The built-in tools declare it: `ReadFile`,
+  `ListDirectory`, `GlobFiles`, `GrepFiles` are read-only; `WriteFile`, `EditFile`, `DeleteFile`, `MoveFile`,
+  `ExecuteCommand` and the todo tool are not.
 
 ### Fixed
 - **`WriteFile` keeps an existing file's encoding and line endings, as `EditFile` does.** Overwriting a UTF-8 file with
