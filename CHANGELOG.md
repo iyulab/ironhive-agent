@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.47.1] - Unreleased
+
+### Dependencies
+- Microsoft.Extensions.AI 10.10.0, Microsoft.Extensions.AI.Abstractions 10.10.1, Microsoft.Extensions.AI.OpenAI 10.10.1, OpenAI 2.14.0; Microsoft.Bcl.Memory 10.0.12.
+
 ## [0.47.0] - 2026-10-04
 
 ### Changed
