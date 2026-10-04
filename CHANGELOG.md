@@ -13,6 +13,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   outside that guard: running it again after other calls is not a re-read, and the same output is information.
   Consecutive identical calls are still refused by `RepeatedCallGuardMiddleware`. Tools that declare nothing are
   guarded as before.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.22.0 -> 0.23.0.
 
 ### Added
 - **Tools declare whether they can change anything:** `tool.WithReadOnly(bool)` and
