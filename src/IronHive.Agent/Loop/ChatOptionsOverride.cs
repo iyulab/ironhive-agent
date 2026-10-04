@@ -10,6 +10,19 @@ namespace IronHive.Agent.Loop;
 internal static class ChatOptionsOverride
 {
     /// <summary>
+    /// The options every model call of a turn starts from: the loop's configured defaults from
+    /// <paramref name="options"/> and the turn's <paramref name="tools"/>. One definition for both loops.
+    /// </summary>
+    public static ChatOptions Baseline(AgentOptions options, IList<AITool>? tools) => new()
+    {
+        Temperature = options.Temperature,
+        MaxOutputTokens = options.MaxTokens,
+        // A copy: the options object is the loop's configuration, and a call's options may be changed below it.
+        Reasoning = options.Reasoning?.Clone(),
+        Tools = tools,
+    };
+
+    /// <summary>
     /// Applies <paramref name="overrideOptions"/> onto <paramref name="baseline"/> field by field, for
     /// every settable <see cref="ChatOptions"/> property. A set override field replaces the baseline
     /// value; an unset (<c>null</c>) override field keeps the baseline value.

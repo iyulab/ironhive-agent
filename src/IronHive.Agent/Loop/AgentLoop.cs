@@ -405,14 +405,7 @@ public class AgentLoop : IAgentLoop
             tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
         }
 
-        var chatOptions = new ChatOptions
-        {
-            Temperature = _options.Temperature,
-            MaxOutputTokens = _options.MaxTokens,
-            Tools = tools
-        };
-
-        return ChatOptionsOverride.Apply(chatOptions, overrideOptions);
+        return ChatOptionsOverride.Apply(ChatOptionsOverride.Baseline(_options, tools), overrideOptions);
     }
 
     private string GetLatestUserQuery()
@@ -527,6 +520,16 @@ public class AgentOptions
     /// Maximum tokens for response generation.
     /// </summary>
     public int? MaxTokens { get; set; }
+
+    /// <summary>
+    /// How much the model reasons before it answers, sent with every model call of every turn — e.g.
+    /// <c>new ReasoningOptions { Effort = ReasoningEffort.Low }</c>. A reasoning model left at its own default can think
+    /// for tens of thousands of tokens on a single call; this bounds it where the provider supports a level (the
+    /// OpenAI-compatible provider sends <c>reasoning_effort</c> and a thinking-token budget). A per-turn
+    /// <see cref="ChatOptions.Reasoning"/> override replaces it for that turn. Null (the default): nothing is sent, and
+    /// the provider's default applies.
+    /// </summary>
+    public ReasoningOptions? Reasoning { get; set; }
 
     /// <summary>
     /// Available tools for the agent.

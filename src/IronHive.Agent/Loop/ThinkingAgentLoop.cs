@@ -521,14 +521,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
         }
 
-        var chatOptions = new ChatOptions
-        {
-            Temperature = _options.Temperature,
-            MaxOutputTokens = _options.MaxTokens,
-            Tools = tools
-        };
-
-        return ChatOptionsOverride.Apply(chatOptions, overrideOptions);
+        return ChatOptionsOverride.Apply(ChatOptionsOverride.Baseline(_options, tools), overrideOptions);
     }
 
     private string GetLatestUserQuery()

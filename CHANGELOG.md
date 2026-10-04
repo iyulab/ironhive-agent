@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.46.0] - Unreleased
+
+### Added
+- **`AgentOptions.Reasoning`: how much the model reasons, set once for every model call of every turn.** Both loops send
+  it (`new ReasoningOptions { Effort = ReasoningEffort.Low }`); a per-turn `ChatOptions.Reasoning` replaces it for that
+  turn. Until now a loop could only set reasoning per turn, so a host had to pass the same override on every call or
+  leave a reasoning model to think without bound — tens of thousands of tokens on one call.
+
 ## [0.45.1] - 2026-10-04
 
 ### Changed
