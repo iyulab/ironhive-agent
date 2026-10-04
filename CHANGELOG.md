@@ -18,6 +18,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - The guards' acceptance envelope — the sequences they must stop and must let through, with where each was seen — is
   now one test table (`LoopGuardEnvelopeTests`); a guard change adds its row there.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.19.0 -> 0.19.1, `IndexThinking` 0.24.1 -> 0.24.2, `IronHive.Abstractions` 0.50.0 -> 0.51.0, `TokenMeter` 0.7.8 -> 0.7.9, `WebFlux` 0.19.5 -> 0.19.6.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.15 -> 0.21.16, `Ironbees.Core` 0.21.15 -> 0.21.16, `IronProw.Core` 0.14.1 -> 0.14.2, `MemoryIndexer` 0.23.0 -> 0.23.1.
 
 
 ### Dependencies
