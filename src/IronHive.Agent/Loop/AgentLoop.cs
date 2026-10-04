@@ -175,7 +175,7 @@ public class AgentLoop : IAgentLoop
         _hostResults.MarkProduced(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
-        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools);
+        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
         var usage = MapUsage(response.Usage);
 
         // Record usage for session tracking
@@ -323,7 +323,7 @@ public class AgentLoop : IAgentLoop
         // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
         // non-streaming path leaves behind -- tool results included, and in the order they arrived.
         var turnMessages = historyBuilder.Build();
-        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools);
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
 

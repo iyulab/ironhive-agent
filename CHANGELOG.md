@@ -12,6 +12,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `ApprovalUnavailable`, `Rejected`, a loop guard, `InvalidArguments`, `ResultWithheld`), `null` when nothing refused
   the call. A host reporting a run's outcome can count permission refusals separately from guard stops.
 
+### Fixed
+- **A turn cut off at the function-invocation cap reports `StopReason.StepLimit`, not `Completed`.** At
+  `MaximumIterationsPerRequest` Microsoft.Extensions.AI invokes the last round's calls and asks the model once more
+  without tools, so the turn ended on text with no call pending and read as finished. The loop now counts the turn's
+  tool-call rounds against the cap of the `FunctionInvokingChatClient` in its chain (streaming and non-streaming).
+
 ## [0.43.1] - 2026-10-04
 
 ### Changed

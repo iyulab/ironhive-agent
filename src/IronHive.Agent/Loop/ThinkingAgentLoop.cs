@@ -198,7 +198,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         _hostResults.MarkProduced(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
-        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools);
+        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient));
         var thinkingContent = ExtractThinkingContent(response);
         var usage = MapUsage(response.Usage);
 
@@ -373,7 +373,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         // Same rebuild as AgentLoop -- the peer implementation lost tool results in exactly the same way.
         var turnMessages = historyBuilder.Build();
-        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools);
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient));
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
 
