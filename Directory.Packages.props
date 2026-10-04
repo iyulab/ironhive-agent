@@ -4,12 +4,12 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.49.0" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.50.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
-    <PackageVersion Include="IronProw.Core" Version="0.13.8" />
+    <PackageVersion Include="IronProw.Core" Version="0.14.0" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.21.14" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.14" />
+    <PackageVersion Include="Ironbees.Core" Version="0.21.15" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.15" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.8" />
     <!-- Microsoft.Extensions.AI -->
