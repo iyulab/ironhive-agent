@@ -524,8 +524,9 @@ public class AgentOptions
     /// <summary>
     /// How much the model reasons before it answers, sent with every model call of every turn — e.g.
     /// <c>new ReasoningOptions { Effort = ReasoningEffort.Low }</c>. A reasoning model left at its own default can think
-    /// for tens of thousands of tokens on a single call; this bounds it where the provider supports a level (the
-    /// OpenAI-compatible provider sends <c>reasoning_effort</c> and a thinking-token budget). A per-turn
+    /// for tens of thousands of tokens on a single call. The OpenAI-compatible provider sends <c>reasoning_effort</c>,
+    /// a thinking-token budget and the thinking switches open-weight chat templates read; how strictly a server holds a
+    /// level is the server's — <see cref="ReasoningEffort.None"/> (thinking off) is the setting servers enforce. A per-turn
     /// <see cref="ChatOptions.Reasoning"/> override replaces it for that turn. Null (the default): nothing is sent, and
     /// the provider's default applies.
     /// </summary>
