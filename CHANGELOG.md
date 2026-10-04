@@ -22,6 +22,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `ExecuteCommand` and the todo tool are not.
 
 ### Fixed
+- **The always-refused shell commands are the dangerous command itself, not anything that starts like it.** They were
+  matched as substrings, so `rm -rf /tmp/build` was refused as «remove root», `| sha256sum` as «pipe into a shell», and
+  `dd if=/dev/zero of=out.bin` as a disk write — whatever the permission rules allowed. Now `rm -rf /` (and `/*`), a
+  pipe into `sh`/`bash`, `dd`/`>` onto a disk device, `mkfs`, `fdisk`, `format X:`, `chmod 777 /` and the fork bomb are
+  refused; a command that only resembles one goes to the rules like any other (still asked about as Critical when a
+  human decides).
 - **`WriteFile` keeps an existing file's encoding and line endings, as `EditFile` does.** Overwriting a UTF-8 file with
   a byte-order mark, or a UTF-16 file, wrote plain UTF-8; content written with `\n` into a `\r\n` file changed every
   line ending; and `append: true` added UTF-8 bytes to a UTF-16 file. Content that itself carries `\r\n` is written as

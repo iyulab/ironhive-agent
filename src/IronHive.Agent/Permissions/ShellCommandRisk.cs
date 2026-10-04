@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using IronHive.Agent.Mode;
 
 namespace IronHive.Agent.Permissions;
@@ -8,23 +9,25 @@ namespace IronHive.Agent.Permissions;
 /// </summary>
 internal static class ShellCommandRisk
 {
-    // Refused outright, before any Bash rule: no rule and no human can make these safe.
-    private static readonly string[] AlwaysDeniedPatterns =
+    // Refused outright, before any Bash rule: no rule and no human can make these safe. Each pattern names the dangerous
+    // command itself, not a prefix of it: "rm -rf /" is the root, not `rm -rf /tmp/build`; "| sh" is a shell, not
+    // `| sha256sum`; dd is dangerous when it writes a disk device, not when it reads /dev/zero into a file. A command that
+    // only resembles one of these goes to the rules (and to a human when they say Ask), as any other command does.
+    // Matched against the lower-cased command.
+    private const string End = @"(?=$|[\s;&|)])";
+
+    private static readonly Regex[] AlwaysDeniedPatterns =
     [
-        ":(){:|:&};:",     // fork bomb
-        "> /dev/sda",
-        "dd if=/dev/",
-        "mkfs.",
-        "fdisk",
-        "format c:",
-        "rm -rf /",        // remove root
-        "rm -rf /*",       // remove root contents
-        "chmod 777 /",     // insecure permissions on root
-        "chmod -r 777 /",  // recursive insecure permissions
-        "| bash",          // pipe to a shell (remote code execution)
-        "| sh",
-        "| /bin/bash",
-        "| /bin/sh",
+        new(@":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:", RegexOptions.CultureInvariant),                           // fork bomb
+        new(@">\s*/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk)", RegexOptions.CultureInvariant),                               // overwrite a disk
+        new(@"\bdd\b[^;&|]*\bof=/dev/(sd|hd|vd|xvd|nvme|mmcblk|disk)", RegexOptions.CultureInvariant),                  // dd onto a disk
+        new(@"\bmkfs(\.|\s)", RegexOptions.CultureInvariant),
+        new(@"\bfdisk\b", RegexOptions.CultureInvariant),
+        new(@"\bformat\s+[a-z]:", RegexOptions.CultureInvariant),
+        new(@"\brm\s+(-[a-z]*\s+)*-[a-z]*(rf|fr)[a-z]*\s+(-[a-z-]+\s+)*/\*?" + End, RegexOptions.CultureInvariant),       // remove root
+        new(@"\brm\s+(-r\s+-f|-f\s+-r)\s+/\*?" + End, RegexOptions.CultureInvariant),
+        new(@"\bchmod\s+(-r\s+)?777\s+/" + End, RegexOptions.CultureInvariant),                                      // world-writable root
+        new(@"\|\s*(/bin/|/usr/bin/)?(ba|z|da)?sh" + End, RegexOptions.CultureInvariant),                               // pipe into a shell
     ];
 
     // Destructive but not refused outright (a rule or a human decides): shown as Critical when asked about.
@@ -40,7 +43,7 @@ internal static class ShellCommandRisk
     internal static bool IsAlwaysDenied(string command)
     {
         var lower = command.ToLowerInvariant().Trim();
-        return AlwaysDeniedPatterns.Any(p => lower.Contains(p, StringComparison.Ordinal));
+        return AlwaysDeniedPatterns.Any(p => p.IsMatch(lower));
     }
 
     /// <summary>The risk level shown for a command the rules leave to a human.</summary>
