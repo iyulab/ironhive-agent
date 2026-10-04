@@ -80,6 +80,7 @@ public class ApprovalGateMiddlewareTests
 
         Assert.Equal(1, probe.Invocations);
         Assert.True(response.ToolCalls[0].Success);
+        Assert.Null(response.ToolCalls[0].RefusalKind);
         Assert.Equal("wrote notes/a.txt", response.ToolCalls[0].Result);
         Assert.False(string.IsNullOrEmpty(response.ToolCalls[0].CallId));
     }
@@ -95,6 +96,7 @@ public class ApprovalGateMiddlewareTests
 
         Assert.Equal(0, probe.Invocations);
         Assert.False(response.ToolCalls[0].Success);
+        Assert.Equal(ToolCallRefusalKind.Denied, response.ToolCalls[0].RefusalKind);
         Assert.Contains("Permission denied", response.ToolCalls[0].Result);
         Assert.Contains("Protected directory", response.ToolCalls[0].Result);
         await approval.DidNotReceive().RequestApprovalAsync(Arg.Any<ApprovalRequest>(), Arg.Any<CancellationToken>());
@@ -130,6 +132,7 @@ public class ApprovalGateMiddlewareTests
 
         Assert.Equal(0, probe.Invocations);
         Assert.False(response.ToolCalls[0].Success);
+        Assert.Equal(ToolCallRefusalKind.Rejected, response.ToolCalls[0].RefusalKind);
         Assert.Contains("Approval rejected", response.ToolCalls[0].Result);
         Assert.Contains("not today", response.ToolCalls[0].Result);
     }

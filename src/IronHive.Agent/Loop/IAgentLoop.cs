@@ -294,6 +294,14 @@ public record ToolCallResult
     /// but the tool did not run.
     /// </remarks>
     public bool? Success { get; init; }
+
+    /// <summary>
+    /// Why the tool invocation pipeline refused the call, or <c>null</c> when it did not
+    /// (<see cref="Mode.ToolCallRefusal"/>): a permission rule (<see cref="Mode.ToolCallRefusalKind.Denied"/>), a denied or
+    /// unavailable approval, a loop guard, unparseable arguments, or a guard that withheld the result. <see cref="Success"/>
+    /// is <c>false</c> for every one of them; this tells them apart from a tool that ran and failed, and from each other.
+    /// </summary>
+    public Mode.ToolCallRefusalKind? RefusalKind { get; init; }
 }
 
 /// <summary>

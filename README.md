@@ -779,6 +779,9 @@ The loop **extracts** the calls the model requested — it does not invoke them.
 `Success` is `null` rather than a guess. A call's presence and arguments are always populated; if your
 check needs the outcome too, confirm your client wraps function invocation.
 
+A call the tool invocation pipeline refused has `Success = false` and a `RefusalKind` (`Denied`, `ApprovalUnavailable`,
+`Rejected`, a loop guard, `InvalidArguments`, `ResultWithheld`); a tool that ran and failed has `RefusalKind = null`.
+
 ## Tracing
 
 Each turn is an `invoke_agent` span; the model calls and tool runs inside it become its children when the chat client

@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.44.0] - Unreleased
+
+### Added
+- **`ToolCallResult.RefusalKind`: a call the tool pipeline refused is told apart from a tool that ran and failed, and
+  the refusals from each other.** All have `Success = false`; `RefusalKind` is the `ToolCallRefusalKind` (`Denied`,
+  `ApprovalUnavailable`, `Rejected`, a loop guard, `InvalidArguments`, `ResultWithheld`), `null` when nothing refused
+  the call. A host reporting a run's outcome can count permission refusals separately from guard stops.
+
 ## [0.43.1] - 2026-10-04
 
 ### Changed

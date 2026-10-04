@@ -238,6 +238,7 @@ public class AgentLoopTests
 
         // Assert
         Assert.False(response.ToolCalls[0].Success);
+        Assert.Null(response.ToolCalls[0].RefusalKind); // the tool ran and failed - nothing refused it
     }
 
     [Fact]

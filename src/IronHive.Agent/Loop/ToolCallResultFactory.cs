@@ -86,14 +86,15 @@ public static class ToolCallResultFactory
             {
                 // A refusal from the permission gate is a result the model reads, not an outcome the
                 // tool produced: the tool did not run, and this record must say so.
-                var refused = functionResult.Result is ToolCallRefusal;
+                var refusal = functionResult.Result as ToolCallRefusal;
                 results.Add(new ToolCallResult
                 {
                     CallId = call.CallId,
                     ToolName = call.Name,
                     Arguments = arguments,
                     Result = IronHive.Agent.Context.ToolResultText.Of(functionResult.Result),
-                    Success = functionResult.Exception is null && !refused
+                    Success = functionResult.Exception is null && refusal is null,
+                    RefusalKind = refusal?.Kind
                 });
                 continue;
             }
