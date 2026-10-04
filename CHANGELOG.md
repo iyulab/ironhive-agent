@@ -17,6 +17,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `MaximumIterationsPerRequest` Microsoft.Extensions.AI invokes the last round's calls and asks the model once more
   without tools, so the turn ended on text with no call pending and read as finished. The loop now counts the turn's
   tool-call rounds against the cap of the `FunctionInvokingChatClient` in its chain (streaming and non-streaming).
+- **A turn whose answer was cut off and continued keeps its tool calls** (`ThinkingAgentLoop`, through IndexThinking
+  0.24.1): `AgentResponse.ToolCalls` and the history held only the combined answer.
+
+### Dependencies
+- IndexThinking 0.24.0 -> 0.24.1.
 
 ## [0.43.1] - 2026-10-04
 
