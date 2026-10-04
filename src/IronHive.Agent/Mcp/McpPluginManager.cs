@@ -4,6 +4,7 @@ using IronHive.Agent.Mode;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using IronHive.Agent.Context;
+using IronHive.Agent.Invocation;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -116,7 +117,7 @@ public class McpPluginManager : IMcpPluginManager
             {
                 // McpClientTool inherits from AIFunction which inherits from AITool
                 var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
-                allTools.AddRange(tools.Select(WithDeclaredRetrievalHints));
+                allTools.AddRange(tools.Select(WithDeclaredHints));
             }
             catch (Exception ex)
             {
@@ -141,18 +142,24 @@ public class McpPluginManager : IMcpPluginManager
         }
 
         var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
-        return tools.Select(WithDeclaredRetrievalHints).ToList().AsReadOnly();
+        return tools.Select(WithDeclaredHints).ToList().AsReadOnly();
     }
 
     /// <summary>
-    /// Carries the retrieval hints an MCP server declares in a tool's <c>_meta</c> — under
-    /// <see cref="ToolRetrievalHints.AliasesKey"/> and <see cref="ToolRetrievalHints.CompanionsKey"/>, as a string
-    /// array or one comma-separated string — into the tool's <see cref="AITool.AdditionalProperties"/>, where the
-    /// tool retrievers read them. A tool without them is returned unchanged. Public for a host that lists tools through
-    /// its own <see cref="McpClientTool"/> clients rather than this manager.
+    /// Carries the hints an MCP server declares in a tool's <c>_meta</c> into the tool's
+    /// <see cref="AITool.AdditionalProperties"/>, each as a string array or one comma-separated string:
+    /// <list type="bullet">
+    /// <item>retrieval hints under <see cref="ToolRetrievalHints.AliasesKey"/> and <see cref="ToolRetrievalHints.CompanionsKey"/>,
+    /// read by the tool retrievers;</item>
+    /// <item>target arguments under <see cref="ToolInvocationHints.TargetArgumentsKey"/>, read by the loop guards. A name
+    /// the tool's input schema does not declare is dropped (it would make every call the same target).</item>
+    /// </list>
+    /// A tool without them is returned unchanged. Public for a host that lists tools through its own
+    /// <see cref="McpClientTool"/> clients rather than this manager.
     /// </summary>
-    public static AITool WithDeclaredRetrievalHints(McpClientTool tool)
+    public static AITool WithDeclaredHints(McpClientTool tool)
     {
+        ArgumentNullException.ThrowIfNull(tool);
         var meta = tool.ProtocolTool.Meta;
         if (meta is null)
         {
@@ -161,9 +168,22 @@ public class McpPluginManager : IMcpPluginManager
 
         var aliases = ReadHint(meta, ToolRetrievalHints.AliasesKey);
         var companions = ReadHint(meta, ToolRetrievalHints.CompanionsKey);
-        return aliases is null && companions is null
-            ? tool
-            : tool.WithRetrievalHints(aliases, companions);
+        var targets = ReadHint(meta, ToolInvocationHints.TargetArgumentsKey) is { } declared
+            ? ToolInvocationHints.KnownTargets(tool, declared)
+            : [];
+
+        AITool hinted = tool;
+        if (aliases is not null || companions is not null)
+        {
+            hinted = hinted.WithRetrievalHints(aliases, companions);
+        }
+
+        if (targets.Length > 0)
+        {
+            hinted = hinted.WithTargetArguments(targets);
+        }
+
+        return hinted;
     }
 
     private static string[]? ReadHint(System.Text.Json.Nodes.JsonObject meta, string key)

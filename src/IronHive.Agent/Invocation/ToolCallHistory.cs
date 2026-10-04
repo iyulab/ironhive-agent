@@ -44,6 +44,39 @@ internal static class ToolCallHistory
         return completed;
     }
 
+    /// <summary>
+    /// The one definition of "the same call" the loop guards share: a function that keys a call by its tool name and
+    /// arguments. Calls of <paramref name="current"/>, when it declares target arguments
+    /// (<see cref="ToolInvocationHints.GetTargetArguments"/>), are keyed by those arguments alone; every other call by all
+    /// of its arguments. A call of another tool never shares a key with a call of <paramref name="current"/>.
+    /// </summary>
+    public static Func<string, IEnumerable<KeyValuePair<string, object?>>?, string> KeyFor(AITool current, out IReadOnlyList<string> targets)
+    {
+        var declared = ToolInvocationHints.GetTargetArguments(current);
+        targets = declared;
+        var name = current.Name;
+        return declared.Count == 0
+            ? Key
+            : (callName, arguments) => string.Equals(callName, name, StringComparison.Ordinal)
+                ? TargetKey(callName, arguments, declared)
+                : Key(callName, arguments);
+    }
+
+    private static string TargetKey(string name, IEnumerable<KeyValuePair<string, object?>>? arguments, IReadOnlyList<string> targets)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var (key, value) in arguments ?? [])
+        {
+            values[key] = value;
+        }
+
+        // A target the call omits keys as absent, distinct from an explicit null.
+        var parts = targets
+            .Order(StringComparer.Ordinal)
+            .Select(t => t + (values.TryGetValue(t, out var value) ? "=" + Serialize(value) : "\u001e"));
+        return name + "\u001d" + string.Join("\u001f", parts);
+    }
+
     /// <summary>A key equal for two calls of the same tool with the same arguments, whatever their order.</summary>
     public static string Key(string name, IEnumerable<KeyValuePair<string, object?>>? arguments)
     {

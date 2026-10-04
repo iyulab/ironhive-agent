@@ -15,9 +15,10 @@ public sealed class ToolInvocationOptions
     public bool RefuseUnparseableArguments { get; set; } = true;
 
     /// <summary>
-    /// How many times in a row the same tool may run successfully with identical arguments. The next identical call is
-    /// not run; the model reads that it already has the result and should change course. 0 turns the guard off.
-    /// Default: 3.
+    /// How many times in a row the same tool may run successfully with identical arguments — or with the same target, for
+    /// a tool that declares target arguments (<see cref="ToolInvocationHints.WithTargetArguments"/>), whatever its other
+    /// arguments. The next such call is not run; the model reads that it already has the result and should change course.
+    /// 0 turns the guard off. Default: 3.
     /// </summary>
     public int MaxRepeatedCalls { get; set; } = 3;
 
@@ -43,7 +44,8 @@ public sealed class ToolInvocationOptions
     public int MaxRepeatedErrors { get; set; } = 3;
 
     /// <summary>
-    /// On how many separate visits the same tool may return the same result to identical arguments before the request is
+    /// On how many separate visits the same tool may return the same result to identical arguments (or to the same target,
+    /// for a tool that declares target arguments) before the request is
     /// ended (<c>FunctionInvocationContext.Terminate</c>; the turn ends as <c>TurnStopReason.ToolTerminated</c> on a
     /// <see cref="IronHive.Agent.Mode.ToolCallRefusal"/> of kind <c>RepeatedResult</c>). A visit is a run of identical
     /// calls with other calls before it; consecutive identical calls are the repeated-call guard's. A model that keeps

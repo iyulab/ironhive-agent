@@ -317,14 +317,40 @@ Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocatio
 | Guard | What the model gets | Option (default) |
 |---|---|---|
 | `ArgumentParseFailureMiddleware` | a call whose arguments could not be parsed is not run; the model reads the parse error | `RefuseUnparseableArguments` (true) |
-| `RepeatedCallGuardMiddleware` | the same tool with identical arguments, after that many successful runs in a row, is not run again; the `MaxRefusedRepeats`-th refusal in a row of that call ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedCall` refusal), so a stuck model does not spend the step budget | `MaxRepeatedCalls` (3; 0 = off) · `MaxRefusedRepeats` (2; 0 = keep refusing) |
-| `RepeatedResultGuardMiddleware` | the same tool returning the same result to identical arguments on that many separate visits (other calls in between) ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedResult` refusal that names the cause) — the shape of a working set larger than the masking budget (`ObservationMaskingProtectedTokens`), re-read in rotation until the step limit or written from memory; consecutive repeats are the call guard's, a changed result does not count | `MaxRepeatedResults` (3; 0 = off) |
+| `RepeatedCallGuardMiddleware` | the same tool with identical arguments (or on the same target, for a tool that declares [target arguments](#target-arguments)), after that many successful runs in a row, is not run again; the `MaxRefusedRepeats`-th refusal in a row of that call ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedCall` refusal), so a stuck model does not spend the step budget | `MaxRepeatedCalls` (3; 0 = off) · `MaxRefusedRepeats` (2; 0 = keep refusing) |
+| `RepeatedResultGuardMiddleware` | the same tool returning the same result to identical arguments (or the same target) on that many separate visits (other calls in between) ends the request (`TurnStopReason.ToolTerminated` on a `RepeatedResult` refusal that names the cause) — the shape of a working set larger than the masking budget (`ObservationMaskingProtectedTokens`), re-read in rotation until the step limit or written from memory; consecutive repeats are the call guard's, a changed result does not count | `MaxRepeatedResults` (3; 0 = off) |
 | `RepeatedErrorGuardMiddleware` | the same tool failing with the same error that many times in a row ends the request (`Terminate`) with a result, not an exception | `MaxRepeatedErrors` (3; 0 = off) |
 
 A failure is a call that throws **or a result that reports one**: an MCP result with `isError: true` is recognised out of
 the box (keyed by its first text content), and `ToolInvocationOptions.FailureOf` (`Func<object?, string?>`, error text or
 null) adds your own tools' convention — e.g. `FailureOf = r => r is string s && s.StartsWith("Error") ? s : null`. Both
 guards use it: such a result counts toward `MaxRepeatedErrors` and never as a successful run for `MaxRepeatedCalls`.
+
+### Target arguments
+
+By default two calls are "the same call" when the tool and every argument match. A tool whose arguments split into the
+one that names what it acts on (a `path`, a `url`, a record id) and ones that only shape the answer (a question, a
+format) can declare the first kind. The repeated-call and repeated-result guards then compare those alone, so a model
+that keeps describing one image while it adds or drops a question is stopped like any other repeat:
+
+```csharp
+using IronHive.Agent.Invocation;
+
+var describe = AIFunctionFactory.Create(
+        (string path, string? question) => "...", "describe_image", "Describe an image, optionally answering a question about it.")
+    .WithTargetArguments(["path"]);
+```
+
+- The refusal names the target ("already ran 3 times in a row on the same path, whatever the other arguments") and tells
+  the model to move on to a different path. The `MaxRefusedRepeats`-th refusal ends the request, as before.
+- Every name must be a parameter of the tool. `WithTargetArguments` throws otherwise, since an unknown name would make
+  every call one target. It replaces any targets the tool already declares, and the tool is described and invoked
+  unchanged. `ToolInvocationHints.GetTargetArguments(tool)` reads them.
+- An MCP server declares them in a tool's `_meta` under `ToolInvocationHints.TargetArgumentsKey`
+  (`"ironhive.invocation.target"`), as a string array or a comma-separated string. `McpPluginManager` carries them over;
+  a name the tool's input schema does not declare is dropped.
+- Declare targets only where a new value of every other argument still means "the same thing again". A read with an
+  `offset` or a paged search moves on with each call and must not declare its `path`/`query` as the target.
 
 ## In-Process Tool-Result Guard (opt-in)
 
@@ -493,7 +519,8 @@ var restore = AIFunctionFactory.Create(RestoreFileVersion, "restore_file_version
   MCP `_meta` carries). `WithRetrievalHints` wraps an `AIFunction` or a declaration-only
   `AIFunctionDeclaration` without changing how it is described or invoked, and merges with hints already there.
 - Hints an MCP server declares in a tool's `_meta` reach the retrievers through `McpPluginManager`. A host that lists
-  tools with its own MCP clients uses the same bridge: `McpPluginManager.WithDeclaredRetrievalHints(mcpClientTool)`.
+  tools with its own MCP clients uses the same bridge: `McpPluginManager.WithDeclaredHints(mcpClientTool)`, which carries
+  [target arguments](#target-arguments) too.
   `ToolRetrievalHints.ParseValue(value)` reads a hint value the way the retrievers do.
 
 `ToolRetrievalResult.Selections` records every selected tool with its reason (`Pinned`, `ExactName`, `Alias`,

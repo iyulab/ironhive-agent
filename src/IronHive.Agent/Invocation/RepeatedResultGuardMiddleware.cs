@@ -8,7 +8,8 @@ namespace IronHive.Agent.Invocation;
 
 /// <summary>
 /// Ends a request whose model keeps coming back for content it already has. When a call returns the same result as the
-/// same tool with identical arguments returned on <see cref="ToolInvocationOptions.MaxRepeatedResults"/> − 1 earlier
+/// same tool with identical arguments (or the same target, for a tool that declares target arguments —
+/// <see cref="ToolInvocationHints"/>) returned on <see cref="ToolInvocationOptions.MaxRepeatedResults"/> − 1 earlier
 /// visits — each visit separated from the last by other calls — the request ends
 /// (<see cref="FunctionInvocationContext.Terminate"/>) on a <see cref="ToolCallRefusal"/>
 /// (<see cref="ToolCallRefusalKind.RepeatedResult"/>) that says why.
@@ -49,15 +50,16 @@ public sealed partial class RepeatedResultGuardMiddleware : IToolInvocationMiddl
 
         var max = _options.MaxRepeatedResults;
         var name = context.Function.Name;
-        var key = ToolCallHistory.Key(name, context.CallContent?.Arguments ?? context.Arguments);
+        var keyOf = ToolCallHistory.KeyFor(context.Function, out _);
+        var key = keyOf(name, context.CallContent?.Arguments ?? context.Arguments);
         var completed = max > 0
             ? ToolCallHistory.Completed(context.Messages, context.CallContent?.CallId)
             : [];
 
         // Nothing to compare against, or the call continues a run of the same call (one visit): just run it.
         if (completed.Count == 0
-            || ToolCallHistory.Key(completed[^1].Call.Name, completed[^1].Call.Arguments) == key
-            || !completed.Any(c => ToolCallHistory.Key(c.Call.Name, c.Call.Arguments) == key))
+            || keyOf(completed[^1].Call.Name, completed[^1].Call.Arguments) == key
+            || !completed.Any(c => keyOf(c.Call.Name, c.Call.Arguments) == key))
         {
             return await next(context, cancellationToken).ConfigureAwait(false);
         }
@@ -74,7 +76,7 @@ public sealed partial class RepeatedResultGuardMiddleware : IToolInvocationMiddl
         var visitCounted = false;
         foreach (var (call, earlier) in completed)
         {
-            var callKey = ToolCallHistory.Key(call.Name, call.Arguments);
+            var callKey = keyOf(call.Name, call.Arguments);
             if (callKey != previousKey)
             {
                 visitCounted = false; // a new visit starts

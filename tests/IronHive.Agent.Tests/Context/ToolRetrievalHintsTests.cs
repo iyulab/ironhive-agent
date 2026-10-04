@@ -204,7 +204,7 @@ public class McpRetrievalHintsTests
     [Fact]
     public void HintsAnMcpServerDeclaresInMeta_ReachTheRetriever()
     {
-        var tool = IronHive.Agent.Mcp.McpPluginManager.WithDeclaredRetrievalHints(McpTool(new()
+        var tool = IronHive.Agent.Mcp.McpPluginManager.WithDeclaredHints(McpTool(new()
         {
             [ToolRetrievalHints.AliasesKey] = "undo, revert",
             [ToolRetrievalHints.CompanionsKey] = new System.Text.Json.Nodes.JsonArray("list_file_versions"),
@@ -220,6 +220,6 @@ public class McpRetrievalHintsTests
     {
         var original = McpTool(new() { ["other"] = "x" });
 
-        Assert.Same(original, IronHive.Agent.Mcp.McpPluginManager.WithDeclaredRetrievalHints(original));
+        Assert.Same(original, IronHive.Agent.Mcp.McpPluginManager.WithDeclaredHints(original));
     }
 }

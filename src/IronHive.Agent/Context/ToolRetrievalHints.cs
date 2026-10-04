@@ -1,4 +1,5 @@
 using System.Text.Json;
+using IronHive.Agent.Tools;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -66,23 +67,10 @@ public static class ToolRetrievalHints
     {
         ArgumentNullException.ThrowIfNull(tool);
 
-        var properties = new AdditionalPropertiesDictionary();
-        foreach (var (key, value) in tool.AdditionalProperties)
-        {
-            properties[key] = value;
-        }
-
+        var properties = ToolPropertyOverlay.CopyProperties(tool);
         Merge(properties, AliasesKey, aliases);
         Merge(properties, CompanionsKey, companions);
-
-        return tool switch
-        {
-            AIFunction function => new HintedFunction(function, properties),
-            AIFunctionDeclaration declaration => new HintedDeclaration(declaration, properties),
-            _ => throw new ArgumentException(
-                $"Retrieval hints can be attached to an AIFunction or an AIFunctionDeclaration, not to {tool.GetType().Name}.",
-                nameof(tool)),
-        };
+        return ToolPropertyOverlay.With(tool, properties, "Retrieval hints", nameof(tool));
     }
 
     private static void Merge(AdditionalPropertiesDictionary properties, string key, IEnumerable<string>? added)
@@ -119,32 +107,4 @@ public static class ToolRetrievalHints
 
     private static string[] Normalize(IEnumerable<string> items) =>
         items.Select(i => i.Trim()).Where(i => i.Length > 0).ToArray();
-
-    private sealed class HintedFunction(AIFunction inner, AdditionalPropertiesDictionary properties)
-        : DelegatingAIFunction(inner)
-    {
-        public override IReadOnlyDictionary<string, object?> AdditionalProperties => properties;
-    }
-
-    // M.E.AI keeps its delegating declaration internal, so this forwards the declaration surface itself.
-    private sealed class HintedDeclaration(AIFunctionDeclaration inner, AdditionalPropertiesDictionary properties)
-        : AIFunctionDeclaration
-    {
-        public override string Name => inner.Name;
-
-        public override string Description => inner.Description;
-
-        public override JsonElement JsonSchema => inner.JsonSchema;
-
-        public override JsonElement? ReturnJsonSchema => inner.ReturnJsonSchema;
-
-        public override IReadOnlyDictionary<string, object?> AdditionalProperties => properties;
-
-        public override object? GetService(Type serviceType, object? serviceKey = null) =>
-            serviceKey is null && serviceType.IsInstanceOfType(this)
-                ? this
-                : inner.GetService(serviceType, serviceKey);
-
-        public override string ToString() => inner.ToString();
-    }
 }

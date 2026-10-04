@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.45.0] - Unreleased
+
+### Added
+- **A tool can declare the arguments that name what a call acts on, and the loop guards then stop a model that keeps
+  acting on one target while varying the rest.** `tool.WithTargetArguments(["path"])` (or `_meta`
+  `"ironhive.invocation.target"` on an MCP tool): `RepeatedCallGuardMiddleware` and `RepeatedResultGuardMiddleware`
+  compare those arguments alone, so describing one image again and again with and without a question is refused on the
+  fourth call and ended on the second refusal. Undeclared tools keep full-argument comparison. A name the tool does not
+  have is rejected (`ArgumentException`), or dropped when it comes from MCP `_meta`. `ToolInvocationHints` reads them.
+
+### Changed
+- **Breaking:** `McpPluginManager.WithDeclaredRetrievalHints` is renamed `WithDeclaredHints`, since it now carries target
+  arguments as well as retrieval hints. Migration: rename the call.
+
 ## [0.44.0] - 2026-10-04
 
 ### Added
