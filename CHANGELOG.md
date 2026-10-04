@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.46.1] - Unreleased
+
+### Fixed
+- **`WriteFile` keeps an existing file's encoding and line endings, as `EditFile` does.** Overwriting a UTF-8 file with
+  a byte-order mark, or a UTF-16 file, wrote plain UTF-8; content written with `\n` into a `\r\n` file changed every
+  line ending; and `append: true` added UTF-8 bytes to a UTF-16 file. Content that itself carries `\r\n` is written as
+  given, and a new file is still UTF-8 without a mark.
+
 ## [0.46.0] - 2026-10-04
 
 ### Added

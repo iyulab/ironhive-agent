@@ -134,6 +134,12 @@ public class ToolProvider
     /// <param name="path">Relative or absolute path to the file to write.</param>
     /// <param name="content">Content to write to the file.</param>
     /// <param name="append">If true, appends to existing file instead of overwriting.</param>
+    /// <remarks>
+    /// An existing file keeps its encoding (UTF-8 with or without a byte-order mark, UTF-16) and its line endings: content
+    /// written with <c>\n</c> into a file that uses <c>\r\n</c> is written with <c>\r\n</c>, as <see cref="EditFile"/>
+    /// does — otherwise a rewrite (or an append) changes every line ending, and an append to a UTF-16 file would add
+    /// UTF-8 bytes to it. Content that itself carries <c>\r\n</c> is written as given. A new file is UTF-8 without a mark.
+    /// </remarks>
     [Description("Write content to a file. Creates the file if it doesn't exist, or overwrites if it does.")]
     public async Task<string> WriteFile(
         [Description("Path to the file to write (relative to working directory or absolute)")] string path,
@@ -151,9 +157,15 @@ public class ToolProvider
             Directory.CreateDirectory(directory);
         }
 
+        var (encoding, newline) = await ExistingFileFormatAsync(fullPath);
+        var text = newline == "\r\n" && !content.Contains("\r\n", StringComparison.Ordinal)
+            ? content.Replace("\n", "\r\n", StringComparison.Ordinal)
+            : content;
+
+        // Appending through the file's encoding writes no second byte-order mark: the writer emits one only at offset 0.
         Func<Task> write = append
-            ? () => File.AppendAllTextAsync(fullPath, content)
-            : () => File.WriteAllTextAsync(fullPath, content);
+            ? () => File.AppendAllTextAsync(fullPath, text, encoding)
+            : () => File.WriteAllTextAsync(fullPath, text, encoding);
 
         string? note = null;
         if (_writeInterceptor is null)
@@ -266,6 +278,31 @@ public class ToolProvider
 
         static string Collapse(string text) =>
             System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+    }
+
+    /// <summary>
+    /// The encoding and line ending of an existing file, read from its first bytes; UTF-8 without a mark and no
+    /// preference (<c>null</c>) for a file that does not exist or has no line break yet.
+    /// </summary>
+    private static async Task<(Encoding Encoding, string? Newline)> ExistingFileFormatAsync(string fullPath)
+    {
+        if (!File.Exists(fullPath))
+        {
+            return (new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), null);
+        }
+
+        const int Probe = 64 * 1024;
+        var buffer = new byte[Probe];
+        int read;
+        await using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, useAsync: true))
+        {
+            read = await stream.ReadAtLeastAsync(buffer, Probe, throwOnEndOfStream: false);
+        }
+
+        var (encoding, preamble) = DetectEncoding(buffer[..read]);
+        var head = encoding.GetString(buffer, preamble, read - preamble);
+        var newline = head.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : head.Contains('\n') ? "\n" : null;
+        return (encoding, newline);
     }
 
     // UTF-8 with or without a byte-order mark, or UTF-16 by its mark. Writing back with the returned encoding emits the
