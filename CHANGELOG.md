@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.51.1 -> 0.52.0, `IronProw.Core` 0.14.3 -> 0.15.0, `MemoryIndexer` 0.23.2 -> 0.24.0. No source changes.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.17 -> 0.21.18, `Ironbees.Core` 0.21.17 -> 0.21.18.
 
 ## [0.48.2] - 2026-10-05
 

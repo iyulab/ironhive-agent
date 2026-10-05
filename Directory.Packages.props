@@ -8,8 +8,8 @@
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
     <PackageVersion Include="IronProw.Core" Version="0.15.0" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.21.17" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.17" />
+    <PackageVersion Include="Ironbees.Core" Version="0.21.18" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.21.18" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.9" />
     <!-- Microsoft.Extensions.AI -->
