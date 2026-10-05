@@ -70,7 +70,7 @@ public class HeadTailCaptureTests
                 ? "for /L %i in (1,1,12000) do @echo line-%i-padding & echo FINAL-SUMMARY"
                 : "for i in $(seq 1 12000); do echo line-$i-padding; done; echo FINAL-SUMMARY";
 
-            var result = await tools.ExecuteCommand(command, timeoutMs: 60_000);
+            var result = await tools.ExecuteCommand(command, timeoutMs: 60_000, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("FINAL-SUMMARY", result);
             Assert.Contains("line-1-padding", result);

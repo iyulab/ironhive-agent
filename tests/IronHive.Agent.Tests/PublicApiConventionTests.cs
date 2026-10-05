@@ -15,15 +15,7 @@ namespace IronHive.Agent.Tests;
 /// </remarks>
 public class PublicApiConventionTests
 {
-    private static readonly string[] KnownUncancellable =
-    [
-        "IronHive.Agent.Tools.TodoTool.ManageTodo(String, String, String, String, String, String)",
-        "IronHive.Agent.Tools.ToolProvider.EditFile(String, String, String, Boolean)",
-        "IronHive.Agent.Tools.ToolProvider.ExecuteCommand(String, Int32)",
-        "IronHive.Agent.Tools.ToolProvider.GrepFiles(String, String, String)",
-        "IronHive.Agent.Tools.ToolProvider.ReadFile(String, Nullable<Int32>, Nullable<Int32>)",
-        "IronHive.Agent.Tools.ToolProvider.WriteFile(String, String, Boolean)",
-    ];
+    private static readonly string[] KnownUncancellable = [];
 
     private static readonly string[] KnownResultReturns = [];
 

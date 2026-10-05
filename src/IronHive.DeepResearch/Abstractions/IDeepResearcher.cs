@@ -57,20 +57,15 @@ public interface IResearchSession : IAsyncDisposable
     /// <summary>
     /// 현재 체크포인트 조회
     /// </summary>
-    Task<ResearchCheckpoint> GetCheckpointAsync();
-
-    /// <summary>
-    /// 리서치 계속 진행
-    /// </summary>
-    Task ContinueAsync();
+    Task<ResearchCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 사용자 정의 쿼리 추가
     /// </summary>
-    Task AddQueryAsync(string customQuery);
+    Task AddQueryAsync(string customQuery, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 리서치 종료 및 결과 반환
+    /// 리서치 종료 및 결과 반환 — 누적된 상태에서 리서치를 끝까지 실행한다(취소 가능).
     /// </summary>
-    Task<ResearchResult> FinalizeAsync();
+    Task<ResearchResult> FinalizeAsync(CancellationToken cancellationToken = default);
 }

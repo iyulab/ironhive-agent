@@ -15,14 +15,11 @@ namespace IronHive.DeepResearch.Tests;
 /// </remarks>
 public class PublicApiConventionTests
 {
-    private static readonly string[] KnownUncancellable =
-    [
-        "IronHive.DeepResearch.Abstractions.IResearchSession.AddQueryAsync(String)",
-        "IronHive.DeepResearch.Abstractions.IResearchSession.ContinueAsync()",
-        "IronHive.DeepResearch.Abstractions.IResearchSession.FinalizeAsync()",
-        "IronHive.DeepResearch.Abstractions.IResearchSession.GetCheckpointAsync()",
-    ];
+    private static readonly string[] KnownUncancellable = [];
 
+    // Kept (2026-10-05): ExtractedContent is also the per-item result of ExtractBatchAsync, and a page that cannot be
+    // fetched is an expected outcome per source — ContentEnrichmentAgent records it as a FailedExtraction and goes on.
+    // Throwing here would only move that mapping into a catch at the one caller.
     private static readonly string[] KnownResultReturns =
     [
         "IronHive.DeepResearch.Abstractions.IContentExtractor.ExtractAsync(String, ContentExtractionOptions, CancellationToken)",

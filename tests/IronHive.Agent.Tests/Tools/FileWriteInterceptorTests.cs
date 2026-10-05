@@ -29,7 +29,7 @@ public class FileWriteInterceptorTests : IDisposable
         var interceptor = new Recording(note: " (snapshot saved)");
         var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = interceptor });
 
-        var result = await tools.WriteFile("sub/notes.md", "hello");
+        var result = await tools.WriteFile("sub/notes.md", "hello", cancellationToken: TestContext.Current.CancellationToken);
 
         var expectedPath = Path.GetFullPath(Path.Combine(_dir, "sub", "notes.md"));
         Assert.Equal([expectedPath], interceptor.Paths.Select(Path.GetFullPath));
@@ -41,7 +41,7 @@ public class FileWriteInterceptorTests : IDisposable
     [Fact]
     public async Task WithoutAnInterceptor_TheMessageIsUnchanged()
     {
-        var result = await new ToolProvider(_dir).WriteFile("plain.txt", "x");
+        var result = await new ToolProvider(_dir).WriteFile("plain.txt", "x", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Successfully wrote to file: plain.txt", result);
     }
@@ -51,9 +51,9 @@ public class FileWriteInterceptorTests : IDisposable
     {
         var interceptor = new Recording(note: null);
         var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = interceptor });
-        await tools.WriteFile("log.txt", "a");
+        await tools.WriteFile("log.txt", "a", cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await tools.WriteFile("log.txt", "b", append: true);
+        var result = await tools.WriteFile("log.txt", "b", append: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Successfully appended to file: log.txt", result);
         Assert.Equal("ab", await File.ReadAllTextAsync(Path.Combine(_dir, "log.txt"), TestContext.Current.CancellationToken));
@@ -65,7 +65,7 @@ public class FileWriteInterceptorTests : IDisposable
     {
         var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = new Recording(note: " (refused)", callWrite: false) });
 
-        await tools.WriteFile("blocked.txt", "x");
+        await tools.WriteFile("blocked.txt", "x", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(File.Exists(Path.Combine(_dir, "blocked.txt")));
     }
@@ -75,7 +75,7 @@ public class FileWriteInterceptorTests : IDisposable
     {
         var tools = new ToolProvider(_dir, new FileToolOptions { WriteInterceptor = new Throwing() });
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tools.WriteFile("x.txt", "x"));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tools.WriteFile("x.txt", "x", cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("versioning store is read-only", ex.Message);
     }

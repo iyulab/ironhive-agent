@@ -149,7 +149,7 @@ public class DeepResearcherTests
         var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
 
         // Act
-        var checkpoint = await session.GetCheckpointAsync();
+        var checkpoint = await session.GetCheckpointAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         checkpoint.Should().NotBeNull();
@@ -166,22 +166,23 @@ public class DeepResearcherTests
         var customQuery = "Custom follow-up query";
 
         // Act
-        await session.AddQueryAsync(customQuery);
+        await session.AddQueryAsync(customQuery, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         session.CurrentState.ExecutedQueries.Should().Contain(q => q.Query == customQuery);
     }
 
+    // Resuming runs the rest of the research; the caller's token must reach it, or a resumed research cannot be stopped.
     [Fact]
-    public async Task Session_ContinueAsync_ThrowsNotImplementedException()
+    public async Task ResumeAsync_PassesTheCallersTokenToTheResearchRun()
     {
-        // Arrange
-        var request = CreateTestRequest();
-        var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
+        var session = await _researcher.StartInteractiveAsync(CreateTestRequest(), TestContext.Current.CancellationToken);
+        _mockOrchestrator.SetupResult(CreateTestResult());
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
-        // Act & Assert — ContinueAsync throws synchronously before returning a Task
-        var act = () => { _ = session.ContinueAsync(); };
-        act.Should().Throw<NotImplementedException>();
+        await _researcher.ResumeAsync(session.SessionId, cts.Token);
+
+        _mockOrchestrator.LastToken.Should().Be(cts.Token);
     }
 
     [Fact]
@@ -193,12 +194,12 @@ public class DeepResearcherTests
 
         // Add a custom query to accumulate state before finalizing
         const string customQuery = "accumulated custom query";
-        await session.AddQueryAsync(customQuery);
+        await session.AddQueryAsync(customQuery, cancellationToken: TestContext.Current.CancellationToken);
 
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         // Act
-        var result = await session.FinalizeAsync();
+        var result = await session.FinalizeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert — orchestrator received the state with the accumulated query
         result.Should().NotBeNull();
@@ -216,7 +217,7 @@ public class DeepResearcherTests
         _mockOrchestrator.SetupResult(CreateTestResult());
 
         // Act
-        var result = await session.FinalizeAsync();
+        var result = await session.FinalizeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().NotBeNull();
@@ -231,11 +232,11 @@ public class DeepResearcherTests
         var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         _mockOrchestrator.SetupResult(CreateTestResult());
 
-        await session.FinalizeAsync();
+        await session.FinalizeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => session.FinalizeAsync());
+            () => session.FinalizeAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -260,11 +261,11 @@ public class DeepResearcherTests
         var session = await _researcher.StartInteractiveAsync(request, TestContext.Current.CancellationToken);
         _mockOrchestrator.SetupResult(CreateTestResult());
 
-        await session.FinalizeAsync();
+        await session.FinalizeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => session.AddQueryAsync("New query"));
+            () => session.AddQueryAsync("New query", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static ResearchRequest CreateTestRequest()
@@ -364,6 +365,8 @@ internal class MockResearchOrchestratorForFacade : ResearchOrchestrator
     public bool ExecuteStreamCalled { get; private set; }
     public ResearchState? LastExecutedState { get; private set; }
 
+    public CancellationToken LastToken { get; private set; }
+
     public MockResearchOrchestratorForFacade() : base(
         CreateMockQueryPlanner(),
         CreateMockSearchCoordinator(),
@@ -393,6 +396,7 @@ internal class MockResearchOrchestratorForFacade : ResearchOrchestrator
     {
         ExecuteCalled = true;
         LastExecutedState = state;
+        LastToken = cancellationToken;
 
         return Task.FromResult(_result ?? BuildDefaultResult(state.Request.Query));
     }

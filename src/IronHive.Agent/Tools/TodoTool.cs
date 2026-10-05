@@ -47,28 +47,29 @@ public class TodoTool
         [Description("Task ID (required for 'update', 'complete', 'remove')")] string? id = null,
         [Description("New status for 'update': 'pending', 'in_progress', 'blocked', 'completed'")] string? status = null,
         [Description("Task priority for 'add' or 'update': 'low', 'medium', 'high'")] string? priority = null,
-        [Description("Dependencies - comma-separated task IDs that must complete first")] string? dependencies = null)
+        [Description("Dependencies - comma-separated task IDs that must complete first")] string? dependencies = null,
+        CancellationToken cancellationToken = default)
     {
         return action.ToLowerInvariant() switch
         {
-            "add" => await AddTodoAsync(task, priority, dependencies),
-            "list" => await ListTodosAsync(),
-            "update" => await UpdateTodoAsync(id, task, status, priority, dependencies),
-            "complete" => await CompleteTodoAsync(id),
-            "remove" => await RemoveTodoAsync(id),
-            "clear" => await ClearTodosAsync(),
+            "add" => await AddTodoAsync(task, priority, dependencies, cancellationToken),
+            "list" => await ListTodosAsync(cancellationToken),
+            "update" => await UpdateTodoAsync(id, task, status, priority, dependencies, cancellationToken),
+            "complete" => await CompleteTodoAsync(id, cancellationToken),
+            "remove" => await RemoveTodoAsync(id, cancellationToken),
+            "clear" => await ClearTodosAsync(cancellationToken),
             _ => throw new ArgumentException($"Unknown action '{action}'. Use 'add', 'list', 'update', 'complete', 'remove', or 'clear'.", nameof(action))
         };
     }
 
-    private async Task<string> AddTodoAsync(string? task, string? priority, string? dependencies)
+    private async Task<string> AddTodoAsync(string? task, string? priority, string? dependencies, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(task))
         {
             throw new ArgumentException("Task description is required for 'add' action.", nameof(task));
         }
 
-        var todos = await LoadTodosAsync();
+        var todos = await LoadTodosAsync(cancellationToken);
         var newId = GenerateId(todos);
 
         var newTodo = new TodoItem
@@ -82,14 +83,14 @@ public class TodoTool
         };
 
         todos.Items.Add(newTodo);
-        await SaveTodosAsync(todos);
+        await SaveTodosAsync(todos, cancellationToken);
 
         return $"Added task #{newId}: {task}";
     }
 
-    private async Task<string> ListTodosAsync()
+    private async Task<string> ListTodosAsync(CancellationToken cancellationToken)
     {
-        var todos = await LoadTodosAsync();
+        var todos = await LoadTodosAsync(cancellationToken);
 
         if (todos.Items.Count == 0)
         {
@@ -125,14 +126,14 @@ public class TodoTool
         return string.Join(Environment.NewLine, lines);
     }
 
-    private async Task<string> UpdateTodoAsync(string? id, string? task, string? status, string? priority, string? dependencies)
+    private async Task<string> UpdateTodoAsync(string? id, string? task, string? status, string? priority, string? dependencies, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
             throw new ArgumentException("Task ID is required for 'update' action.", nameof(id));
         }
 
-        var todos = await LoadTodosAsync();
+        var todos = await LoadTodosAsync(cancellationToken);
         var todo = todos.Items.Find(t => t.Id == id);
 
         if (todo == null)
@@ -161,19 +162,19 @@ public class TodoTool
         }
 
         todo.UpdatedAt = DateTime.UtcNow;
-        await SaveTodosAsync(todos);
+        await SaveTodosAsync(todos, cancellationToken);
 
         return $"Updated task #{id}: {todo.Task} [{todo.Status}]";
     }
 
-    private async Task<string> CompleteTodoAsync(string? id)
+    private async Task<string> CompleteTodoAsync(string? id, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
             throw new ArgumentException("Task ID is required for 'complete' action.", nameof(id));
         }
 
-        var todos = await LoadTodosAsync();
+        var todos = await LoadTodosAsync(cancellationToken);
         var todo = todos.Items.Find(t => t.Id == id);
 
         if (todo == null)
@@ -197,19 +198,19 @@ public class TodoTool
         todo.Status = TodoStatus.Completed;
         todo.CompletedAt = DateTime.UtcNow;
         todo.UpdatedAt = DateTime.UtcNow;
-        await SaveTodosAsync(todos);
+        await SaveTodosAsync(todos, cancellationToken);
 
         return $"Completed task #{id}: {todo.Task}";
     }
 
-    private async Task<string> RemoveTodoAsync(string? id)
+    private async Task<string> RemoveTodoAsync(string? id, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
             throw new ArgumentException("Task ID is required for 'remove' action.", nameof(id));
         }
 
-        var todos = await LoadTodosAsync();
+        var todos = await LoadTodosAsync(cancellationToken);
         var removed = todos.Items.RemoveAll(t => t.Id == id);
 
         if (removed == 0)
@@ -217,13 +218,13 @@ public class TodoTool
             throw new KeyNotFoundException($"Task #{id} not found.");
         }
 
-        await SaveTodosAsync(todos);
+        await SaveTodosAsync(todos, cancellationToken);
         return $"Removed task #{id}";
     }
 
-    private async Task<string> ClearTodosAsync()
+    private async Task<string> ClearTodosAsync(CancellationToken cancellationToken)
     {
-        var todos = await LoadTodosAsync();
+        var todos = await LoadTodosAsync(cancellationToken);
         var count = todos.Items.Count;
 
         // Only clear completed tasks
@@ -234,11 +235,11 @@ public class TodoTool
             return "No completed tasks to clear.";
         }
 
-        await SaveTodosAsync(todos);
+        await SaveTodosAsync(todos, cancellationToken);
         return $"Cleared {removed} completed tasks. {todos.Items.Count} tasks remaining.";
     }
 
-    private async Task<TodoList> LoadTodosAsync()
+    private async Task<TodoList> LoadTodosAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_todoFilePath))
         {
@@ -247,7 +248,7 @@ public class TodoTool
 
         try
         {
-            var json = await File.ReadAllTextAsync(_todoFilePath);
+            var json = await File.ReadAllTextAsync(_todoFilePath, cancellationToken);
             return JsonSerializer.Deserialize<TodoList>(json, JsonOptions) ?? new TodoList();
         }
         catch
@@ -256,7 +257,7 @@ public class TodoTool
         }
     }
 
-    private async Task SaveTodosAsync(TodoList todos)
+    private async Task SaveTodosAsync(TodoList todos, CancellationToken cancellationToken)
     {
         var directory = Path.GetDirectoryName(_todoFilePath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -265,7 +266,7 @@ public class TodoTool
         }
 
         var json = JsonSerializer.Serialize(todos, JsonOptions);
-        await File.WriteAllTextAsync(_todoFilePath, json);
+        await File.WriteAllTextAsync(_todoFilePath, json, cancellationToken);
     }
 
     private static string GenerateId(TodoList todos)

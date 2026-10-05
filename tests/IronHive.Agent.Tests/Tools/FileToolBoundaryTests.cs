@@ -55,8 +55,8 @@ public class FileToolBoundaryTests : IDisposable
     {
         var path = form.Replace("{ABSOLUTE}", _secret, StringComparison.Ordinal);
 
-        var open = await _open.ReadFile(path);
-        var confined = await _confined.ReadFile(path);
+        var open = await _open.ReadFile(path, cancellationToken: TestContext.Current.CancellationToken);
+        var confined = await _confined.ReadFile(path, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("TOP-SECRET", open, StringComparison.Ordinal);
         Assert.DoesNotContain("TOP-SECRET", confined, StringComparison.Ordinal);
@@ -67,9 +67,9 @@ public class FileToolBoundaryTests : IDisposable
     [Fact]
     public async Task InsideTheRoots_NothingChanges()
     {
-        Assert.Contains("inside", await _confined.ReadFile("src/inside.txt"), StringComparison.Ordinal);
-        Assert.Contains("inside", await _confined.ReadFile(Path.Combine(_work, "src", "inside.txt")), StringComparison.Ordinal);
-        Assert.Contains("inside", await _confined.ReadFile("src/../src/inside.txt"), StringComparison.Ordinal);
+        Assert.Contains("inside", await _confined.ReadFile("src/inside.txt", cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Contains("inside", await _confined.ReadFile(Path.Combine(_work, "src", "inside.txt"), cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Contains("inside", await _confined.ReadFile("src/../src/inside.txt", cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -77,11 +77,11 @@ public class FileToolBoundaryTests : IDisposable
     {
         var target = Path.Combine(_outside, "planted.txt");
 
-        var confined = await _confined.WriteFile("../outside/planted.txt", "x");
+        var confined = await _confined.WriteFile("../outside/planted.txt", "x", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains("outside the directories", confined, StringComparison.Ordinal);
         Assert.False(File.Exists(target));
 
-        var open = await _open.WriteFile("../outside/planted.txt", "x");
+        var open = await _open.WriteFile("../outside/planted.txt", "x", cancellationToken: TestContext.Current.CancellationToken);
         Assert.StartsWith("Successfully wrote", open, StringComparison.Ordinal);
         Assert.True(File.Exists(target));
     }
@@ -100,7 +100,7 @@ public class FileToolBoundaryTests : IDisposable
     {
         var before = File.ReadAllText(_secret);
 
-        var confined = await _confined.EditFile("../outside/secret.txt", before, "changed");
+        var confined = await _confined.EditFile("../outside/secret.txt", before, "changed", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("outside the directories", confined, StringComparison.Ordinal);
         Assert.Equal(before, File.ReadAllText(_secret));
@@ -143,10 +143,10 @@ public class FileToolBoundaryTests : IDisposable
     [Fact]
     public async Task GrepFiles_DoesNotReadOutsideTheRoots()
     {
-        Assert.Contains("needle", await _open.GrepFiles("needle", "../outside/*.txt"), StringComparison.Ordinal);
-        Assert.DoesNotContain("TOP-SECRET", await _confined.GrepFiles("needle", "../outside/*.txt"), StringComparison.Ordinal);
+        Assert.Contains("needle", await _open.GrepFiles("needle", "../outside/*.txt", cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.DoesNotContain("TOP-SECRET", await _confined.GrepFiles("needle", "../outside/*.txt", cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
 
-        var viaBase = await _confined.GrepFiles("needle", "*.txt", "../outside");
+        var viaBase = await _confined.GrepFiles("needle", "*.txt", "../outside", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains("outside the directories", viaBase, StringComparison.Ordinal);
     }
 
@@ -158,7 +158,7 @@ public class FileToolBoundaryTests : IDisposable
         Directory.CreateDirectory(sibling);
         File.WriteAllText(Path.Combine(sibling, "n.txt"), "sibling");
 
-        var result = await _confined.ReadFile("../work-notes/n.txt");
+        var result = await _confined.ReadFile("../work-notes/n.txt", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("sibling", result, StringComparison.Ordinal);
     }
@@ -168,8 +168,8 @@ public class FileToolBoundaryTests : IDisposable
     {
         var tools = new ToolProvider(_work, new FileToolOptions { AllowedRoots = [".", _outside] });
 
-        Assert.Contains("TOP-SECRET", await tools.ReadFile(_secret), StringComparison.Ordinal);
-        Assert.Contains("inside", await tools.ReadFile("src/inside.txt"), StringComparison.Ordinal);
+        Assert.Contains("TOP-SECRET", await tools.ReadFile(_secret, cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        Assert.Contains("inside", await tools.ReadFile("src/inside.txt", cancellationToken: TestContext.Current.CancellationToken), StringComparison.Ordinal);
     }
 
     [Fact]

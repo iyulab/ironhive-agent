@@ -36,7 +36,7 @@ public class WriteFileFormatTests : IDisposable
     {
         File.WriteAllText(PathOf("a.cs"), "class A\r\n{\r\n}\r\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
-        await _tools.WriteFile("a.cs", "class B\n{\n}\n");
+        await _tools.WriteFile("a.cs", "class B\n{\n}\n", cancellationToken: TestContext.Current.CancellationToken);
 
         var bytes = File.ReadAllBytes(PathOf("a.cs"));
         Assert.Equal([0xEF, 0xBB, 0xBF], bytes[..3]);
@@ -48,7 +48,7 @@ public class WriteFileFormatTests : IDisposable
     {
         File.WriteAllText(PathOf("log.txt"), "first\r\n", new UnicodeEncoding(bigEndian: false, byteOrderMark: true));
 
-        await _tools.WriteFile("log.txt", "second\n", append: true);
+        await _tools.WriteFile("log.txt", "second\n", append: true, cancellationToken: TestContext.Current.CancellationToken);
 
         var bytes = File.ReadAllBytes(PathOf("log.txt"));
         Assert.Equal([0xFF, 0xFE], bytes[..2]);
@@ -60,7 +60,7 @@ public class WriteFileFormatTests : IDisposable
     {
         File.WriteAllText(PathOf("lf.txt"), "x\ny\n");
 
-        await _tools.WriteFile("lf.txt", "a\r\nb\r\n");
+        await _tools.WriteFile("lf.txt", "a\r\nb\r\n", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("a\r\nb\r\n", File.ReadAllText(PathOf("lf.txt")));
     }
@@ -68,7 +68,7 @@ public class WriteFileFormatTests : IDisposable
     [Fact]
     public async Task A_new_file_is_UTF8_without_a_mark_and_written_as_given()
     {
-        await _tools.WriteFile("new.txt", "héllo\nworld\n");
+        await _tools.WriteFile("new.txt", "héllo\nworld\n", cancellationToken: TestContext.Current.CancellationToken);
 
         var bytes = File.ReadAllBytes(PathOf("new.txt"));
         Assert.NotEqual(0xEF, bytes[0]);
@@ -81,7 +81,7 @@ public class WriteFileFormatTests : IDisposable
     {
         File.WriteAllText(PathOf("unix.sh"), "#!/bin/sh\necho 1\n");
 
-        await _tools.WriteFile("unix.sh", "#!/bin/sh\necho 2\n");
+        await _tools.WriteFile("unix.sh", "#!/bin/sh\necho 2\n", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("#!/bin/sh\necho 2\n", File.ReadAllText(PathOf("unix.sh")));
     }

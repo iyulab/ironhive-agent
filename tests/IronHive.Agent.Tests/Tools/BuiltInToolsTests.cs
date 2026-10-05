@@ -31,7 +31,7 @@ public class BuiltInToolsTests : IDisposable
         await File.WriteAllTextAsync(testFile, "Hello, World!", TestContext.Current.CancellationToken);
 
         // Act
-        var result = await _tools.ReadFile("test.txt");
+        var result = await _tools.ReadFile("test.txt", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Hello, World!", result);
@@ -92,7 +92,7 @@ public class BuiltInToolsTests : IDisposable
     public async Task ReadFile_NonExistent_Throws()
     {
         // Act
-        var ex = await Assert.ThrowsAsync<FileNotFoundException>(() => _tools.ReadFile("nonexistent.txt"));
+        var ex = await Assert.ThrowsAsync<FileNotFoundException>(() => _tools.ReadFile("nonexistent.txt", cancellationToken: TestContext.Current.CancellationToken));
 
         // Assert
         Assert.StartsWith("File not found", ex.Message);
@@ -106,7 +106,7 @@ public class BuiltInToolsTests : IDisposable
         await File.WriteAllTextAsync(testFile, "Line1\nLine2\nLine3\nLine4\nLine5", TestContext.Current.CancellationToken);
 
         // Act
-        var result = await _tools.ReadFile("lines.txt", startLine: 2, lineCount: 2);
+        var result = await _tools.ReadFile("lines.txt", startLine: 2, lineCount: 2, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal($"Line2{Environment.NewLine}Line3", result);
@@ -116,7 +116,7 @@ public class BuiltInToolsTests : IDisposable
     public async Task WriteFile_CreatesNewFile()
     {
         // Act
-        var result = await _tools.WriteFile("new.txt", "New content");
+        var result = await _tools.WriteFile("new.txt", "New content", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("Successfully wrote", result);
@@ -132,7 +132,7 @@ public class BuiltInToolsTests : IDisposable
         await File.WriteAllTextAsync(testFile, "First", TestContext.Current.CancellationToken);
 
         // Act
-        var result = await _tools.WriteFile("append.txt", "Second", append: true);
+        var result = await _tools.WriteFile("append.txt", "Second", append: true, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("Successfully appended", result);
@@ -183,7 +183,7 @@ public class BuiltInToolsTests : IDisposable
         File.WriteAllText(Path.Combine(_testDir, "search2.txt"), "No match here");
 
         // Act
-        var result = await _tools.GrepFiles("PATTERN", "*.txt");
+        var result = await _tools.GrepFiles("PATTERN", "*.txt", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("search1.txt", result);
@@ -198,7 +198,7 @@ public class BuiltInToolsTests : IDisposable
         var command = OperatingSystem.IsWindows() ? "echo Hello" : "echo Hello";
 
         // Act
-        var result = await _tools.ExecuteCommand(command);
+        var result = await _tools.ExecuteCommand(command, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("Exit code: 0", result);
@@ -212,7 +212,7 @@ public class BuiltInToolsTests : IDisposable
         var command = OperatingSystem.IsWindows() ? "ping -n 10 127.0.0.1" : "sleep 10";
 
         // Act
-        var ex = await Assert.ThrowsAsync<TimeoutException>(() => _tools.ExecuteCommand(command, timeoutMs: 100));
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() => _tools.ExecuteCommand(command, timeoutMs: 100, cancellationToken: TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Contains("timed out", ex.Message);

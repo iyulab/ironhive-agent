@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.49.0] - Unreleased
+
+### Fixed
+- **Cancelling a turn stops the shell command it is running.** `ExecuteCommand` waited only for its own timeout (30 s
+  by default), so a cancelled turn left the command running until then. It now kills the process tree and throws
+  `OperationCanceledException` as soon as the invocation's token is canceled. `ReadFile`, `WriteFile`, `EditFile`,
+  `GrepFiles` and `ManageTodo` take the token too (bound from the tool invocation; the model does not see it), and
+  `GrepFiles` no longer swallows a cancellation as an unreadable file.
+- **DeepResearch: `ResumeAsync` and `IResearchSession.FinalizeAsync` can be canceled.** `ResumeAsync` dropped its
+  token and the session ran the rest of the research with none, so a resumed research could not be stopped.
+
+### Removed
+- **Breaking:** `IResearchSession.ContinueAsync`. Its only implementation threw `NotImplementedException`; finish a
+  session with `FinalizeAsync`.
+
+### Changed
+- **Breaking:** `IResearchSession.GetCheckpointAsync`, `AddQueryAsync` and `FinalizeAsync` take an optional
+  `CancellationToken`.
+
 ## [0.48.4] - 2026-10-05
 
 ### Changed

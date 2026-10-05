@@ -97,11 +97,13 @@ public class ToolProvider
     /// <param name="path">Relative or absolute path to the file to read.</param>
     /// <param name="startLine">Optional 1-based line number to start reading from.</param>
     /// <param name="lineCount">Optional number of lines to read. If not specified, reads entire file.</param>
+    /// <param name="cancellationToken">Stops the operation; bound from the tool invocation, not exposed to the model.</param>
     [Description("Read the content of a file. Returns the file content as text.")]
     public async Task<string> ReadFile(
         [Description("Path to the file to read (relative to working directory or absolute)")] string path,
         [Description("Line number to start reading from (1-based, optional)")] int? startLine = null,
-        [Description("Number of lines to read (optional, reads all if not specified)")] int? lineCount = null)
+        [Description("Number of lines to read (optional, reads all if not specified)")] int? lineCount = null,
+        CancellationToken cancellationToken = default)
     {
         if (!TryResolvePath(path, out var fullPath, out var refusal))
         {
@@ -121,14 +123,14 @@ public class ToolProvider
 
         if (startLine.HasValue || lineCount.HasValue)
         {
-            var lines = await File.ReadAllLinesAsync(fullPath);
+            var lines = await File.ReadAllLinesAsync(fullPath, cancellationToken);
             var start = Math.Max(0, (startLine ?? 1) - 1);
             var count = lineCount ?? (lines.Length - start);
             var selectedLines = lines.Skip(start).Take(count);
             return string.Join(Environment.NewLine, selectedLines);
         }
 
-        return await File.ReadAllTextAsync(fullPath);
+        return await File.ReadAllTextAsync(fullPath, cancellationToken);
     }
 
     /// <summary>
@@ -137,6 +139,7 @@ public class ToolProvider
     /// <param name="path">Relative or absolute path to the file to write.</param>
     /// <param name="content">Content to write to the file.</param>
     /// <param name="append">If true, appends to existing file instead of overwriting.</param>
+    /// <param name="cancellationToken">Stops the operation; bound from the tool invocation, not exposed to the model.</param>
     /// <remarks>
     /// An existing file keeps its encoding (UTF-8 with or without a byte-order mark, UTF-16) and its line endings: content
     /// written with <c>\n</c> into a file that uses <c>\r\n</c> is written with <c>\r\n</c>, as <see cref="EditFile"/>
@@ -147,7 +150,8 @@ public class ToolProvider
     public async Task<string> WriteFile(
         [Description("Path to the file to write (relative to working directory or absolute)")] string path,
         [Description("Content to write to the file")] string content,
-        [Description("If true, append to existing file instead of overwriting")] bool append = false)
+        [Description("If true, append to existing file instead of overwriting")] bool append = false,
+        CancellationToken cancellationToken = default)
     {
         if (!TryResolvePath(path, out var fullPath, out var refusal))
         {
@@ -160,15 +164,15 @@ public class ToolProvider
             Directory.CreateDirectory(directory);
         }
 
-        var (encoding, newline) = await ExistingFileFormatAsync(fullPath);
+        var (encoding, newline) = await ExistingFileFormatAsync(fullPath, cancellationToken);
         var text = newline == "\r\n" && !content.Contains("\r\n", StringComparison.Ordinal)
             ? content.Replace("\n", "\r\n", StringComparison.Ordinal)
             : content;
 
         // Appending through the file's encoding writes no second byte-order mark: the writer emits one only at offset 0.
         Func<Task> write = append
-            ? () => File.AppendAllTextAsync(fullPath, text, encoding)
-            : () => File.WriteAllTextAsync(fullPath, text, encoding);
+            ? () => File.AppendAllTextAsync(fullPath, text, encoding, cancellationToken)
+            : () => File.WriteAllTextAsync(fullPath, text, encoding, cancellationToken);
 
         string? note = null;
         if (_writeInterceptor is null)
@@ -177,7 +181,7 @@ public class ToolProvider
         }
         else
         {
-            note = await _writeInterceptor.InterceptAsync(fullPath, write);
+            note = await _writeInterceptor.InterceptAsync(fullPath, write, cancellationToken);
         }
 
         return append
@@ -206,6 +210,7 @@ public class ToolProvider
     /// <param name="oldText">The exact text to replace.</param>
     /// <param name="newText">The text to put in its place.</param>
     /// <param name="replaceAll">Replace every occurrence instead of requiring exactly one.</param>
+    /// <param name="cancellationToken">Stops the operation; bound from the tool invocation, not exposed to the model.</param>
     [Description("Replace exact text in an existing file. Prefer this over WriteFile for changing part of a file. oldText " +
                  "must match the file exactly (whitespace included) and occur exactly once - include enough surrounding " +
                  "lines to make it unique - unless replaceAll is true.")]
@@ -213,7 +218,8 @@ public class ToolProvider
         [Description("Path to the file to edit (relative to working directory or absolute)")] string path,
         [Description("The exact text to replace, copied from the file")] string oldText,
         [Description("The text to put in its place")] string newText,
-        [Description("If true, replace every occurrence instead of requiring exactly one")] bool replaceAll = false)
+        [Description("If true, replace every occurrence instead of requiring exactly one")] bool replaceAll = false,
+        CancellationToken cancellationToken = default)
     {
         if (!TryResolvePath(path, out var fullPath, out var refusal))
         {
@@ -238,7 +244,7 @@ public class ToolProvider
         }
 
         // Keep the file's encoding and byte-order mark: only the replaced text may change.
-        var bytes = await File.ReadAllBytesAsync(fullPath);
+        var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken);
         var (encoding, preamble) = DetectEncoding(bytes);
         var content = encoding.GetString(bytes, preamble, bytes.Length - preamble);
         var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
@@ -260,7 +266,7 @@ public class ToolProvider
         }
 
         var edited = content.Replace(find, replacement, StringComparison.Ordinal);
-        Func<Task> write = () => File.WriteAllTextAsync(fullPath, edited, encoding);
+        Func<Task> write = () => File.WriteAllTextAsync(fullPath, edited, encoding, cancellationToken);
 
         string? note = null;
         if (_writeInterceptor is null)
@@ -269,7 +275,7 @@ public class ToolProvider
         }
         else
         {
-            note = await _writeInterceptor.InterceptAsync(fullPath, write);
+            note = await _writeInterceptor.InterceptAsync(fullPath, write, cancellationToken);
         }
 
         return matches == 1
@@ -287,7 +293,7 @@ public class ToolProvider
     /// The encoding and line ending of an existing file, read from its first bytes; UTF-8 without a mark and no
     /// preference (<c>null</c>) for a file that does not exist or has no line break yet.
     /// </summary>
-    private static async Task<(Encoding Encoding, string? Newline)> ExistingFileFormatAsync(string fullPath)
+    private static async Task<(Encoding Encoding, string? Newline)> ExistingFileFormatAsync(string fullPath, CancellationToken cancellationToken)
     {
         if (!File.Exists(fullPath))
         {
@@ -299,7 +305,7 @@ public class ToolProvider
         int read;
         await using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, useAsync: true))
         {
-            read = await stream.ReadAtLeastAsync(buffer, Probe, throwOnEndOfStream: false);
+            read = await stream.ReadAtLeastAsync(buffer, Probe, throwOnEndOfStream: false, cancellationToken);
         }
 
         var (encoding, preamble) = DetectEncoding(buffer[..read]);
@@ -515,11 +521,13 @@ public class ToolProvider
     /// <param name="pattern">Text pattern or regex to search for.</param>
     /// <param name="filePattern">Glob pattern for files to search in.</param>
     /// <param name="path">Base directory for the search.</param>
+    /// <param name="cancellationToken">Stops the operation; bound from the tool invocation, not exposed to the model.</param>
     [Description("Search for text patterns in files (like grep).")]
     public async Task<string> GrepFiles(
         [Description("Text pattern to search for")] string pattern,
         [Description("Glob pattern for files to search in (e.g., '**/*.cs')")] string filePattern,
-        [Description("Base directory for the search (optional)")] string? path = null)
+        [Description("Base directory for the search (optional)")] string? path = null,
+        CancellationToken cancellationToken = default)
     {
         if (!TryResolvePath(path ?? ".", out var basePath, out var refusal))
         {
@@ -549,11 +557,12 @@ public class ToolProvider
 
         foreach (var file in files.Take(50))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var fullFilePath = Path.Combine(basePath, file.Path);
 
             try
             {
-                var lines = await File.ReadAllLinesAsync(fullFilePath);
+                var lines = await File.ReadAllLinesAsync(fullFilePath, cancellationToken);
                 var fileHasMatch = false;
 
                 for (var i = 0; i < lines.Length; i++)
@@ -578,7 +587,7 @@ public class ToolProvider
                     }
                 }
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Skip files that can't be read
             }
@@ -598,10 +607,12 @@ public class ToolProvider
     /// </summary>
     /// <param name="command">The command to execute.</param>
     /// <param name="timeoutMs">Timeout in milliseconds.</param>
+    /// <param name="cancellationToken">Stops the operation; bound from the tool invocation, not exposed to the model.</param>
     [Description("Execute a shell command and return its output. Use with caution.")]
     public async Task<string> ExecuteCommand(
         [Description("The command to execute")] string command,
-        [Description("Timeout in milliseconds (default: 30000)")] int timeoutMs = DefaultCommandTimeout)
+        [Description("Timeout in milliseconds (default: 30000)")] int timeoutMs = DefaultCommandTimeout,
+        CancellationToken cancellationToken = default)
     {
         var isWindows = OperatingSystem.IsWindows();
         var processInfo = new ProcessStartInfo
@@ -639,7 +650,8 @@ public class ToolProvider
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        using var cts = new CancellationTokenSource(timeoutMs);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeoutMs);
 
         try
         {
@@ -648,6 +660,9 @@ public class ToolProvider
         catch (OperationCanceledException)
         {
             process.Kill(entireProcessTree: true);
+
+            // A cancelled turn stops the command with it rather than leaving it running until the timeout.
+            cancellationToken.ThrowIfCancellationRequested();
 
             // What the command printed before it was stopped is often why it hung (a prompt, a retry loop).
             var partial = new StringBuilder();

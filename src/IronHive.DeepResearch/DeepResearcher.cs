@@ -92,7 +92,7 @@ public partial class DeepResearcher : IDeepResearcher
 
         try
         {
-            return await session.FinalizeAsync();
+            return await session.FinalizeAsync(cancellationToken);
         }
         finally
         {
@@ -169,8 +169,9 @@ public partial class ResearchSession : IResearchSession
     }
 
     /// <inheritdoc />
-    public Task<ResearchCheckpoint> GetCheckpointAsync()
+    public Task<ResearchCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var checkpoint = new ResearchCheckpoint
         {
             SessionId = _state.SessionId,
@@ -193,14 +194,9 @@ public partial class ResearchSession : IResearchSession
     }
 
     /// <inheritdoc />
-    public Task ContinueAsync()
-        => throw new NotImplementedException(
-            "Interactive continuation is not yet implemented. " +
-            "Use FinalizeAsync() to complete the session or start a new research session.");
-
-    /// <inheritdoc />
-    public Task AddQueryAsync(string customQuery)
+    public Task AddQueryAsync(string customQuery, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_isComplete)
         {
             throw new InvalidOperationException("Session is already complete.");
@@ -217,7 +213,7 @@ public partial class ResearchSession : IResearchSession
     }
 
     /// <inheritdoc />
-    public async Task<ResearchResult> FinalizeAsync()
+    public async Task<ResearchResult> FinalizeAsync(CancellationToken cancellationToken = default)
     {
         if (_isComplete)
         {
@@ -228,7 +224,7 @@ public partial class ResearchSession : IResearchSession
 
         // Pass accumulated state so the orchestrator continues from collected sources,
         // findings, queries, and gaps rather than starting from scratch.
-        var result = await _orchestrator.ExecuteAsync(_state);
+        var result = await _orchestrator.ExecuteAsync(_state, cancellationToken);
 
         _isComplete = true;
         return result;
