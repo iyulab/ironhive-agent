@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.49.2] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.53.0 -> 0.53.1, `WebFlux` 0.21.0 -> 0.21.1.
+
 ### Fixed
 - **Cancelling a call now cancels it.** 29 method(s) that take a `CancellationToken` caught every exception to
   return a fallback (`null`, an empty result, a failure value) or to log and continue, and treated the caller's own
