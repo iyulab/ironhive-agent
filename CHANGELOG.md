@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.48.2] - 2026-10-05
+
+### Changed
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.21.16 -> 0.21.17, `Ironbees.Core` 0.21.16 -> 0.21.17, `IronHive.Abstractions` 0.51.0 -> 0.51.1, `IronProw.Core` 0.14.2 -> 0.14.3, `MemoryIndexer` 0.23.1 -> 0.23.2, `WebFlux` 0.19.6 -> 0.20.0. No source changes.
+
 ## [0.48.1] - 2026-10-05
 
 ### Fixed
