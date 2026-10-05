@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.48.3] - 2026-10-05
+
+### Changed
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.51.1 -> 0.52.0, `IronProw.Core` 0.14.3 -> 0.15.0, `MemoryIndexer` 0.23.2 -> 0.24.0. No source changes.
+
 ## [0.48.2] - 2026-10-05
 
 ### Changed
