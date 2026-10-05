@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.49.0] - Unreleased
+## [0.49.0] - 2026-10-06
 
 ### Fixed
 - **Cancelling a turn stops the shell command it is running.** `ExecuteCommand` waited only for its own timeout (30 s
