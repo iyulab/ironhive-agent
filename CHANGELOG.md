@@ -22,6 +22,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Changed
 - **Breaking:** `IResearchSession.GetCheckpointAsync`, `AddQueryAsync` and `FinalizeAsync` take an optional
   `CancellationToken`.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.52.0 -> 0.53.0.
 
 ## [0.48.4] - 2026-10-05
 
