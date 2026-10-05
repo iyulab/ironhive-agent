@@ -66,7 +66,7 @@ public partial class LLMQueryExpander : IQueryExpander
                 })
                 .ToList();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogDecompositionError(_logger, ex);
             return CreateFallbackSubQuestions(query);
@@ -111,7 +111,7 @@ public partial class LLMQueryExpander : IQueryExpander
                 })
                 .ToList();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogPerspectiveError(_logger, ex);
             return CreateFallbackPerspectives();
@@ -161,7 +161,7 @@ public partial class LLMQueryExpander : IQueryExpander
                 .OrderBy(q => q.Priority)
                 .ToList();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogExpansionError(_logger, ex);
             return CreateFallbackExpandedQueries(originalQuery, subQuestions);

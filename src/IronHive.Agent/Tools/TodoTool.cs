@@ -251,7 +251,7 @@ public class TodoTool
             var json = await File.ReadAllTextAsync(_todoFilePath, cancellationToken);
             return JsonSerializer.Deserialize<TodoList>(json, JsonOptions) ?? new TodoList();
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return new TodoList();
         }

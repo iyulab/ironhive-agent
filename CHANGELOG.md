@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.49.2] - Unreleased
+
+### Fixed
+- **Cancelling a call now cancels it.** 29 method(s) that take a `CancellationToken` caught every exception to
+  return a fallback (`null`, an empty result, a failure value) or to log and continue, and treated the caller's own
+  cancellation the same way. They now let the caller's `OperationCanceledException` through; other failures behave
+  as before. Affected: MCP plugin loading and tool discovery, the chat client factory and fallback provider, history compaction, and the DeepResearch agents, query expander and Tavily search.
+
 ## [0.49.1] - 2026-10-06
 
 ### Changed

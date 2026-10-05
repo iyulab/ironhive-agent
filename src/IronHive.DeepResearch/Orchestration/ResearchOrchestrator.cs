@@ -224,7 +224,7 @@ public partial class ResearchOrchestrator
             var finalResult = BuildResult(state, reportResult);
             progressList.Add(CreateProgress(state, ProgressType.Completed, maxIterations, result: finalResult));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogStreamingResearchError(_logger, ex);
             caughtException = ex;

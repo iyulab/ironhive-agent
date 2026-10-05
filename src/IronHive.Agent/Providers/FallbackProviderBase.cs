@@ -87,7 +87,7 @@ public abstract class FallbackProviderBase<TProvider> : IAsyncDisposable, IDispo
                         return;
                     }
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
                     // Provider failed, try next
                 }

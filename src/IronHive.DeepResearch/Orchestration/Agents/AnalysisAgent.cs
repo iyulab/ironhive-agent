@@ -108,7 +108,7 @@ public partial class AnalysisAgent
 
                 findings.AddRange(sourceFindings);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 LogSourceAnalysisFailed(_logger, ex, source.Id);
             }
@@ -158,7 +158,7 @@ public partial class AnalysisAgent
                 })
                 .ToList();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogFindingExtractionFailed(_logger, ex, source.Id);
             return [];
@@ -203,7 +203,7 @@ public partial class AnalysisAgent
                 })
                 .ToList();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogGapAnalysisFailed(_logger, ex);
             return [];
@@ -269,7 +269,7 @@ public partial class AnalysisAgent
             return await _textService.GenerateStructuredAsync<SufficiencyEvaluationResponse>(
                 prompt, genOptions, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogLlmSufficiencyEvaluationFailed(_logger, ex);
             return null;

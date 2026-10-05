@@ -74,7 +74,7 @@ public class McpPluginHotReloader : IAsyncDisposable, IDisposable
             {
                 await _pluginManager.ConnectAsync(name, config, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // Log but don't fail — other plugins may still work
                 ReloadError?.Invoke(this, new PluginReloadEventArgs
@@ -147,7 +147,7 @@ public class McpPluginHotReloader : IAsyncDisposable, IDisposable
                         await _pluginManager.ConnectAsync(name, config, cancellationToken);
                         added.Add(name);
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                     {
                         ReloadError?.Invoke(this, new PluginReloadEventArgs
                         {

@@ -93,7 +93,7 @@ public partial class McpToolDiscovery : IDisposable
                         await _pluginManager.ConnectAsync(name, config, cancellationToken);
                         isConnected = true;
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                     {
                         LogPluginConnectionFailed(_logger, name, ex);
                         continue;
@@ -182,7 +182,7 @@ public partial class McpToolDiscovery : IDisposable
             {
                 await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 LogPluginConnectionFailed(_logger, pluginName, ex);
                 return null;
@@ -218,7 +218,7 @@ public partial class McpToolDiscovery : IDisposable
             await _pluginManager.ConnectAsync(pluginName, config, cancellationToken);
             return true;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogPluginConnectionFailed(_logger, pluginName, ex);
             return false;

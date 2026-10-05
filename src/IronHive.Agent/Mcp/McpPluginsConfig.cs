@@ -71,7 +71,7 @@ public static class McpPluginsConfigExtensions
             {
                 await manager.ConnectAsync(name, effectiveConfig, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // Log but continue with other plugins
                 System.Diagnostics.Trace.TraceWarning($"Failed to connect plugin '{name}': {ex.Message}");

@@ -119,7 +119,7 @@ public class McpPluginManager : IMcpPluginManager
                 var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
                 allTools.AddRange(tools.Select(WithDeclaredHints));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // Log but don't fail - other plugins may still work
 #pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
@@ -239,7 +239,7 @@ public class McpPluginManager : IMcpPluginManager
             {
                 requestVerdict = await _guard.CheckCallAsync(inspection, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
 #pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
                 _logger?.LogWarning(ex, "MCP guardrail threw while validating a tool call to '{Plugin}.{Tool}' — blocking (fail-closed)", pluginName, toolName);
@@ -267,7 +267,7 @@ public class McpPluginManager : IMcpPluginManager
                 {
                     resultVerdict = await _guard.CheckResultAsync(inspection, content, cancellationToken);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
 #pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
                     _logger?.LogWarning(ex, "MCP guardrail threw while validating a tool result from '{Plugin}.{Tool}' — blocking (fail-closed)", pluginName, toolName);
@@ -289,7 +289,7 @@ public class McpPluginManager : IMcpPluginManager
                     StructuredContent = result.StructuredContent
                 };
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 return McpToolResult.Error($"Tool call failed: {ex.Message}");
             }
@@ -311,7 +311,7 @@ public class McpPluginManager : IMcpPluginManager
                 StructuredContent = result.StructuredContent
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return McpToolResult.Error($"Tool call failed: {ex.Message}");
         }
@@ -379,7 +379,7 @@ public class McpPluginManager : IMcpPluginManager
             await wrapper.Client.ListToolsAsync(cancellationToken: cts.Token);
             return true;
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return false;
         }

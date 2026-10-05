@@ -124,7 +124,7 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
             {
                 return await SearchAsync(query, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 LogSearchFailed(_logger, ex, query.Query);
                 // 실패한 쿼리는 빈 결과 반환

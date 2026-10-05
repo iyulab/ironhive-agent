@@ -57,7 +57,7 @@ public partial class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequ
 
             return AutonomousResearchResult.FromResearchResult(request.RequestId, result);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             if (_logger is not null)
             {

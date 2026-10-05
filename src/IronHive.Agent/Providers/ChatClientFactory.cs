@@ -88,7 +88,7 @@ public sealed class ChatClientFactory : IChatClientFactory
                 {
                     return await p.Value.GetAvailableModelsAsync(cancellationToken);
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
                     return Array.Empty<AvailableModelInfo>();
                 }
@@ -118,7 +118,7 @@ public sealed class ChatClientFactory : IChatClientFactory
         {
             return await provider.GetAvailableModelsAsync(cancellationToken);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return Array.Empty<AvailableModelInfo>();
         }

@@ -142,7 +142,7 @@ public partial class ReportGeneratorAgent
                 Sections = sections
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogOutlineGenerationFailed(_logger, ex);
             return CreateDefaultOutline(state, options);
@@ -206,7 +206,7 @@ public partial class ReportGeneratorAgent
                 RelatedFindings = usedFindings
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogSectionGenerationFailed(_logger, ex, outlineSection.Title);
 

@@ -133,7 +133,7 @@ public class HistoryCompactor : HistoryCompactorBase
             {
                 return await SummarizeWithLlmAsync(middle, targetTokens, cancellationToken);
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // Fallback to truncation on error
                 return TruncateFromBeginning(middle, targetTokens);
