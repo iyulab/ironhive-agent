@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.53.0 -> 0.53.1, `WebFlux` 0.21.0 -> 0.21.1.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.22.0 -> 0.22.1, `Ironbees.Core` 0.22.0 -> 0.22.1, `IronProw.Core` 0.15.2 -> 0.15.3, `MemoryIndexer` 0.26.0 -> 0.26.1.
 
 ### Fixed
 - **Cancelling a call now cancels it.** 29 method(s) that take a `CancellationToken` caught every exception to
