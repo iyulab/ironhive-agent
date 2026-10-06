@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [0.51.0] - Unreleased
 
+### Changed
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.24.0 -> 0.24.1, `Ironbees.Core` 0.24.0 -> 0.24.1, `IronProw.Core` 0.15.5 -> 0.15.6.
+
 ### Added
 - **A tool call's arguments can stream while the model writes them.** With `AgentOptions.StreamToolArguments = true`,
   `RunStreamingAsync` (both `AgentLoop` and `ThinkingAgentLoop`) also yields `ToolCallDelta` chunks with
