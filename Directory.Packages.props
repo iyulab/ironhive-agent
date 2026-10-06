@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.53.1" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.54.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
     <PackageVersion Include="IronProw.Core" Version="0.15.3" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
@@ -30,7 +30,7 @@
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <!-- IndexThinking (token management, reasoning extraction) -->
-    <PackageVersion Include="IndexThinking" Version="0.24.2" />
+    <PackageVersion Include="IndexThinking" Version="0.25.0" />
     <!-- Security pin: override transitive Microsoft.Bcl.Memory 9.0.4 (NU1903 / GHSA-73j8-2gch-69rq,
          CVE-2026-26127 Base64Url OOB-read DoS). Patched in 10.0.4+; pin 10.0.8 so consumers with
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
@@ -38,9 +38,9 @@
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.26.1" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
-    <PackageVersion Include="FluxGuard.Remote" Version="0.20.0" />
+    <PackageVersion Include="FluxGuard.Remote" Version="0.21.0" />
     <!-- DeepResearch dependencies -->
-    <PackageVersion Include="WebFlux" Version="0.21.1" />
+    <PackageVersion Include="WebFlux" Version="0.22.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
