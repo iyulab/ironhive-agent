@@ -203,8 +203,11 @@ public record AgentResponseChunk
     public string? TextDelta { get; init; }
 
     /// <summary>
-    /// Thinking/reasoning content chunk.
-    /// Only available when using models that support extended thinking.
+    /// Reasoning the model streams while it thinks, as it arrives — set when the model returns its reasoning
+    /// (M.E.AI <see cref="Microsoft.Extensions.AI.TextReasoningContent"/>: Chat Completions <c>reasoning_content</c>,
+    /// Anthropic thinking, the streaming reasoning separator), from <see cref="AgentLoop"/> and
+    /// <see cref="ThinkingAgentLoop"/> alike. <see cref="ThinkingAgentLoop"/> also yields the turn-end thinking it
+    /// extracts (metadata, <c>&lt;think&gt;</c> tags). Never part of <see cref="TextDelta"/>.
     /// </summary>
     public string? ThinkingDelta { get; init; }
 

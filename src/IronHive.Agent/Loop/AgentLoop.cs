@@ -281,6 +281,13 @@ public class AgentLoop : IAgentLoop
 
         await foreach (var update in stream)
         {
+            // Live reasoning from a thinking model, as it is written — progress only, like argument fragments: it is
+            // not part of the response text or the recorded turn.
+            if (LiveReasoning.Extract(update) is { } reasoning)
+            {
+                yield return new AgentResponseChunk { ThinkingDelta = reasoning };
+            }
+
             // Yield and collect text content
             if (!string.IsNullOrEmpty(update.Text))
             {

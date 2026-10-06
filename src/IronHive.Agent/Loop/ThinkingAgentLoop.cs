@@ -302,7 +302,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             // 1. Live, provider-native reasoning (M.E.AI TextReasoningContent, e.g. from the streaming
             //    reasoning separator or a reasoning-capable model). Bridge each delta to ThinkingDelta
             //    immediately so consumers get live separation instead of hand-splitting <think> tags.
-            var liveDelta = ExtractLiveReasoning(update);
+            var liveDelta = LiveReasoning.Extract(update);
             if (!string.IsNullOrEmpty(liveDelta))
             {
                 liveReasoning.Append(liveDelta);
@@ -436,21 +436,6 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         }
 
         return preparedHistory;
-    }
-
-    /// <summary>
-    /// Extracts live, provider-native reasoning streamed as M.E.AI <see cref="TextReasoningContent"/>
-    /// on the update's contents (the streaming reasoning separator or a reasoning-capable model emits
-    /// these). Returns the concatenated reasoning text for this update, or null if it carries none.
-    /// </summary>
-    private static string? ExtractLiveReasoning(ChatResponseUpdate update)
-    {
-        var joined = string.Concat(update.Contents
-            .OfType<TextReasoningContent>()
-            .Select(c => c.Text)
-            .Where(t => !string.IsNullOrEmpty(t)));
-
-        return string.IsNullOrEmpty(joined) ? null : joined;
     }
 
     /// <summary>

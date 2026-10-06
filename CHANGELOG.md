@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.52.0] - Unreleased
+
+### Changed
+- **`AgentLoop.RunStreamingAsync` streams a thinking model's reasoning as `ThinkingDelta`.** Reasoning that the chat client
+  returns as M.E.AI `TextReasoningContent` (Chat Completions `reasoning_content`, e.g. llama.cpp/GPUStack, vLLM; Anthropic
+  thinking) now arrives as `ThinkingDelta` chunks while the model thinks, as it already did from `ThinkingAgentLoop`.
+  Before, the plain loop dropped it, so a host showed nothing during a long thinking phase and could not tell a thinking
+  model from a stalled server. The reasoning is not part of `TextDelta` or the turn's `Content`. A consumer that handles
+  `ThinkingDelta` (or ignores chunks it does not read) needs no change.
+
 ## [0.51.1] - 2026-10-06
 
 ### Changed

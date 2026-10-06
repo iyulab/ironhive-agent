@@ -814,8 +814,12 @@ For a call whose real output is one long argument (a whole document or app), set
 The loop then also yields `ToolCallDelta` chunks with `IsComplete = false` while the model writes: same `Id`,
 `NameDelta` on the first, and `ArgumentsDelta` the provider's raw partial JSON. The complete chunk still follows, and that
 is what tools run on. It needs a chat client built on IronHive's bridge (`generator.AsChatClient(…)`) and a provider that
-streams arguments (Chat Completions, Responses, Anthropic). Off by default; a consumer that counts calls skips
-`IsComplete = false` chunks.
+streams arguments (Chat Completions, Responses, Anthropic — with IronHive 0.56.0+ Anthropic marks the tools
+`eager_input_streaming`, so a long argument streams as written instead of arriving whole at the end). Off by default; a
+consumer that counts calls skips `IsComplete = false` chunks.
+
+A thinking model's reasoning streams as `ThinkingDelta` chunks while it thinks (from `AgentLoop` and `ThinkingAgentLoop`
+alike), whenever the chat client returns it as `TextReasoningContent` — so a host can show that the model is thinking.
 
 ```csharp
 await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))
