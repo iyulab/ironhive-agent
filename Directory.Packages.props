@@ -6,10 +6,10 @@
     <!-- IronHive (LLM abstraction) -->
     <PackageVersion Include="IronHive.Abstractions" Version="0.54.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
-    <PackageVersion Include="IronProw.Core" Version="0.15.3" />
+    <PackageVersion Include="IronProw.Core" Version="0.15.4" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
-    <PackageVersion Include="Ironbees.Core" Version="0.22.1" />
-    <PackageVersion Include="Ironbees.Autonomous" Version="0.22.1" />
+    <PackageVersion Include="Ironbees.Core" Version="0.23.0" />
+    <PackageVersion Include="Ironbees.Autonomous" Version="0.23.0" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageVersion Include="TokenMeter" Version="0.7.9" />
     <!-- Microsoft.Extensions.AI -->
@@ -36,7 +36,7 @@
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.12" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.26.1" />
+    <PackageVersion Include="MemoryIndexer" Version="0.27.0" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
     <PackageVersion Include="FluxGuard.Remote" Version="0.21.0" />
     <!-- DeepResearch dependencies -->

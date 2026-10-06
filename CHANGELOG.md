@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Changed
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.20.0 -> 0.21.0, `IndexThinking` 0.24.2 -> 0.25.0, `IronHive.Abstractions` 0.53.1 -> 0.54.0, `WebFlux` 0.21.1 -> 0.22.0.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.22.1 -> 0.23.0, `Ironbees.Core` 0.22.1 -> 0.23.0, `IronProw.Core` 0.15.3 -> 0.15.4, `MemoryIndexer` 0.26.1 -> 0.27.0.
 
 ### Removed
 - **Breaking: public types that nothing used are removed.** No code path in this library constructed, returned or accepted them, and no implementation existed where they were interfaces. Code that never named them is unaffected; code that did can delete the reference - there was no behaviour behind it.
