@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.51.0] - Unreleased
+
+### Added
+- **A tool call's arguments can stream while the model writes them.** With `AgentOptions.StreamToolArguments = true`,
+  `RunStreamingAsync` (both `AgentLoop` and `ThinkingAgentLoop`) also yields `ToolCallDelta` chunks with
+  `IsComplete = false` — same `Id`, `NameDelta` on the first, `ArgumentsDelta` the provider's raw partial JSON — before the
+  complete chunk, which still follows and is what tools run on. Needs a chat client built on IronHive's bridge and a
+  provider that streams arguments (Chat Completions, Responses, Anthropic). Off by default.
+
+### Dependencies
+- IronHive.Abstractions 0.55.0; `IronHive.Extensions.AI` 0.55.0 is now referenced (the fragment content type).
+
 ## [0.50.2] - 2026-10-06
 
 ### Changed

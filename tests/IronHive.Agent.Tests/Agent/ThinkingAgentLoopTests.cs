@@ -124,6 +124,30 @@ public class ThinkingAgentLoopTests
     }
 
     [Fact]
+    public async Task RunStreamingAsync_ToolArgumentFragments_PassThroughThinkingClientAsInProgressChunks()
+    {
+        // ThinkingChatClient sits between the loop and the bridge; a fragment must survive it.
+        var client = new FixedStreamClient(
+            new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new IronHive.Extensions.AI.FunctionCallDeltaContent("c1", "{\"q\":", "search")] },
+            new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new FunctionCallContent("c1", "search", new Dictionary<string, object?> { ["q"] = 1 })] });
+        var loop = new ThinkingAgentLoop(client, BuildTurnManager(new ChatResponse([new ChatMessage(ChatRole.Assistant, "")])),
+            new AgentOptions { StreamToolArguments = true });
+
+        var tools = new List<ToolCallChunk>();
+        await foreach (var chunk in loop.RunStreamingAsync("q", cancellationToken: TestContext.Current.CancellationToken))
+        {
+            if (chunk.ToolCallDelta is { } tool)
+            {
+                tools.Add(tool);
+            }
+        }
+
+        Assert.Equal([false, true], tools.Select(t => t.IsComplete));
+        Assert.Equal("search", tools[0].NameDelta);
+        Assert.Equal("{\"q\":", tools[0].ArgumentsDelta);
+    }
+
+    [Fact]
     public async Task RunStreamingAsync_LiveReasoningPlusMatchingTurnEnd_EmitsThinkingOnce()
     {
         // Live reasoning streams as TextReasoningContent; the turn-end metadata blob repeats the same

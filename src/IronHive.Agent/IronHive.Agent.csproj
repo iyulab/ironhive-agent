@@ -42,6 +42,8 @@
     <PackageReference Include="TokenMeter" />
     <!-- IronHive (LLM abstraction) -->
     <PackageReference Include="IronHive.Abstractions" />
+    <!-- FunctionCallDeltaContent: the tool-argument fragments the IronHive IChatClient bridge streams (AgentOptions.StreamToolArguments). -->
+    <PackageReference Include="IronHive.Extensions.AI" />
     <!-- Provider failure reading and the transient-status boundary, shared with the IronProw gateway (ErrorRecoveryService). -->
     <PackageReference Include="IronProw.Core" />
   </ItemGroup>

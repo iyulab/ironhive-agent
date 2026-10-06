@@ -70,6 +70,7 @@ public class ReadmeSnippetCompileTests
         ("host", "IHostToolRunner host = null!;"),
         ("RestoreFileVersion", "static string RestoreFileVersion(string path, int version) => \"\";"),
         ("ShowStarted", "static void ShowStarted(string? id, string? name) { }"),
+        ("ShowProgress", "static void ShowProgress(string? id, string? fragment) { }"),
         ("ShowFinished", "static void ShowFinished(string? id, bool? success) { }"),
     ];
 

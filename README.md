@@ -808,6 +808,23 @@ await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))
 
 `ToolResult.CallId` is the `ToolCallDelta.Id` of the same call, and the record is the one the final `Turn` carries.
 
+### A tool call's arguments while the model writes them
+
+For a call whose real output is one long argument (a whole document or app), set `AgentOptions.StreamToolArguments = true`.
+The loop then also yields `ToolCallDelta` chunks with `IsComplete = false` while the model writes: same `Id`,
+`NameDelta` on the first, and `ArgumentsDelta` the provider's raw partial JSON. The complete chunk still follows, and that
+is what tools run on. It needs a chat client built on IronHive's bridge (`generator.AsChatClient(…)`) and a provider that
+streams arguments (Chat Completions, Responses, Anthropic). Off by default; a consumer that counts calls skips
+`IsComplete = false` chunks.
+
+```csharp
+await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))
+{
+    if (chunk.ToolCallDelta is { IsComplete: false } writing) ShowProgress(writing.Id, writing.ArgumentsDelta);
+    else if (chunk.ToolCallDelta is { } call) ShowStarted(call.Id, call.NameDelta);
+}
+```
+
 ### `ToolCallResult.Success` is `bool?` on purpose
 
 The loop **extracts** the calls the model requested — it does not invoke them. Unless the

@@ -344,6 +344,12 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                 };
             }
 
+            // Argument fragments of a call still being written (AgentOptions.StreamToolArguments) — progress only.
+            foreach (var fragment in update.Contents.OfType<IronHive.Extensions.AI.FunctionCallDeltaContent>())
+            {
+                yield return new AgentResponseChunk { ToolCallDelta = ToolCallChunkFactory.FromDelta(fragment) };
+            }
+
             if (update.Contents.OfType<FunctionCallContent>().Any())
             {
                 foreach (var functionCall in update.Contents.OfType<FunctionCallContent>())

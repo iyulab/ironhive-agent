@@ -20,6 +20,9 @@ internal static class ChatOptionsOverride
         // A copy: the options object is the loop's configuration, and a call's options may be changed below it.
         Reasoning = options.Reasoning?.Clone(),
         Tools = tools,
+        AdditionalProperties = options.StreamToolArguments
+            ? new AdditionalPropertiesDictionary { [IronHive.Extensions.AI.ChatClientAdapter.StreamToolArgumentsKey] = true }
+            : null,
     };
 
     /// <summary>

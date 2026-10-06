@@ -309,18 +309,17 @@ public record ToolCallResult
 /// </summary>
 /// <remarks>
 /// <para>
-/// The built-in <see cref="AgentLoop"/> and <see cref="ThinkingAgentLoop"/> always emit chunks
-/// with <see cref="IsComplete"/> = <c>true</c>, because the underlying
-/// <c>Microsoft.Extensions.AI</c> chat client has already accumulated streaming fragments into
-/// the materialised <see cref="Microsoft.Extensions.AI.FunctionCallContent.Arguments"/> dictionary
-/// before forwarding it. Consumers can therefore parse
-/// <see cref="ArgumentsDelta"/> directly as JSON in that common case.
+/// By default the built-in <see cref="AgentLoop"/> and <see cref="ThinkingAgentLoop"/> emit one chunk per call with
+/// <see cref="IsComplete"/> = <c>true</c>: the chat client has already accumulated the streaming fragments into the
+/// materialised <see cref="Microsoft.Extensions.AI.FunctionCallContent.Arguments"/>, so <see cref="ArgumentsDelta"/>
+/// parses as JSON.
 /// </para>
 /// <para>
-/// The <c>Delta</c> suffix on <see cref="NameDelta"/> and <see cref="ArgumentsDelta"/> is kept so
-/// future loop implementations can forward true provider deltas; in that case they must set
-/// <see cref="IsComplete"/> to <c>false</c> on intermediate chunks and emit a final chunk
-/// (with the same <see cref="Id"/>) with <see cref="IsComplete"/> = <c>true</c>.
+/// With <see cref="AgentOptions.StreamToolArguments"/> on (and a chat client built on IronHive's bridge), the call is
+/// also streamed while the model writes it: chunks with <see cref="IsComplete"/> = <c>false</c> and the same
+/// <see cref="Id"/>, <see cref="NameDelta"/> on the first only, <see cref="ArgumentsDelta"/> the provider's raw
+/// partial JSON — then the complete chunk as above. A consumer that only cares about calls can skip
+/// <see cref="IsComplete"/> = <c>false</c> chunks.
 /// </para>
 /// <para>
 /// Use <see cref="ToolCallChunkFactory.FromFunctionCall"/> to build chunks from

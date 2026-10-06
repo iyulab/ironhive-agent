@@ -17,9 +17,8 @@ namespace IronHive.Agent.Loop;
 /// is guaranteed to be valid JSON (or <c>null</c> when the provider reported no arguments).
 /// </para>
 /// <para>
-/// A future streaming loop that wants to forward raw provider deltas without accumulating
-/// should build <see cref="ToolCallChunk"/> directly with <see cref="ToolCallChunk.IsComplete"/> = <c>false</c>
-/// rather than using this factory.
+/// <see cref="FromDelta"/> builds the in-progress chunks (<see cref="ToolCallChunk.IsComplete"/> = <c>false</c>) from the
+/// argument fragments the IronHive chat-client bridge streams when <see cref="AgentOptions.StreamToolArguments"/> is on.
 /// </para>
 /// </remarks>
 public static class ToolCallChunkFactory
@@ -46,6 +45,25 @@ public static class ToolCallChunkFactory
                 ? JsonSerializer.Serialize(functionCall.Arguments)
                 : null,
             IsComplete = true
+        };
+    }
+
+    /// <summary>
+    /// Builds an in-progress <see cref="ToolCallChunk"/> from one streamed argument fragment: same <see cref="ToolCallChunk.Id"/>
+    /// as the complete chunk that follows, <see cref="ToolCallChunk.NameDelta"/> on the first fragment only, and
+    /// <see cref="ToolCallChunk.ArgumentsDelta"/> the provider's raw partial JSON.
+    /// </summary>
+    /// <param name="delta">The fragment the chat client streamed.</param>
+    public static ToolCallChunk FromDelta(IronHive.Extensions.AI.FunctionCallDeltaContent delta)
+    {
+        ArgumentNullException.ThrowIfNull(delta);
+
+        return new ToolCallChunk
+        {
+            Id = delta.CallId,
+            NameDelta = delta.Name,
+            ArgumentsDelta = delta.ArgumentsFragment,
+            IsComplete = false
         };
     }
 }

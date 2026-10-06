@@ -292,6 +292,13 @@ public class AgentLoop : IAgentLoop
                 };
             }
 
+            // Argument fragments of a call still being written (AgentOptions.StreamToolArguments) — progress only; the
+            // complete call below is what is recorded and run.
+            foreach (var fragment in update.Contents.OfType<IronHive.Extensions.AI.FunctionCallDeltaContent>())
+            {
+                yield return new AgentResponseChunk { ToolCallDelta = ToolCallChunkFactory.FromDelta(fragment) };
+            }
+
             // Yield and collect tool call updates
             if (update.Contents.OfType<FunctionCallContent>().Any())
             {
@@ -556,4 +563,15 @@ public class AgentOptions
     /// Options for dynamic tool retrieval. Only used when an IToolRetriever is configured.
     /// </summary>
     public ToolRetrievalOptions? ToolRetrievalOptions { get; set; }
+
+    /// <summary>
+    /// Stream a tool call's arguments while the model writes them: <c>RunStreamingAsync</c> then also yields
+    /// <see cref="AgentResponseChunk.ToolCallDelta"/> chunks with <see cref="ToolCallChunk.IsComplete"/> = <c>false</c>
+    /// (same <see cref="ToolCallChunk.Id"/>, name on the first, raw partial JSON in <see cref="ToolCallChunk.ArgumentsDelta"/>)
+    /// before the complete chunk, which still follows and is what tools run on. Needs a chat client built on IronHive's
+    /// bridge (<c>IronHive.Extensions.AI.ChatClientAdapter</c>) and a provider that streams arguments (Chat Completions,
+    /// Responses, Anthropic); with any other client nothing changes. Default false: a consumer that shows one event per
+    /// tool chunk would otherwise see each call several times.
+    /// </summary>
+    public bool StreamToolArguments { get; set; }
 }
