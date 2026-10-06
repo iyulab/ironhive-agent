@@ -1,32 +1,6 @@
 namespace IronHive.DeepResearch.Models.Search;
 
 /// <summary>
-/// 검색 배치 요청
-/// </summary>
-public record SearchBatch
-{
-    /// <summary>
-    /// 배치 ID
-    /// </summary>
-    public string Id { get; init; } = Guid.NewGuid().ToString("N")[..8];
-
-    /// <summary>
-    /// 실행할 검색 쿼리들
-    /// </summary>
-    public required IReadOnlyList<SearchQuery> Queries { get; init; }
-
-    /// <summary>
-    /// 배치 우선순위 (낮을수록 높은 우선순위)
-    /// </summary>
-    public int Priority { get; init; } = 1;
-
-    /// <summary>
-    /// 배치 생성 시간
-    /// </summary>
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-}
-
-/// <summary>
 /// 검색 실행 결과
 /// </summary>
 public record SearchExecutionResult
