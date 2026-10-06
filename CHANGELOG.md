@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.50.0] - Unreleased
+## [0.50.0] - 2026-10-06
 
 ### Changed
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.20.0 -> 0.21.0, `IndexThinking` 0.24.2 -> 0.25.0, `IronHive.Abstractions` 0.53.1 -> 0.54.0, `WebFlux` 0.21.1 -> 0.22.0.
