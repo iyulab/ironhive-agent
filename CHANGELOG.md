@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.52.7] - 2026-10-08
+
+### Changed
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.24.5 -> 0.24.6, `Ironbees.Core` 0.24.5 -> 0.24.6, `MemoryIndexer` 0.30.0 -> 0.31.0, `TokenMeter` 0.7.9 -> 0.7.10. No source changes.
+
 ## [0.52.6] - 2026-10-08
 
 ### Changed
