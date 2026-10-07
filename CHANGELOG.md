@@ -14,6 +14,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   leave a host's per-user boundary and outlive a deletion request. A test over every shipped log template keeps it so.
 - Re-pinned sibling package(s) `MemoryIndexer` 0.28.0 -> 0.29.0.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.57.0 -> 0.58.0, `IronHive.Extensions.AI` 0.57.0 -> 0.58.0.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.24.4 -> 0.24.5, `Ironbees.Core` 0.24.4 -> 0.24.5, `IronProw.Core` 0.15.11 -> 0.15.12, `WebFlux` 0.22.3 -> 0.22.4.
 
 ## [0.52.4] - 2026-10-07
 
