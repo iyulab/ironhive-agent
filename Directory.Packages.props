@@ -4,8 +4,8 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.55.1" />
-    <PackageVersion Include="IronHive.Extensions.AI" Version="0.55.1" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.56.0" />
+    <PackageVersion Include="IronHive.Extensions.AI" Version="0.56.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
     <PackageVersion Include="IronProw.Core" Version="0.15.7" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->

@@ -13,6 +13,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   Before, the plain loop dropped it, so a host showed nothing during a long thinking phase and could not tell a thinking
   model from a stalled server. The reasoning is not part of `TextDelta` or the turn's `Content`. A consumer that handles
   `ThinkingDelta` (or ignores chunks it does not read) needs no change.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.55.1 -> 0.56.0, `IronHive.Extensions.AI` 0.55.1 -> 0.56.0.
 
 ## [0.51.1] - 2026-10-06
 
