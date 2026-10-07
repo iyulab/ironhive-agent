@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [0.52.5] - Unreleased
+## [0.52.5] - 2026-10-07
 
 ### Changed
 - **Log messages no longer carry user, operator or tool text.** DeepResearch logs the length of a query or prompt
