@@ -12,6 +12,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   tool-result guard log that a tool was denied, rejected or withheld without the reason text (an operator's rejection
   logs only whether a reason was given). The reasons still reach the model and the caller through the refusal; logs
   leave a host's per-user boundary and outlive a deletion request. A test over every shipped log template keeps it so.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.28.0 -> 0.29.0.
 
 ## [0.52.4] - 2026-10-07
 
