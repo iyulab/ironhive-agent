@@ -29,7 +29,7 @@ public partial class QueryPlannerAgent
         ResearchState state,
         CancellationToken cancellationToken = default)
     {
-        LogQueryPlanStarting(_logger, state.Request.Query);
+        LogQueryPlanStarting(_logger, state.Request.Query.Length);
 
         var options = CreateExpansionOptions(state.Request);
 
@@ -200,8 +200,8 @@ public partial class QueryPlannerAgent
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Query plan starting: {Query}")]
-    private static partial void LogQueryPlanStarting(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Query plan starting: query of {QueryLength} chars")]
+    private static partial void LogQueryPlanStarting(ILogger logger, int queryLength);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Decomposing query (Self-Ask pattern)")]
     private static partial void LogDecomposingQuery(ILogger logger);

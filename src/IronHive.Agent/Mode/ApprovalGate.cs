@@ -72,7 +72,7 @@ public sealed partial class ApprovalGate
         if (_modes is { CurrentMode: AgentMode.Planning } && !_modeFilter!.IsToolPermitted(toolName, AgentMode.Planning))
         {
             const string reason = "Planning mode permits read-only tools only";
-            LogDenied(_logger, toolName, reason);
+            LogDenied(_logger, toolName);
             return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Denied, $"{reason}: {toolName}"));
         }
 
@@ -84,7 +84,7 @@ public sealed partial class ApprovalGate
                 return GateDecision.Proceed(null);
 
             case PermissionAction.Deny:
-                LogDenied(_logger, toolName, risk.Reason ?? "not allowed");
+                LogDenied(_logger, toolName);
                 return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Denied, risk.Reason ?? "Tool execution not allowed"));
 
             case PermissionAction.Ask:
@@ -92,7 +92,7 @@ public sealed partial class ApprovalGate
                 {
                     // An Ask verdict with nobody to ask is a refusal, not a pass: letting the call through
                     // here is exactly the silent no-op the gate exists to remove.
-                    LogNoApprovalService(_logger, toolName, risk.Reason ?? "approval required");
+                    LogNoApprovalService(_logger, toolName);
                     return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.ApprovalUnavailable, risk.Reason ?? toolName));
                 }
 
@@ -107,7 +107,8 @@ public sealed partial class ApprovalGate
 
                 if (!result.Approved)
                 {
-                    LogRejected(_logger, toolName, result.RejectionReason ?? "declined");
+                    var hasReason = !string.IsNullOrWhiteSpace(result.RejectionReason);
+                    LogRejected(_logger, toolName, hasReason);
                     return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Rejected, result.RejectionReason ?? "the operator declined"));
                 }
 
@@ -118,14 +119,14 @@ public sealed partial class ApprovalGate
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} denied by permission rules: {Reason}")]
-    private static partial void LogDenied(ILogger logger, string toolName, string reason);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} denied by permission rules")]
+    private static partial void LogDenied(ILogger logger, string toolName);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} requires approval but no IHumanApprovalService is configured; refusing: {Reason}")]
-    private static partial void LogNoApprovalService(ILogger logger, string toolName, string reason);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} requires approval but no IHumanApprovalService is configured; refusing")]
+    private static partial void LogNoApprovalService(ILogger logger, string toolName);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Tool {ToolName} rejected by the operator: {Reason}")]
-    private static partial void LogRejected(ILogger logger, string toolName, string reason);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tool {ToolName} rejected by the operator (reason given: {HasReason})")]
+    private static partial void LogRejected(ILogger logger, string toolName, bool hasReason);
 }
 
 /// <summary>What <see cref="ApprovalGate.DecideAsync(string, IDictionary{string, object?}?, CancellationToken)"/> decided about one tool call.</summary>

@@ -251,7 +251,7 @@ public partial class SearchCoordinatorAgent
 
                 var result = await provider.SearchAsync(query, linkedCts.Token);
 
-                LogQuerySucceeded(_logger, query.Query, result.Sources.Count);
+                LogQuerySucceeded(_logger, query.Query.Length, result.Sources.Count);
 
                 return new QueryExecutionResult { Success = true, Result = result };
             }
@@ -264,12 +264,12 @@ public partial class SearchCoordinatorAgent
             {
                 // 타임아웃
                 lastException = new TimeoutException($"Query timed out after {options.QueryTimeout.TotalSeconds}s");
-                LogQueryTimeout(_logger, query.Query, retryCount + 1, options.MaxRetriesPerQuery + 1);
+                LogQueryTimeout(_logger, query.Query.Length, retryCount + 1, options.MaxRetriesPerQuery + 1);
             }
             catch (HttpRequestException ex) when (IsRateLimited(ex))
             {
                 lastException = ex;
-                LogRateLimitDetected(_logger, query.Query);
+                LogRateLimitDetected(_logger, query.Query.Length);
 
                 // Rate limit 대기
                 var waitTime = CalculateRateLimitWait(retryCount, options);
@@ -283,12 +283,12 @@ public partial class SearchCoordinatorAgent
             catch (HttpRequestException ex) when (IsServerError(ex))
             {
                 lastException = ex;
-                LogServerError(_logger, query.Query, ex.Message);
+                LogServerError(_logger, ex, query.Query.Length);
             }
             catch (Exception ex)
             {
                 lastException = ex;
-                LogQueryFailed(_logger, ex, query.Query);
+                LogQueryFailed(_logger, ex, query.Query.Length);
 
                 // 재시도 불가능한 에러
                 if (!IsRetryableError(ex))
@@ -509,20 +509,20 @@ public partial class SearchCoordinatorAgent
     [LoggerMessage(Level = LogLevel.Information, Message = "Search execution completed: success {SuccessCount}, failed {FailCount}, sources {SourceCount}, duration {Duration}ms")]
     private static partial void LogSearchExecutionCompleted(ILogger logger, int successCount, int failCount, int sourceCount, double duration);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Query succeeded: {Query}, sources {Count}")]
-    private static partial void LogQuerySucceeded(ILogger logger, string query, int count);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Query succeeded: {QueryLength} chars, sources {Count}")]
+    private static partial void LogQuerySucceeded(ILogger logger, int queryLength, int count);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Query timeout: {Query} (attempt {Retry}/{MaxRetry})")]
-    private static partial void LogQueryTimeout(ILogger logger, string query, int retry, int maxRetry);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Query timeout: {QueryLength} chars (attempt {Retry}/{MaxRetry})")]
+    private static partial void LogQueryTimeout(ILogger logger, int queryLength, int retry, int maxRetry);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Rate limit detected: {Query}, retrying after wait")]
-    private static partial void LogRateLimitDetected(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rate limit detected for a query of {QueryLength} chars, retrying after wait")]
+    private static partial void LogRateLimitDetected(ILogger logger, int queryLength);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Server error: {Query}, {Message}")]
-    private static partial void LogServerError(ILogger logger, string query, string message);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Server error for a query of {QueryLength} chars")]
+    private static partial void LogServerError(ILogger logger, Exception exception, int queryLength);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Query failed: {Query}")]
-    private static partial void LogQueryFailed(ILogger logger, Exception? exception, string query);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Query failed: {QueryLength} chars")]
+    private static partial void LogQueryFailed(ILogger logger, Exception? exception, int queryLength);
 
     #endregion
 }

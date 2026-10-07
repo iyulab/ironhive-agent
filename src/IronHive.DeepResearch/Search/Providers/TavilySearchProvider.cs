@@ -57,7 +57,7 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
         var cacheKey = _cache.GenerateKey(query);
         if (_cache.TryGet(cacheKey, out var cached) && cached != null)
         {
-            LogReturningCachedResult(_logger, query.Query);
+            LogReturningCachedResult(_logger, query.Query.Length);
             return cached;
         }
 
@@ -73,7 +73,7 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
             ExcludeDomains = query.ExcludeDomains?.ToList()
         };
 
-        LogExecutingSearch(_logger, query.Query, request.SearchDepth);
+        LogExecutingSearch(_logger, query.Query.Length, request.SearchDepth);
 
         // 3. API 호출
         var response = await _httpClient.PostAsJsonAsync(
@@ -85,7 +85,7 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(cancellationToken);
-            LogApiError(_logger, response.StatusCode, error);
+            LogApiError(_logger, response.StatusCode, error.Length);
             throw new HttpRequestException($"Tavily API error: {response.StatusCode} - {error}");
         }
 
@@ -126,7 +126,7 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                LogSearchFailed(_logger, ex, query.Query);
+                LogSearchFailed(_logger, ex, query.Query.Length);
                 // 실패한 쿼리는 빈 결과 반환
                 return new SearchResult
                 {
@@ -193,14 +193,14 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Returning cached result for query: {Query}")]
-    private static partial void LogReturningCachedResult(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Returning cached result for a query of {QueryLength} chars")]
+    private static partial void LogReturningCachedResult(ILogger logger, int queryLength);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Executing Tavily search: {Query}, Depth: {Depth}")]
-    private static partial void LogExecutingSearch(ILogger logger, string query, string depth);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Executing Tavily search: query of {QueryLength} chars, Depth: {Depth}")]
+    private static partial void LogExecutingSearch(ILogger logger, int queryLength, string depth);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Tavily API error: {StatusCode} - {Error}")]
-    private static partial void LogApiError(ILogger logger, System.Net.HttpStatusCode statusCode, string error);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Tavily API error: {StatusCode}, body of {ErrorLength} chars")]
+    private static partial void LogApiError(ILogger logger, System.Net.HttpStatusCode statusCode, int errorLength);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Tavily search completed: {ResultCount} results")]
     private static partial void LogSearchCompleted(ILogger logger, int resultCount);
@@ -208,8 +208,8 @@ public partial class TavilySearchProvider : ISearchProvider, IDisposable
     [LoggerMessage(Level = LogLevel.Information, Message = "Executing batch search: {Count} queries")]
     private static partial void LogExecutingBatchSearch(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Search failed for query: {Query}")]
-    private static partial void LogSearchFailed(ILogger logger, Exception? exception, string query);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Search failed for a query of {QueryLength} chars")]
+    private static partial void LogSearchFailed(ILogger logger, Exception? exception, int queryLength);
 
     #endregion
 }

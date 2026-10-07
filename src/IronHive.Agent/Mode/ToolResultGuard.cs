@@ -99,7 +99,7 @@ public sealed partial class ToolResultGuardMiddleware : IToolResultMiddleware
 
         if (verdict.Withheld)
         {
-            LogWithheld(_logger, context.ToolName, verdict.Reason ?? "policy violation");
+            LogWithheld(_logger, context.ToolName);
             return new ToolCallRefusal(ToolCallRefusalKind.ResultWithheld, verdict.Reason ?? "policy violation");
         }
         return verdict.Replacement ?? result;
@@ -116,6 +116,6 @@ public sealed partial class ToolResultGuardMiddleware : IToolResultMiddleware
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool result guard threw while inspecting '{Tool}' - withholding the result (fail-closed)")]
     private static partial void LogGuardFailed(ILogger logger, Exception ex, string tool);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Tool result of '{Tool}' withheld by guard: {Reason}")]
-    private static partial void LogWithheld(ILogger logger, string tool, string reason);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tool result of '{Tool}' withheld by guard")]
+    private static partial void LogWithheld(ILogger logger, string tool);
 }

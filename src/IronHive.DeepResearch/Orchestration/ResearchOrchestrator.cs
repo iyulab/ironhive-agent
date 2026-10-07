@@ -57,7 +57,7 @@ public partial class ResearchOrchestrator
         ResearchState state,
         CancellationToken cancellationToken = default)
     {
-        LogResearchStarting(_logger, state.Request.Query, state.Request.Depth);
+        LogResearchStarting(_logger, state.Request.Query.Length, state.Request.Depth);
         using var usageScope = ResearchUsageScope.Enter(state.Usage);
 
         // 시작 시 취소 상태 확인
@@ -582,8 +582,8 @@ public partial class ResearchOrchestrator
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Research starting: {Query}, depth: {Depth}")]
-    private static partial void LogResearchStarting(ILogger logger, string query, ResearchDepth depth);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research starting: query of {QueryLength} chars, depth: {Depth}")]
+    private static partial void LogResearchStarting(ILogger logger, int queryLength, ResearchDepth depth);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Research cancelled before start")]
     private static partial void LogResearchCancelledBeforeStart(ILogger logger);

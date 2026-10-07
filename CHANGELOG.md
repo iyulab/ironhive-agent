@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.52.5] - Unreleased
+
+### Changed
+- **Log messages no longer carry user, operator or tool text.** DeepResearch logs the length of a query or prompt
+  instead of the query (17 messages, including the Tavily provider's API error body), and the approval gate and the
+  tool-result guard log that a tool was denied, rejected or withheld without the reason text (an operator's rejection
+  logs only whether a reason was given). The reasons still reach the model and the caller through the refusal; logs
+  leave a host's per-user boundary and outlive a deletion request. A test over every shipped log template keeps it so.
+
 ## [0.52.4] - 2026-10-07
 
 ### Changed

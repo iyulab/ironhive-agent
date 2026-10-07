@@ -37,7 +37,7 @@ public partial class AutonomousResearchRunner
         var maxIterations = GetMaxIterations(request);
         if (_logger is not null)
         {
-            LogAutonomousResearchStarting(_logger, request.Query, maxIterations);
+            LogAutonomousResearchStarting(_logger, request.Query.Length, maxIterations);
         }
 
         // Wrap executor to capture typed results (AutonomousOrchestrator only exposes string output)
@@ -119,8 +119,8 @@ public partial class AutonomousResearchRunner
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Autonomous research starting: {Query}, max iterations: {Max}")]
-    private static partial void LogAutonomousResearchStarting(ILogger logger, string query, int max);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autonomous research starting: query of {QueryLength} chars, max iterations: {Max}")]
+    private static partial void LogAutonomousResearchStarting(ILogger logger, int queryLength, int max);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Autonomous research completed after {Iterations} iteration(s)")]
     private static partial void LogAutonomousResearchCompleted(ILogger logger, int iterations);

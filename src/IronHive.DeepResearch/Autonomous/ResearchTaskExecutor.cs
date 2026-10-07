@@ -34,7 +34,7 @@ public partial class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequ
         {
             if (_logger is not null)
             {
-                LogResearchTaskExecutorStarting(_logger, request.Prompt);
+                LogResearchTaskExecutorStarting(_logger, request.Prompt.Length);
             }
 
             onOutput?.Invoke(new TaskOutput
@@ -84,8 +84,8 @@ public partial class ResearchTaskExecutor : ITaskExecutor<AutonomousResearchRequ
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Research task executor starting: {Query}")]
-    private static partial void LogResearchTaskExecutorStarting(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research task executor starting: prompt of {PromptLength} chars")]
+    private static partial void LogResearchTaskExecutorStarting(ILogger logger, int promptLength);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Research task executor failed")]
     private static partial void LogResearchTaskExecutorFailed(ILogger logger, Exception? exception);

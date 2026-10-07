@@ -36,7 +36,7 @@ public partial class DeepResearcher : IDeepResearcher
         ResearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        LogResearchStarting(_logger, request.Query);
+        LogResearchStarting(_logger, request.Query.Length);
 
         var result = await _orchestrator.ExecuteAsync(request, cancellationToken);
 
@@ -50,7 +50,7 @@ public partial class DeepResearcher : IDeepResearcher
         ResearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        LogStreamingResearchStarting(_logger, request.Query);
+        LogStreamingResearchStarting(_logger, request.Query.Length);
         return _orchestrator.ExecuteStreamAsync(request, cancellationToken);
     }
 
@@ -59,7 +59,7 @@ public partial class DeepResearcher : IDeepResearcher
         ResearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        LogInteractiveSessionStarting(_logger, request.Query);
+        LogInteractiveSessionStarting(_logger, request.Query.Length);
 
         var state = new ResearchState
         {
@@ -103,17 +103,17 @@ public partial class DeepResearcher : IDeepResearcher
 
     #region LoggerMessage Definitions
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Research starting: {Query}")]
-    private static partial void LogResearchStarting(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Research starting: query of {QueryLength} chars")]
+    private static partial void LogResearchStarting(ILogger logger, int queryLength);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Research completed: {SessionId}, sources: {SourceCount}, iterations: {Iterations}")]
     private static partial void LogResearchCompleted(ILogger logger, string sessionId, int sourceCount, int iterations);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Streaming research starting: {Query}")]
-    private static partial void LogStreamingResearchStarting(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Streaming research starting: query of {QueryLength} chars")]
+    private static partial void LogStreamingResearchStarting(ILogger logger, int queryLength);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Interactive research session starting: {Query}")]
-    private static partial void LogInteractiveSessionStarting(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Interactive research session starting: query of {QueryLength} chars")]
+    private static partial void LogInteractiveSessionStarting(ILogger logger, int queryLength);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Research resuming: {SessionId}")]
     private static partial void LogResearchResuming(ILogger logger, string sessionId);
@@ -208,7 +208,7 @@ public partial class ResearchSession : IResearchSession
             Type = SearchType.Web
         });
 
-        LogUserQueryAdded(_logger, customQuery);
+        LogUserQueryAdded(_logger, customQuery.Length);
         return Task.CompletedTask;
     }
 
@@ -251,8 +251,8 @@ public partial class ResearchSession : IResearchSession
     [LoggerMessage(Level = LogLevel.Debug, Message = "Session initialized: {SessionId}")]
     private static partial void LogSessionInitialized(ILogger logger, string sessionId);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "User query added: {Query}")]
-    private static partial void LogUserQueryAdded(ILogger logger, string query);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "User query added: {QueryLength} chars")]
+    private static partial void LogUserQueryAdded(ILogger logger, int queryLength);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Session finalizing and generating report: {SessionId}")]
     private static partial void LogSessionFinalizing(ILogger logger, string sessionId);
