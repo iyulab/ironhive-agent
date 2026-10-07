@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.52.1] - 2026-10-07
+
+### Changed
+- Re-pinned sibling package(s) `IronProw.Core` 0.15.8 -> 0.15.9, `WebFlux` 0.22.2 -> 0.22.3. No source changes.
+
 ## [0.52.0] - 2026-10-07
 
 ### Changed
