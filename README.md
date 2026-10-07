@@ -820,6 +820,8 @@ consumer that counts calls skips `IsComplete = false` chunks.
 
 A thinking model's reasoning streams as `ThinkingDelta` chunks while it thinks (from `AgentLoop` and `ThinkingAgentLoop`
 alike), whenever the chat client returns it as `TextReasoningContent` — so a host can show that the model is thinking.
+The whole reasoning is also recorded on the turn: `TurnRecord.ThinkingContent` (streaming) and
+`AgentResponse.ThinkingContent` (`RunAsync`).
 
 ```csharp
 await foreach (var chunk in loop.RunStreamingAsync(prompt, ct))

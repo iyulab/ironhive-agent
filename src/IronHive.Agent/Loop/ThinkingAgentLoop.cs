@@ -543,13 +543,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         // Fallback: provider-native reasoning carried as M.E.AI TextReasoningContent on the response
         // contents, with no AdditionalProperties blob. No dedup needed — non-streaming has no live stream.
-        var reasoning = string.Concat(response.Messages
-            .SelectMany(m => m.Contents)
-            .OfType<TextReasoningContent>()
-            .Select(c => c.Text)
-            .Where(t => !string.IsNullOrEmpty(t)));
-
-        return string.IsNullOrEmpty(reasoning) ? null : new ThinkingContent { Content = reasoning };
+        return LiveReasoning.ToThinkingContent(LiveReasoning.Extract(response));
     }
 
     /// <inheritdoc />

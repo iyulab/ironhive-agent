@@ -186,9 +186,10 @@ public class AgentLoop : IAgentLoop
         }
 
         var content = response.Text ?? string.Empty;
+        var thinking = LiveReasoning.ToThinkingContent(LiveReasoning.Extract(response));
         var addendum = await TurnObserverNotifier.NotifyAsync(
             _turnObservers,
-            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, StopReason = stopReason },
+            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, ThinkingContent = thinking, StopReason = stopReason },
             cancellationToken);
 
         return new AgentResponse
@@ -199,6 +200,7 @@ public class AgentLoop : IAgentLoop
             HasTextOutput = !string.IsNullOrEmpty(response.Text),
             ToolCalls = toolCalls,
             Usage = usage,
+            ThinkingContent = thinking,
             Addendum = addendum,
             StopReason = stopReason
         };
@@ -255,6 +257,7 @@ public class AgentLoop : IAgentLoop
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var responseBuilder = new StringBuilder();
+        var reasoningBuilder = new StringBuilder();
         var toolCalls = new List<FunctionCallContent>();
         // Function-invocation middleware, when present, streams the outcome of each call back as a
         // FunctionResultContent update. Collecting them is what lets the turn record report an
@@ -281,10 +284,11 @@ public class AgentLoop : IAgentLoop
 
         await foreach (var update in stream)
         {
-            // Live reasoning from a thinking model, as it is written — progress only, like argument fragments: it is
-            // not part of the response text or the recorded turn.
+            // Live reasoning from a thinking model, as it is written. It is not part of the response text; the turn
+            // record carries it whole as ThinkingContent, as the non-streaming path does.
             if (LiveReasoning.Extract(update) is { } reasoning)
             {
+                reasoningBuilder.Append(reasoning);
                 yield return new AgentResponseChunk { ThinkingDelta = reasoning };
             }
 
@@ -356,6 +360,7 @@ public class AgentLoop : IAgentLoop
             Content = responseBuilder.ToString(),
             ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
             Usage = streamedUsage,
+            ThinkingContent = LiveReasoning.ToThinkingContent(reasoningBuilder.ToString()),
             StopReason = streamedStopReason
         };
 

@@ -19,4 +19,20 @@ internal static class LiveReasoning
 
         return string.IsNullOrEmpty(joined) ? null : joined;
     }
+
+    /// <summary>The reasoning a non-streamed response carries, or <see langword="null"/> when it carries none.</summary>
+    public static string? Extract(ChatResponse response)
+    {
+        var joined = string.Concat(response.Messages
+            .SelectMany(m => m.Contents)
+            .OfType<TextReasoningContent>()
+            .Select(c => c.Text)
+            .Where(t => !string.IsNullOrEmpty(t)));
+
+        return string.IsNullOrEmpty(joined) ? null : joined;
+    }
+
+    /// <summary>The turn's recorded reasoning, or <see langword="null"/> when the model wrote none.</summary>
+    public static ThinkingContent? ToThinkingContent(string? reasoning)
+        => string.IsNullOrEmpty(reasoning) ? null : new ThinkingContent { Content = reasoning };
 }

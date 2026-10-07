@@ -42,6 +42,8 @@ public class LiveReasoningStreamingTests
         text.Should().Equal("Hello!");
         turn.Should().NotBeNull();
         turn!.Content.Should().Be("Hello!");
+        turn.ThinkingContent.Should().NotBeNull();
+        turn.ThinkingContent!.Content.Should().Be("The user wants a greeting.");
     }
 
     [Fact]
@@ -52,11 +54,33 @@ public class LiveReasoningStreamingTests
         await foreach (var chunk in loop.RunStreamingAsync("hi", cancellationToken: TestContext.Current.CancellationToken))
         {
             chunk.ThinkingDelta.Should().BeNull();
+            if (chunk.Turn is { } turn)
+            {
+                turn.ThinkingContent.Should().BeNull();
+            }
         }
+    }
+
+    [Fact]
+    public async Task RunAsync_ReasoningContent_IsRecordedOnTheResponse_AndStaysOutOfTheText()
+    {
+        var loop = new AgentLoop(new FixedStreamClient(
+            response: new ChatResponse([new ChatMessage(ChatRole.Assistant,
+                [new TextReasoningContent("The user wants a greeting."), new TextContent("Hello!")])])));
+
+        var response = await loop.RunAsync("hi", cancellationToken: TestContext.Current.CancellationToken);
+
+        response.Content.Should().Be("Hello!");
+        response.ThinkingContent.Should().NotBeNull();
+        response.ThinkingContent!.Content.Should().Be("The user wants a greeting.");
     }
 
     private sealed class FixedStreamClient(params ChatResponseUpdate[] updates) : IChatClient
     {
+        private readonly ChatResponse? _response;
+
+        public FixedStreamClient(ChatResponse response) : this([]) => _response = response;
+
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -70,7 +94,7 @@ public class LiveReasoningStreamingTests
 
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, string.Empty)]));
+            => Task.FromResult(_response ?? new ChatResponse([new ChatMessage(ChatRole.Assistant, string.Empty)]));
 
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
         public void Dispose() { }

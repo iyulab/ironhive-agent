@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.52.2] - Unreleased
+
+### Fixed
+- **The plain `AgentLoop` records a thinking model's reasoning on the turn.** `TurnRecord.ThinkingContent` (the closing
+  chunk of `RunStreamingAsync`, and what turn observers receive) and `AgentResponse.ThinkingContent` (`RunAsync`) hold
+  the reasoning the chat client returned as `TextReasoningContent`, as `ThinkingAgentLoop` already did. Since 0.52.0 the
+  plain loop streamed it as `ThinkingDelta` but left the record `null`, so a host that stores turns lost it.
+
 ## [0.52.1] - 2026-10-07
 
 ### Changed
