@@ -67,6 +67,22 @@ public class EmbeddingRoleTests
         Assert.Equal(["the user prefers xunit", "a", "b"], provider.Documents);
     }
 
+    [Fact]
+    public async Task IronbeesAdapter_SendsTheSelectionRequestToTheQueryRole()
+    {
+        var provider = new RecordingProvider();
+        global::Ironbees.Core.IEmbeddingProvider adapter = new IronHive.Agent.Ironbees.IronbeesEmbeddingProviderAdapter(provider, "recording");
+        var ct = TestContext.Current.CancellationToken;
+
+        var query = await adapter.GenerateQueryEmbeddingAsync("refactor this class", ct);
+        var agents = await adapter.GenerateEmbeddingsAsync(["coder", "writer"], ct);
+
+        Assert.Equal(RecordingProvider.QueryVector, query);
+        Assert.Equal(2, agents.Count);
+        Assert.Equal(["refactor this class"], provider.Queries);
+        Assert.Equal(["coder", "writer"], provider.Documents);
+    }
+
     [Description("Read a file from disk")]
     private static string ReadFile(string path) => path;
 

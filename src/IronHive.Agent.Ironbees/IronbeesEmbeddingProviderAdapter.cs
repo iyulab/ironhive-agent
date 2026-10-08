@@ -29,4 +29,8 @@ public sealed class IronbeesEmbeddingProviderAdapter(IEmbeddingProvider inner, s
     /// <inheritdoc />
     public async Task<IReadOnlyList<float[]>> GenerateEmbeddingsAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken = default)
         => await _inner.EmbedBatchAsync(texts, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<float[]> GenerateQueryEmbeddingAsync(string query, CancellationToken cancellationToken = default)
+        => await _inner.EmbedQueryAsync(query, cancellationToken);
 }

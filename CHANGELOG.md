@@ -11,7 +11,8 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   (E5 `query: `/`passage: `, Nomic, a BGE query instruction) embeds a search differently from the text it is compared
   against. `EmbeddingToolRetriever` now embeds the turn it searches with `EmbedQueryAsync` and the tool descriptions with
   `EmbedBatchAsync`; `FallbackEmbeddingProvider` forwards the query method; `EmbeddingServiceAdapter` sends MemoryIndexer's
-  `GenerateQueryEmbeddingAsync` to it. The method defaults to `EmbedAsync`, so a symmetric provider needs no change.
+  `GenerateQueryEmbeddingAsync` to it, and `IronbeesEmbeddingProviderAdapter` sends Ironbees' `GenerateQueryEmbeddingAsync`
+  (the agent-selection request) to it. The method defaults to `EmbedAsync`, so a symmetric provider needs no change.
 
 ### Removed
 - **Breaking: `IAgentEmbeddingProvider` is gone — `EmbeddingServiceAdapter` takes an `IEmbeddingProvider`.** The memory
@@ -22,6 +23,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **Breaking: `IRerankProvider`, `RerankResult` and `FallbackRerankProvider` are removed.** No retriever, loop or tool
   in this library reranks, and the only implementations registered them where nothing resolved them. Migration: call a
   reranker (for example `LMSupply.Reranker`) directly.
+
+### Dependencies
+- Re-pinned sibling package(s) `Ironbees.Core` 0.24.6 -> 0.25.0, `Ironbees.Autonomous` 0.24.6 -> 0.25.0.
 
 ## [0.52.7] - 2026-10-08
 
