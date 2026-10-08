@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.53.0] - Unreleased
 
 ### Added
 - **`IEmbeddingProvider.EmbedQueryAsync` — searches embed their query on the query side.** An asymmetric embedding model
