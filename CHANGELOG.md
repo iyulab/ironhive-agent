@@ -19,6 +19,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   role. Migration: implement `IronHive.Agent.Providers.IEmbeddingProvider` (`EmbedBatchAsync` takes an
   `IReadOnlyList<string>` and returns `float[][]`; add `ProviderName`, `IsAvailable`, `DisposeAsync`) or pass the provider
   you already register for tool retrieval.
+- **Breaking: `IRerankProvider`, `RerankResult` and `FallbackRerankProvider` are removed.** No retriever, loop or tool
+  in this library reranks, and the only implementations registered them where nothing resolved them. Migration: call a
+  reranker (for example `LMSupply.Reranker`) directly.
 
 ## [0.52.7] - 2026-10-08
 
