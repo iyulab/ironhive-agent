@@ -30,6 +30,13 @@ public sealed class FallbackEmbeddingProvider : FallbackProviderBase<IEmbeddingP
         return await ActiveProvider!.EmbedBatchAsync(texts, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async ValueTask<float[]> EmbedQueryAsync(string query, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        return await ActiveProvider!.EmbedQueryAsync(query, cancellationToken);
+    }
+
     /// <summary>
     /// Gets the currently active provider.
     /// </summary>

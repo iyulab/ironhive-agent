@@ -1,5 +1,5 @@
 using IronHive.Agent.Memory;
-using NSubstitute;
+using IronHive.Agent.Providers;
 
 namespace IronHive.Agent.Tests.Memory;
 
@@ -19,10 +19,7 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public void Dimensions_DelegatesToProvider()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        provider.Dimensions.Returns(1536);
-
-        var adapter = new EmbeddingServiceAdapter(provider);
+        var adapter = new EmbeddingServiceAdapter(new FakeProvider { Dimensions = 1536 });
 
         Assert.Equal(1536, adapter.Dimensions);
     }
@@ -30,10 +27,7 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public void Dimensions_ReturnsZeroWhenProviderReturnsZero()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        provider.Dimensions.Returns(0);
-
-        var adapter = new EmbeddingServiceAdapter(provider);
+        var adapter = new EmbeddingServiceAdapter(new FakeProvider { Dimensions = 0 });
 
         Assert.Equal(0, adapter.Dimensions);
     }
@@ -43,10 +37,7 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public async Task GenerateEmbedding_ReturnsReadOnlyMemoryFromFloatArray()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        var expected = new float[] { 0.1f, 0.2f, 0.3f };
-        provider.EmbedAsync("hello", Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(expected));
+        var provider = new FakeProvider { Single = [0.1f, 0.2f, 0.3f] };
 
         var adapter = new EmbeddingServiceAdapter(provider);
         var result = await adapter.GenerateEmbeddingAsync("hello", TestContext.Current.CancellationToken);
@@ -55,14 +46,13 @@ public class EmbeddingServiceAdapterTests
         Assert.Equal(0.1f, result.Span[0]);
         Assert.Equal(0.2f, result.Span[1]);
         Assert.Equal(0.3f, result.Span[2]);
+        Assert.Equal(["hello"], provider.Texts);
     }
 
     [Fact]
     public async Task GenerateEmbedding_EmptyArray_ReturnsEmptyMemory()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        provider.EmbedAsync("", Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(Array.Empty<float>()));
+        var provider = new FakeProvider { Single = [] };
 
         var adapter = new EmbeddingServiceAdapter(provider);
         var result = await adapter.GenerateEmbeddingAsync("", TestContext.Current.CancellationToken);
@@ -73,17 +63,13 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public async Task GenerateEmbedding_PassesCancellationToken()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        var dummy = new float[] { 1.0f };
-        provider.EmbedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(dummy));
-
+        var provider = new FakeProvider();
         var adapter = new EmbeddingServiceAdapter(provider);
         using var cts = new CancellationTokenSource();
 
         await adapter.GenerateEmbeddingAsync("test", cts.Token);
 
-        await provider.Received(1).EmbedAsync("test", cts.Token);
+        Assert.Equal(cts.Token, provider.LastToken);
     }
 
     // --- GenerateBatchEmbeddingsAsync ---
@@ -91,12 +77,7 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public async Task GenerateBatch_ReturnsListOfReadOnlyMemory()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        var vec1 = new float[] { 1.0f, 2.0f };
-        var vec2 = new float[] { 3.0f, 4.0f };
-        var embeddings = new List<float[]> { vec1, vec2 };
-        provider.EmbedBatchAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<float[]>>(embeddings));
+        var provider = new FakeProvider { Batch = [[1.0f, 2.0f], [3.0f, 4.0f]] };
 
         var adapter = new EmbeddingServiceAdapter(provider);
         var result = await adapter.GenerateBatchEmbeddingsAsync(["hello", "world"], TestContext.Current.CancellationToken);
@@ -109,9 +90,7 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public async Task GenerateBatch_EmptyInput_ReturnsEmptyList()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        provider.EmbedBatchAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<float[]>>(new List<float[]>()));
+        var provider = new FakeProvider { Batch = [] };
 
         var adapter = new EmbeddingServiceAdapter(provider);
         var result = await adapter.GenerateBatchEmbeddingsAsync([], TestContext.Current.CancellationToken);
@@ -122,17 +101,39 @@ public class EmbeddingServiceAdapterTests
     [Fact]
     public async Task GenerateBatch_MaterializesEnumerable()
     {
-        var provider = Substitute.For<IAgentEmbeddingProvider>();
-        IEnumerable<string>? capturedTexts = null;
-        var singleVec = new float[] { 1.0f };
-        provider.EmbedBatchAsync(Arg.Do<IEnumerable<string>>(t => capturedTexts = t), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<float[]>>(new List<float[]> { singleVec }));
+        var provider = new FakeProvider { Batch = [[1.0f]] };
 
         var adapter = new EmbeddingServiceAdapter(provider);
-        await adapter.GenerateBatchEmbeddingsAsync(["text1"], TestContext.Current.CancellationToken);
+        await adapter.GenerateBatchEmbeddingsAsync(Enumerable.Repeat("text1", 1), TestContext.Current.CancellationToken);
 
-        // The adapter converts to List<string> before passing
-        Assert.NotNull(capturedTexts);
-        Assert.IsType<List<string>>(capturedTexts);
+        Assert.Equal(["text1"], provider.Texts);
+    }
+
+    private sealed class FakeProvider : IEmbeddingProvider
+    {
+        public float[] Single { get; init; } = [1.0f];
+        public float[][] Batch { get; init; } = [];
+        public List<string> Texts { get; } = [];
+        public CancellationToken LastToken { get; private set; }
+
+        public string ProviderName => "fake";
+        public bool IsAvailable => true;
+        public int Dimensions { get; init; }
+
+        public ValueTask<float[]> EmbedAsync(string text, CancellationToken cancellationToken = default)
+        {
+            Texts.Add(text);
+            LastToken = cancellationToken;
+            return new(Single);
+        }
+
+        public ValueTask<float[][]> EmbedBatchAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken = default)
+        {
+            Texts.AddRange(texts);
+            LastToken = cancellationToken;
+            return new(Batch);
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

@@ -50,8 +50,8 @@ public class EmbeddingToolRetriever : IToolRetriever
         // Ensure index is built (lazy, rebuild if tool list changed)
         await EnsureIndexAsync(availableTools, cancellationToken);
 
-        // Embed the query
-        var queryEmbedding = await _embedder.EmbedAsync(query, cancellationToken);
+        // Embed the query on the query side; tool descriptions are the documents it is compared against
+        var queryEmbedding = await _embedder.EmbedQueryAsync(query, cancellationToken);
 
         // Score all tools via cosine similarity
         var scores = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);

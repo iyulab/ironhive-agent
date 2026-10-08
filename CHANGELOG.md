@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **`IEmbeddingProvider.EmbedQueryAsync` — searches embed their query on the query side.** An asymmetric embedding model
+  (E5 `query: `/`passage: `, Nomic, a BGE query instruction) embeds a search differently from the text it is compared
+  against. `EmbeddingToolRetriever` now embeds the turn it searches with `EmbedQueryAsync` and the tool descriptions with
+  `EmbedBatchAsync`; `FallbackEmbeddingProvider` forwards the query method; `EmbeddingServiceAdapter` sends MemoryIndexer's
+  `GenerateQueryEmbeddingAsync` to it. The method defaults to `EmbedAsync`, so a symmetric provider needs no change.
+
+### Removed
+- **Breaking: `IAgentEmbeddingProvider` is gone — `EmbeddingServiceAdapter` takes an `IEmbeddingProvider`.** The memory
+  adapter had its own embedding interface beside the one the tool retriever and the Ironbees adapter use, with no query
+  role. Migration: implement `IronHive.Agent.Providers.IEmbeddingProvider` (`EmbedBatchAsync` takes an
+  `IReadOnlyList<string>` and returns `float[][]`; add `ProviderName`, `IsAvailable`, `DisposeAsync`) or pass the provider
+  you already register for tool retrieval.
+
 ## [0.52.7] - 2026-10-08
 
 ### Changed
