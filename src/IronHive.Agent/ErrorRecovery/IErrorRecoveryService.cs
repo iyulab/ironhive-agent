@@ -32,7 +32,7 @@ public enum ErrorCategory
     /// <summary>Authentication/authorization failures.</summary>
     Authentication,
 
-    /// <summary>Rate limiting or quota exceeded.</summary>
+    /// <summary>Rate limiting — the provider asks the caller to slow down; waiting clears it.</summary>
     RateLimit,
 
     /// <summary>Tool execution failures.</summary>
@@ -51,7 +51,13 @@ public enum ErrorCategory
     Timeout,
 
     /// <summary>Internal/unexpected errors.</summary>
-    Internal
+    Internal,
+
+    /// <summary>
+    /// The account behind the credential cannot pay for the request (exhausted balance or quota, billing not set up —
+    /// IronHive's <c>BillingException</c>, or HTTP 402). Waiting does not clear it; the account has to be funded.
+    /// </summary>
+    Billing
 }
 
 /// <summary>

@@ -6,7 +6,16 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Fixed
+- **Breaking: an account that cannot pay is no longer waited out as a rate limit.** `ErrorRecoveryService` put an exhausted quota
+  (OpenAI `insufficient_quota`, which arrives as HTTP 429) under `RateLimit` → `WaitAndRetry`, and a 402 under
+  `InvalidInput` → «Trying alternative approach». Both are now the new `ErrorCategory.Billing` → `Escalate` with no retry
+  delay — from IronHive's `BillingException`, a 402 status, or the `insufficient_quota` code in a message.
+  Migration: code that reads `ErrorOccurrence.Category` sees `Billing` where it saw `RateLimit` (exhausted quota) or
+  `InvalidInput` (402).
+
 ### Dependencies
+- Re-pinned sibling package(s) `IronHive.Abstractions` / `IronHive.Extensions.AI` 0.58.0 -> 0.59.0.
 - Re-pinned sibling package(s) `WebFlux` 0.22.4 -> 0.23.0.
 
 ## [0.53.0] - 2026-10-09

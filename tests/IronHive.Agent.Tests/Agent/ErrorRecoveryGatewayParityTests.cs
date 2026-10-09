@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Net;
+using IronHive.Abstractions.Exceptions;
 using IronHive.Agent.ErrorRecovery;
 using IronProw.Core;
 
@@ -15,7 +16,7 @@ namespace IronHive.Agent.Tests.Agent;
 /// </summary>
 public class ErrorRecoveryGatewayParityTests
 {
-    public static TheoryData<int> Statuses => new() { 400, 401, 403, 404, 408, 409, 422, 429, 500, 501, 502, 503, 504 };
+    public static TheoryData<int> Statuses => new() { 400, 401, 402, 403, 404, 408, 409, 422, 429, 500, 501, 502, 503, 504 };
 
     [Theory]
     [MemberData(nameof(Statuses))]
@@ -45,6 +46,27 @@ public class ErrorRecoveryGatewayParityTests
 
         Assert.Equal(expected, analysis.RecommendedAction);
         Assert.Equal(status, analysis.Error.HttpStatusCode);
+    }
+
+    // An account that cannot pay does not recover by waiting: whether it arrives as IronHive's typed exception (OpenAI's
+    // exhausted quota is a 429 on the wire), a bare 402, or only the vendor's code in a message, the agent stops and says
+    // so instead of waiting out a «rate limit».
+    [Fact]
+    public void ABillingRefusal_EscalatesInsteadOfWaiting()
+    {
+        foreach (var exception in new Exception[]
+        {
+            new BillingException("You exceeded your current quota"),
+            new ClientResultException(new FakeResponse(402)),
+            new InvalidOperationException("insufficient_quota: You exceeded your current quota"),
+        })
+        {
+            var analysis = new ErrorRecoveryService().AnalyzeException(exception);
+
+            Assert.Equal(ErrorCategory.Billing, analysis.Error.Category);
+            Assert.Equal(RecoveryAction.Escalate, analysis.RecommendedAction);
+            Assert.Null(analysis.RetryDelay);
+        }
     }
 
     [Fact]

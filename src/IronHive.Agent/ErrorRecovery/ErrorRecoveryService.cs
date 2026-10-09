@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using IronProw.Core;
+using IronHive.Abstractions.Exceptions;
 
 namespace IronHive.Agent.ErrorRecovery;
 
@@ -195,7 +196,9 @@ public class ErrorRecoveryService : IErrorRecoveryService
     private ErrorOccurrence CreateErrorFromException(Exception exception, string? toolName)
     {
         var failure = ReadHttpFailure(exception);
-        var category = failure is { } http ? CategorizeHttpFailure(exception, http.StatusCode) : CategorizeException(exception);
+        var category = exception is BillingException
+            ? ErrorCategory.Billing
+            : failure is { } http ? CategorizeHttpFailure(exception, http.StatusCode) : CategorizeException(exception);
         var severity = DetermineSeverity(exception, category);
 
         return new ErrorOccurrence
@@ -229,13 +232,15 @@ public class ErrorRecoveryService : IErrorRecoveryService
     }
 
     /// <summary>
-    /// A provider refusal, by its status: credentials (401/403) and capacity (429/503) have a recovery of their own;
+    /// A provider refusal, by its status: credentials (401/403), an unfunded account (402) and capacity (429/503) have a
+    /// recovery of their own;
     /// otherwise the gateway's classifier decides — a status it would retry is transient, any other is a request this
     /// provider will refuse the same way again.
     /// </summary>
     private ErrorCategory CategorizeHttpFailure(Exception exception, int status) => status switch
     {
         401 or 403 => ErrorCategory.Authentication,
+        402 => ErrorCategory.Billing,
         429 or 503 => ErrorCategory.RateLimit,
         _ when _classifier.Classify(exception) == ErrorClassification.Retryable => ErrorCategory.Network,
         _ => ErrorCategory.InvalidInput,
@@ -250,6 +255,7 @@ public class ErrorRecoveryService : IErrorRecoveryService
             TimeoutException or TaskCanceledException { InnerException: TimeoutException } => ErrorCategory.Timeout,
             IOException or FileNotFoundException or DirectoryNotFoundException => ErrorCategory.FileSystem,
             ArgumentException or FormatException => ErrorCategory.InvalidInput,
+            _ when exception.Message.Contains("insufficient_quota", StringComparison.OrdinalIgnoreCase) => ErrorCategory.Billing,
             _ when exception.Message.Contains("rate limit", StringComparison.OrdinalIgnoreCase) => ErrorCategory.RateLimit,
             _ when exception.Message.Contains("quota", StringComparison.OrdinalIgnoreCase) => ErrorCategory.RateLimit,
             _ when exception.Message.Contains("token", StringComparison.OrdinalIgnoreCase) &&
@@ -264,6 +270,7 @@ public class ErrorRecoveryService : IErrorRecoveryService
         return category switch
         {
             ErrorCategory.Authentication => ErrorSeverity.High,
+            ErrorCategory.Billing => ErrorSeverity.High,
             ErrorCategory.ContextLimit => ErrorSeverity.High,
             ErrorCategory.RateLimit => ErrorSeverity.Medium,
             ErrorCategory.Network => ErrorSeverity.Medium,
@@ -311,6 +318,11 @@ public class ErrorRecoveryService : IErrorRecoveryService
             ErrorCategory.Authentication => (
                 RecoveryAction.Escalate,
                 "Authentication failed. Please check credentials.",
+                null),
+
+            ErrorCategory.Billing => (
+                RecoveryAction.Escalate,
+                "The provider account cannot pay for the request. Top up the account; retrying will not succeed.",
                 null),
 
             ErrorCategory.ContextLimit => (
