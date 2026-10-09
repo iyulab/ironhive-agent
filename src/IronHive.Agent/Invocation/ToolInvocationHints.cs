@@ -44,6 +44,12 @@ public static class ToolInvocationHints
     public const string ReadOnlyKey = "ironhive.invocation.readonly";
 
     /// <summary>
+    /// The <see cref="AITool.AdditionalProperties"/> key for a tool's own time limit per call: a <see cref="TimeSpan"/>,
+    /// a number of seconds, or a string holding either. Set it with <see cref="WithMaxDuration"/>.
+    /// </summary>
+    public const string MaxDurationKey = "ironhive.invocation.maxduration";
+
+    /// <summary>
     /// Whether <paramref name="tool"/> declares itself read-only (<c>true</c>), able to change state (<c>false</c>), or
     /// declares nothing (<c>null</c>). <see cref="ReadOnlyKey"/> is read first (a bool, the strings <c>"true"</c>/<c>"false"</c>,
     /// or a JSON boolean); otherwise an MCP tool's <c>readOnlyHint</c> annotation, found through
@@ -80,6 +86,64 @@ public static class ToolInvocationHints
         properties[ReadOnlyKey] = readOnly;
         return ToolPropertyOverlay.With(tool, properties, "Invocation hints", nameof(tool));
     }
+
+    /// <summary>
+    /// The time limit per call <paramref name="tool"/> declares (<see cref="MaxDurationKey"/>), or <c>null</c> when it
+    /// declares none or a value that is not a positive duration. <see cref="Timeout.InfiniteTimeSpan"/> means the tool
+    /// declares no limit at all, whatever <see cref="ToolInvocationOptions.MaxInvocationDuration"/> says.
+    /// </summary>
+    /// <remarks>
+    /// Only the host declares this — an MCP server's <c>_meta</c> is not read for it, since a server must not be able to
+    /// lift the limit its client set.
+    /// </remarks>
+    public static TimeSpan? GetMaxDuration(AITool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        if (!tool.AdditionalProperties.TryGetValue(MaxDurationKey, out var value))
+        {
+            return null;
+        }
+
+        TimeSpan? limit = value switch
+        {
+            TimeSpan span => span,
+            int seconds => TimeSpan.FromSeconds(seconds),
+            long seconds => TimeSpan.FromSeconds(seconds),
+            double seconds => TimeSpan.FromSeconds(seconds),
+            System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Number } json => TimeSpan.FromSeconds(json.GetDouble()),
+            System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } json => ParseDuration(json.GetString()),
+            string text => ParseDuration(text),
+            _ => null,
+        };
+        return limit == Timeout.InfiniteTimeSpan || limit > TimeSpan.Zero ? limit : null;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="tool"/> carrying its own time limit per call, which wins over
+    /// <see cref="ToolInvocationOptions.MaxInvocationDuration"/> — longer for a tool that legitimately runs long (a build,
+    /// a large download), shorter for one that should answer fast; <see cref="Timeout.InfiniteTimeSpan"/> for no limit.
+    /// The returned tool invokes and describes itself exactly as <paramref name="tool"/> does.
+    /// </summary>
+    /// <param name="tool">An <see cref="AIFunction"/> or an <see cref="AIFunctionDeclaration"/>.</param>
+    /// <param name="limit">A positive duration, or <see cref="Timeout.InfiniteTimeSpan"/>.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="limit"/> is zero or negative (other than infinite).</exception>
+    public static AITool WithMaxDuration(this AITool tool, TimeSpan limit)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        if (limit != Timeout.InfiniteTimeSpan && limit <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "A tool's time limit must be positive, or Timeout.InfiniteTimeSpan for none.");
+        }
+
+        var properties = ToolPropertyOverlay.CopyProperties(tool);
+        properties[MaxDurationKey] = limit;
+        return ToolPropertyOverlay.With(tool, properties, "Invocation hints", nameof(tool));
+    }
+
+    private static TimeSpan? ParseDuration(string? text) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+            ? TimeSpan.FromSeconds(seconds)
+            : TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var span) ? span : null;
 
     /// <summary>The target arguments <paramref name="tool"/> declares, or an empty list.</summary>
     public static IReadOnlyList<string> GetTargetArguments(AITool tool)

@@ -6,8 +6,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace IronHive.Agent.Invocation;
 
 /// <summary>
-/// Ends the request when a tool keeps failing the same way. A failure is a call that throws, or a result that reports
-/// one — an MCP result with <c>isError: true</c>, or whatever <see cref="ToolInvocationOptions.FailureOf"/> recognises.
+/// Ends the request when a tool keeps failing the same way. A failure is a call that throws, a call stopped at its time
+/// limit (<see cref="ToolCallRefusalKind.TimedOut"/>), or a result that reports one — an MCP result with
+/// <c>isError: true</c>, or whatever <see cref="ToolInvocationOptions.FailureOf"/> recognises.
 /// When the conversation shows the same tool failing with the same error (exception type and message, or the reported
 /// error text) immediately before it, so that the streak reaches <see cref="ToolInvocationOptions.MaxRepeatedErrors"/>,
 /// the guard sets <see cref="FunctionInvocationContext.Terminate"/> and returns a <see cref="ToolCallRefusal"/>
@@ -55,12 +56,12 @@ public sealed partial class RepeatedErrorGuardMiddleware : IToolInvocationMiddle
             return refusal;
         }
 
-        if (_options.MaxRepeatedErrors <= 0 || ToolResultFailure.Of(result, _options) is not { } reported)
+        if (_options.MaxRepeatedErrors <= 0 || FailureOf(result) is not { } failure)
         {
             return result;
         }
 
-        return RefuseIfRepeated(context, Failure.Reported(reported)) ?? result;
+        return RefuseIfRepeated(context, failure) ?? result;
     }
 
     private ToolCallRefusal? RefuseIfRepeated(FunctionInvocationContext context, Failure failure)
@@ -98,8 +99,11 @@ public sealed partial class RepeatedErrorGuardMiddleware : IToolInvocationMiddle
     }
 
     private Failure? FailureOf(FunctionResultContent result) =>
-        result.Exception is { } ex ? Failure.Thrown(ex)
-        : ToolResultFailure.Of(result.Result, _options) is { } reported ? Failure.Reported(reported)
+        result.Exception is { } ex ? Failure.Thrown(ex) : FailureOf(result.Result);
+
+    private Failure? FailureOf(object? result) =>
+        result is ToolCallRefusal { Kind: ToolCallRefusalKind.TimedOut } timedOut ? Failure.TimedOut(timedOut.Reason)
+        : ToolResultFailure.Of(result, _options) is { } reported ? Failure.Reported(reported)
         : null;
 
     /// <summary>What makes two failures "the same": the exception type and message, or the reported error text.</summary>
@@ -110,6 +114,8 @@ public sealed partial class RepeatedErrorGuardMiddleware : IToolInvocationMiddle
         public static Failure Thrown(Exception ex) => new(ex.GetType().FullName ?? ex.GetType().Name, ex.Message);
 
         public static Failure Reported(string text) => new(ReportedKind, text);
+
+        public static Failure TimedOut(string reason) => new("timeout", reason);
 
         public string ShortKind => Kind[(Kind.LastIndexOf('.') + 1)..];
 

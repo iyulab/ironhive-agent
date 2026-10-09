@@ -42,6 +42,10 @@ public class OrchestratedAgentLoop : IAgentLoop
         => RunAsync(prompt, overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
+    public Task<AgentResponse> RunAsync(ChatMessage message, CancellationToken cancellationToken = default)
+        => RunAsync(message, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
     /// <exception cref="NotSupportedException">
     /// <paramref name="overrideOptions"/> is not <c>null</c>. This loop delegates to
     /// <see cref="IAgentOrchestrator"/>, which has no per-turn <see cref="ChatOptions"/> concept —
@@ -81,6 +85,37 @@ public class OrchestratedAgentLoop : IAgentLoop
         };
     }
 
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">
+    /// <paramref name="message"/> carries a part other than text (an image, audio, a file): the orchestrator takes a text
+    /// prompt per turn, so the part would be dropped — it is rejected instead. Or <paramref name="overrideOptions"/> is
+    /// not <c>null</c>, as for the string overload.
+    /// </exception>
+    public Task<AgentResponse> RunAsync(ChatMessage message, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+        => RunAsync(TextOnly(message), overrideOptions, cancellationToken);
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">As for <see cref="RunAsync(ChatMessage, ChatOptions?, CancellationToken)"/>.</exception>
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(ChatMessage message, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+        => RunStreamingAsync(TextOnly(message), overrideOptions, cancellationToken);
+
+    private static string TextOnly(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (message.Role != ChatRole.User)
+        {
+            throw new ArgumentException($"A turn starts from a user message; this one has role '{message.Role}'.", nameof(message));
+        }
+
+        if (message.Contents.FirstOrDefault(c => c is not TextContent) is { } other)
+        {
+            throw new NotSupportedException(
+                $"OrchestratedAgentLoop delegates to IAgentOrchestrator, which takes a text prompt per turn; the message carries a {other.GetType().Name} that would be dropped. Use AgentLoop or ThinkingAgentLoop for a message with non-text parts.");
+        }
+
+        return message.Text;
+    }
+
     private const string ContinueNotSupported =
         "OrchestratedAgentLoop delegates to IAgentOrchestrator, which takes a prompt per turn and has no host-executed " +
         "tool calls to continue from. Use AgentLoop or ThinkingAgentLoop for a host tool round trip.";
@@ -108,6 +143,10 @@ public class OrchestratedAgentLoop : IAgentLoop
     /// <inheritdoc />
     public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, CancellationToken cancellationToken = default)
         => RunStreamingAsync(prompt, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(ChatMessage message, CancellationToken cancellationToken = default)
+        => RunStreamingAsync(message, overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
     /// <exception cref="NotSupportedException">

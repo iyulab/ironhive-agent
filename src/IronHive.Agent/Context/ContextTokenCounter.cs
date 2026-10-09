@@ -95,7 +95,10 @@ public class ContextTokenCounter : IContextTokenCounter
             FunctionCallContent func => CountFunctionCallTokens(func),
             FunctionResultContent result => EstimateTokens(ToolResultText.Of(result.Result))
                 + (ToolResultText.ImageCount(result.Result) * ToolResultText.ImageTokens),
-            _ when content.GetType().Name.Contains("Image", StringComparison.OrdinalIgnoreCase) => 85,
+            // An image a user sent with the request: charged like an image a tool returned, not as nothing.
+            DataContent data when data.HasTopLevelMediaType("image") => ToolResultText.ImageTokens,
+            UriContent uri when uri.HasTopLevelMediaType("image") => ToolResultText.ImageTokens,
+            _ when content.GetType().Name.Contains("Image", StringComparison.OrdinalIgnoreCase) => ToolResultText.ImageTokens,
             _ => 0
         };
     }

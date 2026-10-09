@@ -30,7 +30,13 @@ public enum ToolCallRefusalKind
     /// The call returned a result the model had already received on several separate visits, and the request was ended —
     /// typically a working set larger than the context budget, re-read in rotation as masking pushes it out.
     /// </summary>
-    RepeatedResult
+    RepeatedResult,
+
+    /// <summary>
+    /// The tool ran past its time limit (<c>ToolInvocationOptions.MaxInvocationDuration</c>, or the tool's own
+    /// <c>ToolInvocationHints.WithMaxDuration</c>) and was stopped; it produced no result.
+    /// </summary>
+    TimedOut
 }
 
 /// <summary>
@@ -56,6 +62,7 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.RepeatedCall => $"Tool call not run: {Reason}",
         ToolCallRefusalKind.RepeatedError => $"Tool call stopped: {Reason}",
         ToolCallRefusalKind.RepeatedResult => $"Tool call stopped: {Reason}",
+        ToolCallRefusalKind.TimedOut => $"Tool call stopped: {Reason}",
         _ => $"Tool call refused: {Reason}"
     };
 

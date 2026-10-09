@@ -65,4 +65,34 @@ public sealed class ToolInvocationOptions
     /// returns a <c>string</c> — arrives as that <c>string</c>. Null by default.
     /// </summary>
     public Func<object?, string?>? FailureOf { get; set; }
+
+    /// <summary>
+    /// Longest one tool call may run. When it is exceeded the call's cancellation token is cancelled, and the model
+    /// receives a <see cref="IronHive.Agent.Mode.ToolCallRefusal"/> of kind
+    /// <see cref="IronHive.Agent.Mode.ToolCallRefusalKind.TimedOut"/> naming the tool and the limit, so it can narrow the
+    /// request or stop. A tool that ignores its token is abandoned a few seconds later (it keeps running in the
+    /// background, but the turn no longer waits for it). <see cref="MaxRepeatedErrors"/> counts timeouts like any other
+    /// failure, so a model that repeats the same slow call is stopped. Only the tool's own run is timed — the steps around
+    /// it (an approval gate waiting for a person among them) are not. A tool can carry its own limit
+    /// (<see cref="ToolInvocationHints.WithMaxDuration"/>), which wins over this one. Null (the default): no limit.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Set to zero or a negative value.</exception>
+    public TimeSpan? MaxInvocationDuration
+    {
+        get => _maxInvocationDuration;
+        set
+        {
+            if (value is { } limit && limit <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), limit, "MaxInvocationDuration must be positive; null means no limit.");
+            }
+
+            _maxInvocationDuration = value;
+        }
+    }
+
+    private TimeSpan? _maxInvocationDuration;
+
+    /// <summary>How long a timed-out call that ignores its cancellation token is still awaited before it is abandoned.</summary>
+    internal TimeSpan AbandonGrace { get; init; } = TimeSpan.FromSeconds(5);
 }

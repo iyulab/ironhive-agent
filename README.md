@@ -4,7 +4,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 
 ## Features
 
-- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs)). Every turn says why it ended — `AgentResponse.StopReason` / `TurnRecord.StopReason` (`Completed` · `OutputLimit` · `ContentFilter` · `ToolTerminated` · `AwaitingHostTools` · `StepLimit`); `AgentOptions.MaxTurnDuration` caps one turn's wall-clock time (past it the turn throws `TimeoutException`); `AgentOptions.Reasoning` sets how much the model reasons on every call (`new ReasoningOptions { Effort = ReasoningEffort.Low }` — the OpenAI-compatible provider sends `reasoning_effort`, a thinking-token budget and the chat-template thinking switches; how strictly a server holds a level is up to the server, and `ReasoningEffort.None` is the one servers enforce; a per-turn `ChatOptions.Reasoning` replaces it; unset sends nothing, so a reasoning model may think for tens of thousands of tokens per call)
+- **Agent Loop**: Single-threaded master loop with streaming support; `RunAsync`/`RunStreamingAsync` accept an optional per-turn `ChatOptions` override (merged onto the loop's configured defaults) for callers that need to adjust temperature, tools, or reasoning flags on a single turn; a turn can also start from a `ChatMessage` (`RunAsync(message)` / `RunStreamingAsync(message)` — text plus an image, a page, an audio clip as `DataContent`/`UriContent`; a user message with at least one part); `ContinueAsync`/`ContinueStreamingAsync` continue from the current history without a new user message — the second half of a host-executed tool round trip (see [Tools the host runs](#tools-the-host-runs)). Every turn says why it ended — `AgentResponse.StopReason` / `TurnRecord.StopReason` (`Completed` · `OutputLimit` · `ContentFilter` · `ToolTerminated` · `AwaitingHostTools` · `StepLimit`); `AgentOptions.MaxTurnDuration` caps one turn's wall-clock time (past it the turn throws `TimeoutException`); `AgentOptions.Reasoning` sets how much the model reasons on every call (`new ReasoningOptions { Effort = ReasoningEffort.Low }` — the OpenAI-compatible provider sends `reasoning_effort`, a thinking-token budget and the chat-template thinking switches; how strictly a server holds a level is up to the server, and `ReasoningEffort.None` is the one servers enforce; a per-turn `ChatOptions.Reasoning` replaces it; unset sends nothing, so a reasoning model may think for tens of thousands of tokens per call)
 - **Context Management**: Auto-compaction (by default token-based: the most recent 40k tokens are kept and compaction runs once at least 20k can be pruned; `UseTokenBasedCompaction = false` switches to a 92% threshold). Older messages are summarized, except user messages and the calls and results of `ProtectedToolOutputs` (default: the built-in file-reading tools); a tool call and its results are always kept or summarized together, goal reminders, prompt caching; observation masking of old tool results — per user turn, and with `CompactionConfig.ObservationMaskingProtectedTokens` by a size budget inside one turn (add `.UseToolRoundContext(contextManager)` after `UseFunctionInvocation()` so every round of a turn is reduced, see [Long single-message tasks](#long-single-message-tasks))
 - **Mode System**: Plan/Work/HITL mode transitions with tool filtering
 - **Tool invocation pipeline**: every tool call runs through ordered `IToolInvocationMiddleware` steps and every result through `IToolResultMiddleware` steps — on a chat client, in the Ironbees adapter, and for results a host supplies before `ContinueAsync`. Turn it on with `chatClient.AsBuilder().UseToolInvocationPipeline().Build(serviceProvider)` in place of `UseFunctionInvocation()` (`AddIronHiveAgent` registers the pipeline with its default loop guards; `AddIronHiveAgentApprovalGate()` adds the permission gate; `AddToolInvocationMiddleware<T>()` / `AddToolResultMiddleware<T>()` add your own). See [Tool Invocation Pipeline](#tool-invocation-pipeline)
@@ -325,6 +325,34 @@ A failure is a call that throws **or a result that reports one**: an MCP result 
 the box (keyed by its first text content), and `ToolInvocationOptions.FailureOf` (`Func<object?, string?>`, error text or
 null) adds your own tools' convention — e.g. `FailureOf = r => r is string s && s.StartsWith("Error") ? s : null`. Both
 guards use it: such a result counts toward `MaxRepeatedErrors` and never as a successful run for `MaxRepeatedCalls`.
+
+### Time limit per tool call
+
+`ToolInvocationOptions.MaxInvocationDuration` (null by default — no limit) bounds one tool call. Past it the call's
+cancellation token is cancelled and the model reads a `ToolCallRefusal` of kind `TimedOut` naming the tool and the limit
+(«'search_files' did not finish within 30 s and was stopped; ask for less at once …»), so it can narrow the request.
+A tool that ignores its token is abandoned a few seconds later — it may keep running in the background, but the turn
+goes on. Timeouts count as failures for `MaxRepeatedErrors`, so a model that repeats the same slow call is stopped.
+
+```csharp
+services.AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocationOptions { MaxInvocationDuration = TimeSpan.FromSeconds(30) });
+
+var build = AIFunctionFactory.Create((string target) => "built", "run_build")
+    .WithMaxDuration(TimeSpan.FromMinutes(10));      // its own limit wins over the default
+var shell = AIFunctionFactory.Create((string command) => "ok", "shell")
+    .WithMaxDuration(Timeout.InfiniteTimeSpan);      // no limit
+```
+
+- Only the tool's own run is timed — the pipeline applies the limit innermost, so an approval gate waiting for a person
+  does not use it up.
+- A pipeline you assemble yourself takes the options as its third argument:
+  `new ToolInvocationPipeline(steps, resultSteps, options)`; without it there is no default limit (a tool's own
+  `WithMaxDuration` still applies).
+- A streamed turn reports the timeout on the call's `ToolResult` chunk (`Success = false`, `RefusalKind = TimedOut`);
+  between the call's `ToolCallDelta` and that chunk, a tool is running — not a silent model.
+- `ToolInvocationHints.MaxDurationKey` (`"ironhive.invocation.maxduration"`) holds a tool's own limit (a `TimeSpan`, a
+  number of seconds, or a string of either). An MCP server's `_meta` is **not** read for it: a server must not lift the
+  limit its client set.
 
 ### Target arguments
 

@@ -74,7 +74,8 @@ public static class ToolInvocationServiceCollectionExtensions
     /// Registers the container's <see cref="ToolInvocationPipeline"/> (once): the registered
     /// <see cref="IToolInvocationMiddleware"/>s and <see cref="IToolResultMiddleware"/>s in registration order, plus a
     /// <see cref="ToolResultGuardMiddleware"/> over the registered <see cref="IToolResultGuard"/> when there is one and no
-    /// guard step was registered for it.
+    /// guard step was registered for it. The registered <see cref="ToolInvocationOptions"/> (<c>AddIronHiveAgent</c>'s
+    /// <c>ToolInvocation</c>) gives the time limit per call.
     /// </summary>
     public static IServiceCollection AddToolInvocationPipeline(this IServiceCollection services)
     {
@@ -88,7 +89,7 @@ public static class ToolInvocationServiceCollectionExtensions
                 results.Add(new ToolResultGuardMiddleware(guard, sp.GetService<ILogger<ToolResultGuardMiddleware>>()));
             }
 
-            return new ToolInvocationPipeline(sp.GetServices<IToolInvocationMiddleware>(), results);
+            return new ToolInvocationPipeline(sp.GetServices<IToolInvocationMiddleware>(), results, sp.GetService<ToolInvocationOptions>());
         });
         return services;
     }

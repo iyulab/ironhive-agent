@@ -6,6 +6,34 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **A tool call can have a time limit.** `ToolInvocationOptions.MaxInvocationDuration` (null by default) bounds one call:
+  past it the tool's token is cancelled and the model reads a `ToolCallRefusal` of the new kind `TimedOut` naming the tool
+  and the limit; a tool that ignores its token is abandoned a few seconds later and the turn goes on. A tool carries its
+  own limit with `tool.WithMaxDuration(...)` (`Timeout.InfiniteTimeSpan` for none), which wins over the default. Timeouts
+  count toward `MaxRepeatedErrors`, so a model repeating the same slow call is stopped. Only the tool's run is timed —
+  an approval wait around it is not. A streamed turn shows it on the call's `ToolResult` chunk (`RefusalKind = TimedOut`).
+- **A turn can start from a `ChatMessage`.** `IAgentLoop.RunAsync(ChatMessage, …)` / `RunStreamingAsync(ChatMessage, …)`
+  take a user message that carries more than text — an image, a page, an audio clip next to the request — and append it
+  to the history like a string prompt (goal reminder, compaction and contributors unchanged). `OrchestratedAgentLoop`
+  takes a text-only message and refuses one whose image it would have to drop (`NotSupportedException`).
+- **Breaking: `IAgentLoop` has two new members** (`RunAsync(ChatMessage, ChatOptions?, CancellationToken)`,
+  `RunStreamingAsync(ChatMessage, ChatOptions?, CancellationToken)`; the shorter overloads have default implementations).
+  Migration: a class that implements `IAgentLoop` itself adds them — typically `_history.Add(message)` and the same turn
+  as the string overload. Mocks (`Substitute.For<IAgentLoop>()`) need nothing.
+- **Breaking: `ToolCallRefusalKind` has a new member, `TimedOut`.** Migration: a `switch` over the kind without a default
+  arm handles it. `new ToolInvocationPipeline(steps, resultSteps)` gains an optional third argument (`options`) —
+  recompile; pass your `ToolInvocationOptions` there for the default time limit.
+
+### Fixed
+- **An image a user sends with the request counts toward the context budget.** A `DataContent`/`UriContent` image in a
+  user message was estimated at 0 tokens (only tool-result images were charged), so compaction started later than it
+  should for image-heavy conversations.
+
+### Changed
+- `RunStreamingAsync(string …)` checks an empty prompt when it is called, not when enumeration starts — the same
+  `ArgumentException`, thrown earlier.
+
 ### Dependencies
 - Re-pinned sibling package(s) `TokenMeter` 0.7.10 -> 0.8.0.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.59.0 -> 0.59.1, `IronHive.Extensions.AI` 0.59.0 -> 0.59.1.

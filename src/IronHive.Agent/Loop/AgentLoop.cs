@@ -67,11 +67,20 @@ public class AgentLoop : IAgentLoop
         => RunAsync(prompt, overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
+    public Task<AgentResponse> RunAsync(ChatMessage message, CancellationToken cancellationToken = default)
+        => RunAsync(message, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
     public Task<AgentResponse> RunAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        return RunAsync(new ChatMessage(ChatRole.User, prompt), overrideOptions, cancellationToken);
+    }
 
-        _history.Add(new ChatMessage(ChatRole.User, prompt));
+    /// <inheritdoc />
+    public Task<AgentResponse> RunAsync(ChatMessage message, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
+    {
+        _history.Add(UserTurn.Checked(message));
         return RunTurnAsync(overrideOptions, cancellationToken);
     }
 
@@ -211,14 +220,35 @@ public class AgentLoop : IAgentLoop
         => RunStreamingAsync(prompt, overrideOptions: null, cancellationToken);
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(ChatMessage message, CancellationToken cancellationToken = default)
+        => RunStreamingAsync(message, overrideOptions: null, cancellationToken);
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(
         string prompt,
         ChatOptions? overrideOptions,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        return RunStreamingAsync(new ChatMessage(ChatRole.User, prompt), overrideOptions, cancellationToken);
+    }
 
-        _history.Add(new ChatMessage(ChatRole.User, prompt));
+    /// <inheritdoc />
+    public IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(
+        ChatMessage message,
+        ChatOptions? overrideOptions,
+        CancellationToken cancellationToken = default)
+    {
+        UserTurn.Checked(message);
+        return RunStreamingFromAsync(message, overrideOptions, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<AgentResponseChunk> RunStreamingFromAsync(
+        ChatMessage message,
+        ChatOptions? overrideOptions,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        _history.Add(message);
         await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
         {
             yield return chunk;

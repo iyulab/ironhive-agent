@@ -53,6 +53,31 @@ public interface IAgentLoop
     IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(string prompt, ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Runs a turn from a user message that can carry more than text — an image to look at, a document page, an audio
+    /// clip next to the request (<see cref="DataContent"/>, <see cref="UriContent"/>). The message is appended to the
+    /// history exactly as a string prompt is (a string prompt is this with one <see cref="TextContent"/>); the goal
+    /// reminder, compaction and turn contributors apply unchanged.
+    /// </summary>
+    /// <param name="message">A <see cref="ChatRole.User"/> message with at least one content part.</param>
+    /// <param name="overrideOptions">Per-turn <see cref="ChatOptions"/> overrides — same merge semantics as the string overload.</param>
+    /// <param name="cancellationToken">Cancellation token for graceful shutdown</param>
+    /// <exception cref="ArgumentException"><paramref name="message"/> is not a user message, or has no content.</exception>
+    Task<AgentResponse> RunAsync(ChatMessage message, ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
+
+    /// <summary><see cref="RunAsync(ChatMessage, ChatOptions?, CancellationToken)"/> with the loop's own options.</summary>
+    Task<AgentResponse> RunAsync(ChatMessage message, CancellationToken cancellationToken = default)
+        => RunAsync(message, overrideOptions: null, cancellationToken);
+
+    /// <summary>
+    /// Streaming counterpart of <see cref="RunAsync(ChatMessage, ChatOptions?, CancellationToken)"/>.
+    /// </summary>
+    IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(ChatMessage message, ChatOptions? overrideOptions, CancellationToken cancellationToken = default);
+
+    /// <summary><see cref="RunStreamingAsync(ChatMessage, ChatOptions?, CancellationToken)"/> with the loop's own options.</summary>
+    IAsyncEnumerable<AgentResponseChunk> RunStreamingAsync(ChatMessage message, CancellationToken cancellationToken = default)
+        => RunStreamingAsync(message, overrideOptions: null, cancellationToken);
+
+    /// <summary>
     /// Continues the conversation from the current <see cref="History"/> without adding a user message:
     /// the second half of a host-executed tool round trip. A tool declared without an implementation
     /// (<c>AIFunctionFactory.CreateDeclaration</c>) stops the turn with its call pending in <see cref="History"/>
