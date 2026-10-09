@@ -196,9 +196,8 @@ public class ErrorRecoveryService : IErrorRecoveryService
     private ErrorOccurrence CreateErrorFromException(Exception exception, string? toolName)
     {
         var failure = ReadHttpFailure(exception);
-        var category = exception is BillingException
-            ? ErrorCategory.Billing
-            : failure is { } http ? CategorizeHttpFailure(exception, http.StatusCode) : CategorizeException(exception);
+        var category = CategorizeTyped(exception)
+            ?? (failure is { } http ? CategorizeHttpFailure(exception, http.StatusCode) : CategorizeException(exception));
         var severity = DetermineSeverity(exception, category);
 
         return new ErrorOccurrence
@@ -245,6 +244,29 @@ public class ErrorRecoveryService : IErrorRecoveryService
         _ when _classifier.Classify(exception) == ErrorClassification.Retryable => ErrorCategory.Network,
         _ => ErrorCategory.InvalidInput,
     };
+
+    /// <summary>
+    /// The failures IronHive already types (<see cref="BillingException"/>, <see cref="ContextOverflowException"/>,
+    /// <see cref="RateLimitException"/>), found anywhere in the inner-exception chain. They decide the category before any
+    /// status code or message text is read: a provider adapter that raised one has already classified the failure.
+    /// </summary>
+    private static ErrorCategory? CategorizeTyped(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            switch (current)
+            {
+                case BillingException:
+                    return ErrorCategory.Billing;
+                case ContextOverflowException:
+                    return ErrorCategory.ContextLimit;
+                case RateLimitException:
+                    return ErrorCategory.RateLimit;
+            }
+        }
+
+        return null;
+    }
 
     private static ErrorCategory CategorizeException(Exception exception)
     {

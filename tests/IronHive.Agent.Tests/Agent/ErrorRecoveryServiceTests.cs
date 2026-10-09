@@ -1,3 +1,4 @@
+using IronHive.Abstractions.Exceptions;
 using IronHive.Agent.ErrorRecovery;
 
 namespace IronHive.Agent.Tests.Agent;
@@ -284,5 +285,50 @@ public class ErrorRecoveryServiceTests
         var analysis = _service.AnalyzeError(error);
 
         Assert.True(analysis.ShouldNotify);
+    }
+
+    // A typed failure decides its category even when its message carries none of the words the text heuristics look
+    // for — the provider adapter that raised it has already classified it.
+    [Fact]
+    public void AnalyzeException_ContextOverflowException_IsContextLimit()
+    {
+        var analysis = _service.AnalyzeException(new ContextOverflowException("The request did not fit."));
+
+        Assert.Equal(ErrorCategory.ContextLimit, analysis.Error.Category);
+    }
+
+    [Fact]
+    public void AnalyzeException_RateLimitException_IsRateLimit()
+    {
+        var analysis = _service.AnalyzeException(new RateLimitException("Slow down."));
+
+        Assert.Equal(ErrorCategory.RateLimit, analysis.Error.Category);
+    }
+
+    [Fact]
+    public void AnalyzeException_TypedFailureInsideAWrapper_IsFound()
+    {
+        var wrapped = new InvalidOperationException("The turn failed.", new ContextOverflowException("Too long."));
+
+        var analysis = _service.AnalyzeException(wrapped);
+
+        Assert.Equal(ErrorCategory.ContextLimit, analysis.Error.Category);
+    }
+
+    // Text wins nothing over a type: a rate-limit message on a context overflow is still a context overflow.
+    [Fact]
+    public void AnalyzeException_TypeOutranksMessageText()
+    {
+        var analysis = _service.AnalyzeException(new ContextOverflowException("rate limit reached for this prompt size"));
+
+        Assert.Equal(ErrorCategory.ContextLimit, analysis.Error.Category);
+    }
+
+    [Fact]
+    public void AnalyzeException_DoesNotRecordTheError()
+    {
+        _service.AnalyzeException(new RateLimitException("Slow down."));
+
+        Assert.Empty(_service.GetSessionErrors());
     }
 }

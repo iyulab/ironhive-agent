@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Fixed
+- **`ErrorRecoveryService` classifies IronHive's typed failures by their type.** A `ContextOverflowException` is now
+  `ErrorCategory.ContextLimit` and a `RateLimitException` is `RateLimit` whatever their message says (before, only
+  `BillingException` was matched by type; the other two fell to message-text heuristics and usually came out `Unknown`).
+  The type is also found inside wrapping exceptions, and it outranks a status code or message text.
+
 ## [0.55.0] - 2026-10-09
 
 ### Added
