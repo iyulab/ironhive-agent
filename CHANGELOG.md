@@ -31,8 +31,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   should for image-heavy conversations.
 
 ### Changed
-- `RunStreamingAsync(string …)` checks an empty prompt when it is called, not when enumeration starts — the same
-  `ArgumentException`, thrown earlier.
+- **Breaking** — `RunStreamingAsync(string …)` checks an empty prompt when it is called, not when enumeration starts —
+  the same `ArgumentException`, thrown earlier. Migration: code that called it with a possibly empty prompt and caught the
+  exception around the `await foreach` catches it around the call.
 
 ### Dependencies
 - Re-pinned sibling package(s) `TokenMeter` 0.7.10 -> 0.8.0.
