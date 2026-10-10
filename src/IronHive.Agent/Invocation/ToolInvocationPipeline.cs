@@ -126,19 +126,25 @@ public sealed class ToolInvocationPipeline
     {
         var limit = ToolInvocationHints.GetMaxDuration(context.Function) ?? _options.MaxInvocationDuration;
         object? result;
-        if (limit is { } bounded && bounded != Timeout.InfiniteTimeSpan)
-        {
-            var timedOut = await InvokeWithinAsync(context, bounded, cancellationToken);
-            if (timedOut.Refusal is { } refusal)
-            {
-                return refusal;
-            }
 
-            result = timedOut.Result;
-        }
-        else
+        // What the tool reports while it runs (ToolCallStats) is kept for this call, beside its result — including a
+        // call that timed out, whose partial counts say how far it got.
+        using (ToolCallStats.Begin(context.CallContent))
         {
-            result = await context.Function.InvokeAsync(context.Arguments, cancellationToken);
+            if (limit is { } bounded && bounded != Timeout.InfiniteTimeSpan)
+            {
+                var timedOut = await InvokeWithinAsync(context, bounded, cancellationToken);
+                if (timedOut.Refusal is { } refusal)
+                {
+                    return refusal;
+                }
+
+                result = timedOut.Result;
+            }
+            else
+            {
+                result = await context.Function.InvokeAsync(context.Arguments, cancellationToken);
+            }
         }
 
         if (_results.Length == 0)

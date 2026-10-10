@@ -7,6 +7,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [Unreleased]
 
 ### Added
+- **A tool can report how much work its call did, outside what the model reads.** `ToolCallStats.Report(key, value)` (numbers,
+  flags, short labels) from inside a tool run through `ToolInvocationPipeline` puts the values on that call's new
+  `ToolCallResult.Stats` — on the streamed result chunk and the turn record — and never in the result text or anything sent to
+  the model. Bounded per call (`MaxEntries` 16, `MaxKeyLength` 64, `MaxStringLength` 256; past a bound a value is dropped). A
+  call that timed out keeps what it reported before it was stopped.
 - **MCP plugin documents can be the `mcpServers` snippet an MCP server's docs give.** `McpPluginsConfigLoader.Parse(string)`
   / `Parse(JsonElement)` read IronHive's `plugins`, the de facto `mcpServers` object and VS Code's `servers` object (also in
   `.ironhive/plugins.json` / `.yaml`), and report what they refused or ignored per entry in the new

@@ -330,6 +330,13 @@ public record ToolCallResult
     /// is <c>false</c> for every one of them; this tells them apart from a tool that ran and failed, and from each other.
     /// </summary>
     public Mode.ToolCallRefusalKind? RefusalKind { get; init; }
+
+    /// <summary>
+    /// What the tool reported about its own work during this call (<see cref="Invocation.ToolCallStats"/>) — items
+    /// visited, bytes read, why it stopped — or <c>null</c> when it reported nothing. Never part of <see cref="Result"/>
+    /// and never sent to the model; bounded by <see cref="Invocation.ToolCallStats.MaxEntries"/> and the other limits there.
+    /// </summary>
+    public IReadOnlyDictionary<string, System.Text.Json.JsonElement>? Stats { get; init; }
 }
 
 /// <summary>

@@ -331,6 +331,12 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
   (`toolInvocationPipeline:`; `AddIronbees` passes the container's). `DefaultPlanExecutor` takes one too; given
   none, it runs `ToolInvocationPipeline.CreateDefault()` — the loop guards only, **no permission gate**. Pass the
   container's pipeline (`serviceProvider.GetRequiredService<ToolInvocationPipeline>()`) to keep the gate.
+- **A tool can report how much work its call did** without putting it in what the model reads: inside the tool, call
+  `ToolCallStats.Report("files_visited", count)` (overloads for `long`, `double`, `bool` and short `string`). The values land on
+  that call's `ToolCallResult.Stats` — on the streamed result chunk and in the turn record — and the IronHive host forwards them
+  on `tool_end`. They are never added to the result and never sent to the model. Bounded: at most `ToolCallStats.MaxEntries`
+  keys, `MaxKeyLength` characters per key, `MaxStringLength` per string; past a bound a value is dropped, not truncated. A call
+  that timed out keeps what it reported before it was stopped. Outside a pipeline-run call, reporting does nothing.
 
 Default loop guards (`AddIronHiveAgent(o => o.ToolInvocation = new ToolInvocationOptions { ... })`):
 

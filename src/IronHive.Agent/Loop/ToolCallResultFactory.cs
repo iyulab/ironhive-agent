@@ -94,7 +94,8 @@ public static class ToolCallResultFactory
                     Arguments = arguments,
                     Result = IronHive.Agent.Context.ToolResultText.Of(functionResult.Result),
                     Success = functionResult.Exception is null && refusal is null,
-                    RefusalKind = refusal?.Kind
+                    RefusalKind = refusal?.Kind,
+                    Stats = IronHive.Agent.Invocation.ToolCallStats.For(call)
                 });
                 continue;
             }
