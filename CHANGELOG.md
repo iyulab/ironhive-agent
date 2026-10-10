@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Changed
+- **`OrchestratedAgentLoop` says that it reports no tool calls.** Its tools run inside the Ironbees framework, which returns the
+  final text only, so `ToolCalls` is empty and the stream has no tool chunks even when tools ran — now documented on the type
+  and in the README (no behaviour change).
+
 ## [0.57.0] - 2026-10-11
 
 ### Added

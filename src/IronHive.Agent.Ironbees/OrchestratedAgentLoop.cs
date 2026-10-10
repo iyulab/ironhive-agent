@@ -11,6 +11,12 @@ namespace IronHive.Agent.Ironbees;
 /// Enables multi-agent orchestration through the standard IAgentLoop interface.
 /// Supports conversation persistence via IConversationStore.
 /// </summary>
+/// <remarks>
+/// The orchestrator's agents run their tools inside the Ironbees framework, which returns only the final text. This loop
+/// therefore reports no per-call records: <see cref="AgentResponse.ToolCalls"/> is empty even when tools ran, and the stream
+/// carries no <see cref="AgentResponseChunk.ToolCallDelta"/> or <see cref="AgentResponseChunk.ToolResult"/>. A host that shows
+/// or measures tool calls uses <see cref="AgentLoop"/> over a tool-invocation-pipeline client instead.
+/// </remarks>
 public class OrchestratedAgentLoop : IAgentLoop
 {
     private readonly IAgentOrchestrator _orchestrator;

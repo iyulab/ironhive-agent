@@ -835,7 +835,11 @@ place of `UseFunctionInvocation()`, the results you appended then go through the
 `IToolResultGuard` included) before the model reads them. Each is processed once: only the trailing tool messages are
 read, and results the loop's own turns produced are skipped. Declarations keep their own name and
 description everywhere the loop reads tools — Planning mode's `ReadOnlyTools`, tool retrieval, schema compression.
-`OrchestratedAgentLoop` has no host tools to continue from and throws `NotSupportedException`.
+`OrchestratedAgentLoop` has no host tools to continue from and throws `NotSupportedException`. It also reports no
+per-call records: tools run inside the Ironbees framework, whose adapter returns the agent's final text only, so its
+`AgentResponse.ToolCalls` / `TurnRecord.ToolCalls` are empty even when tools ran, and its stream carries no `ToolCallDelta` or
+`ToolResult` (no refusal kinds, no `ToolCallResult.Stats`). Use `AgentLoop` over a `UseToolInvocationPipeline()` client when a host
+needs them.
 
 ### Reading the record without an observer
 
