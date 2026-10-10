@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.56.1] - 2026-10-10
 
 ### Fixed
 - **A stream that fails after it started is `Network`, not `Unknown` or `FileSystem`.** `ErrorRecoveryService` read IronHive's
