@@ -161,7 +161,8 @@ public class McpPluginHotReloader : IAsyncDisposable, IDisposable
             {
                 AddedPlugins = added,
                 RemovedPlugins = removed,
-                UpdatedPlugins = updated
+                UpdatedPlugins = updated,
+                ConfigIssues = newConfig.Issues
             });
         }
         finally
@@ -425,4 +426,10 @@ public class PluginReloadEventArgs : EventArgs
     /// Error message if reload failed.
     /// </summary>
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// What the reader refused or ignored in the reloaded document (<see cref="McpPluginsConfig.Issues"/>) —
+    /// a refused entry is not connected, so a host shows these to whoever edited the file.
+    /// </summary>
+    public IReadOnlyList<McpConfigIssue> ConfigIssues { get; init; } = [];
 }

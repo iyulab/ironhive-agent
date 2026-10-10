@@ -58,6 +58,7 @@ public class ReadmeSnippetCompileTests
         ("prompt", "string prompt = \"\";"),
         ("schema", "System.Text.Json.JsonElement schema = default;"),
         ("sessionId", "string sessionId = \"\";"),
+        ("pastedJson", "string pastedJson = \"{}\";"),
         ("config", "McpPluginConfig config = new();"),
         ("manager", "McpPluginManager manager = null!;"),
         ("modeToolFilter", "IModeToolFilter modeToolFilter = null!;"),

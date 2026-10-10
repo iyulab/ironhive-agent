@@ -230,7 +230,8 @@ await manager.ConnectAsync("my-server", new McpPluginConfig
 });
 ```
 
-In YAML plugin config (`Transport` key accepts `stdio` or `http` case-insensitively):
+In YAML plugin config (`transport` — or `type` — accepts `stdio`, `http`, `sse` or `streamable-http` case-insensitively;
+without it, `command` means stdio and `url` means HTTP):
 
 ```yaml
 plugins:
@@ -240,6 +241,25 @@ plugins:
     headers:
       X-Session-Id: abc123
 ```
+
+The snippet an MCP server's documentation gives can be used as it is — an `mcpServers` object (Claude Desktop, Cursor
+and others) or VS Code's `servers` object, in the same file or pasted into a host:
+
+```csharp
+McpPluginsConfig pasted = McpPluginsConfigLoader.Parse(pastedJson);   // or Parse(JsonElement)
+foreach (var issue in pasted.Issues)
+{
+    // Refused: the entry is not in pasted.Plugins (both or neither of command/url, unknown type, wrong value type, ...)
+    // Ignored: the entry was read, a key in it was not (an unknown key, the other transport's key under an explicit type)
+    Console.WriteLine($"{issue.Entry ?? "(document)"}: {issue.Kind} - {issue.Message}");
+}
+```
+
+The same reader serves IronHive's own `plugins` file, so its rules hold there too: keys are case-insensitive with one
+spelling per shape (`type`/`transport`, `args`/`arguments`, `env`/`environment`, `cwd`/`workingDirectory`), an entry
+without `timeoutMs` takes the document's `defaultTimeoutMs`, and `disabled: true` (or `enabled: false`) keeps an entry
+but adds it to `ExcludePlugins`. Problems are reported per entry; only a document that is not a JSON object throws
+(`JsonException`). `McpPluginHotReloader` passes a reloaded document's issues on `PluginReloadEventArgs.ConfigIssues`.
 
 `McpPluginsConfigLoader.LoadFromDefault(baseDirectory)` reads the first of `.ironhive/plugins.yaml`, `.ironhive/plugins.yml`,
 `.ironhive/plugins.json` (then `plugins.yaml|yml|json`) under the directory (default: the current directory), or returns an

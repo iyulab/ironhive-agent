@@ -6,10 +6,27 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **MCP plugin documents can be the `mcpServers` snippet an MCP server's docs give.** `McpPluginsConfigLoader.Parse(string)`
+  / `Parse(JsonElement)` read IronHive's `plugins`, the de facto `mcpServers` object and VS Code's `servers` object (also in
+  `.ironhive/plugins.json` / `.yaml`), and report what they refused or ignored per entry in the new
+  `McpPluginsConfig.Issues` (`McpConfigIssue`: entry, `Refused` / `Ignored`, message) instead of failing at connect time.
+  `PluginReloadEventArgs.ConfigIssues` carries them on hot reload. `disabled: true` / `enabled: false` adds the entry to
+  `ExcludePlugins`.
+
 ### Changed
+- **Breaking: an MCP plugin entry's transport is inferred, and an entry that cannot connect is left out.** Without
+  `transport`/`type`, an entry with `url` is now HTTP (it was read as a stdio plugin with no command), and an entry with
+  both `command` and `url`, neither, an unknown transport, or a value of the wrong type is refused and reported in
+  `Issues` instead of being returned. Migration: if a refused entry appears in `Issues`, add the missing `command`/`url`
+  or a `type`.
 - **The packages from this repository depend on each other at exactly the same version** (`[x.y.z]`), not a floor.
   A consumer that moves one of them while another resolves at an older version now gets restore warning NU1608 naming
   the pair (an error where warnings are errors) — before, the mixed versions restored silently and could fail at run time.
+
+### Fixed
+- **A plugins file's `defaultTimeoutMs` now applies.** Every entry without its own `timeoutMs` used to be read as 30000,
+  so the document default never reached any plugin.
 
 ### Dependencies
 - Re-pinned sibling package(s) `WebFlux` 0.24.0 -> 0.25.0.
