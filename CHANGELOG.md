@@ -10,6 +10,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `WebFlux` 0.23.0 -> 0.24.0.
 - Re-pinned sibling package(s) `Ironbees.Autonomous` 0.25.0 -> 0.26.0, `Ironbees.Core` 0.25.0 -> 0.26.0, `IronHive.Abstractions` 0.59.1 -> 0.60.0, `IronHive.Extensions.AI` 0.59.1 -> 0.60.0.
 - Re-pinned sibling package(s) `TokenMeter` 0.8.0 -> 0.9.0.
+- Re-pinned sibling package(s) `TokenMeter` 0.9.0 -> 0.10.0.
 
 ## [0.55.1] - 2026-10-09
 
