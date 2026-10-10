@@ -6,6 +6,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Changed
+- **Breaking: a research cancelled mid-run no longer ends as a finished report.** `ResearchOrchestrator` stopped its
+  iteration and search-retry loops on cancellation and went on to write the report from what it had gathered.
+  `ExecuteAsync` now returns its partial result (`IsPartial`, «Research was cancelled.»), as it already did for a cancel
+  before the start; `ExecuteStreamAsync` throws `OperationCanceledException`. Migration: a caller that treated a report
+  produced after cancelling as complete handles the partial result (or the exception on the streaming path).
+
 ### Dependencies
 - Re-pinned sibling package(s) `WebFlux` 0.23.0 -> 0.24.0.
 - Re-pinned sibling package(s) `Ironbees.Autonomous` 0.25.0 -> 0.26.0, `Ironbees.Core` 0.25.0 -> 0.26.0, `IronHive.Abstractions` 0.59.1 -> 0.60.0, `IronHive.Extensions.AI` 0.59.1 -> 0.60.0.

@@ -72,8 +72,10 @@ public partial class ResearchOrchestrator
         {
             // 반복 실행
             var maxIterations = GetMaxIterations(state.Request);
-            while (state.CurrentIteration < maxIterations && !cancellationToken.IsCancellationRequested)
+            while (state.CurrentIteration < maxIterations)
             {
+                // A cancel during an iteration must not go on to write the report from what was gathered.
+                cancellationToken.ThrowIfCancellationRequested();
                 state.CurrentIteration++;
                 LogIterationStarting(_logger, state.CurrentIteration, maxIterations);
 
@@ -145,8 +147,9 @@ public partial class ResearchOrchestrator
         try
         {
             using var usageScope = ResearchUsageScope.Enter(state.Usage);
-            while (state.CurrentIteration < maxIterations && !cancellationToken.IsCancellationRequested)
+            while (state.CurrentIteration < maxIterations)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 state.CurrentIteration++;
 
                 // 1. 계획 단계
@@ -311,8 +314,9 @@ public partial class ResearchOrchestrator
         var maxRetries = _options.MaxSearchRetriesPerIteration;
         var successful = new List<SearchResult>();
 
-        while (retryCount <= maxRetries && !cancellationToken.IsCancellationRequested)
+        while (retryCount <= maxRetries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var searchResult = await ExecuteSearchPhaseInternalAsync(state, cancellationToken);
             successful.AddRange(searchResult.SuccessfulResults);
 

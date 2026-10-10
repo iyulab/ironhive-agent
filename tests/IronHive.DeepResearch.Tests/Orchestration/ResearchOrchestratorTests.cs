@@ -444,6 +444,52 @@ public class ResearchOrchestratorTests
         _mockSearchCoordinator.ExecuteSearchesCount.Should().Be(3, "the first search plus two retries");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Research_CancelledBetweenIterations_DoesNotEndAsAFinishedReport(bool stream)
+    {
+        // The iteration loop tested the token in its condition: a cancel during an iteration ended the loop and went on
+        // to write the report from what was gathered, as if the research had finished.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var analysis = new CancellingAnalysisAgent(cts);
+        analysis.SetupInfiniteResults(CreateAnalysisResult(needsMore: true, score: 0.3m));
+        _mockQueryPlanner.SetupPlan(CreateTestPlanResult());
+        _mockSearchCoordinator.SetupSearchResult(CreateTestSearchResult());
+        _mockContentEnrichment.SetupEnrichmentResult(CreateTestEnrichmentResult());
+        _mockReportGenerator.SetupReportResult(CreateTestReportResult());
+        var orchestrator = new ResearchOrchestrator(
+            _mockQueryPlanner, _mockSearchCoordinator, _mockContentEnrichment, analysis, _mockReportGenerator,
+            _options, NullLogger<ResearchOrchestrator>.Instance);
+        var request = CreateTestRequest() with { Depth = ResearchDepth.Standard, MaxIterations = 5 };
+
+        if (stream)
+        {
+            var act = async () => { await foreach (var _ in orchestrator.ExecuteStreamAsync(request, cts.Token)) { } };
+            await act.Should().ThrowAsync<OperationCanceledException>();
+        }
+        else
+        {
+            var result = await orchestrator.ExecuteAsync(request, cts.Token);
+            result.IsPartial.Should().BeTrue("ExecuteAsync reports a cancelled research as a partial result");
+        }
+
+        _mockReportGenerator.GenerateReportCalled.Should().BeFalse();
+        analysis.AnalyzeCallCount.Should().Be(1);
+    }
+
+    /// <summary>An analysis step during which the caller cancels; it does not observe the token itself.</summary>
+    private sealed class CancellingAnalysisAgent(CancellationTokenSource cts) : MockAnalysisAgentForOrchestrator
+    {
+        public override Task<AnalysisResult> AnalyzeAsync(
+            ResearchState state, AnalysisOptions? options = null, IProgress<AnalysisProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            cts.Cancel();
+            return base.AnalyzeAsync(state, options, progress, CancellationToken.None);
+        }
+    }
+
     private void SetupDefaultMocks(bool needsMoreResearch)
     {
         _mockQueryPlanner.SetupPlan(CreateTestPlanResult());
