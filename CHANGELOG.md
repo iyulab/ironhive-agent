@@ -11,6 +11,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   A consumer that moves one of them while another resolves at an older version now gets restore warning NU1608 naming
   the pair (an error where warnings are errors) — before, the mixed versions restored silently and could fail at run time.
 
+### Dependencies
+- Re-pinned sibling package(s) `WebFlux` 0.24.0 -> 0.25.0.
+
 ## [0.56.1] - 2026-10-10
 
 ### Fixed
