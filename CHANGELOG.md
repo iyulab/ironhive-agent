@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.56.0] - 2026-10-10
 
 ### Changed
 - **Breaking: a research cancelled mid-run no longer ends as a finished report.** `ResearchOrchestrator` stopped its
@@ -12,6 +12,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `ExecuteAsync` now returns its partial result (`IsPartial`, «Research was cancelled.»), as it already did for a cancel
   before the start; `ExecuteStreamAsync` throws `OperationCanceledException`. Migration: a caller that treated a report
   produced after cancelling as complete handles the partial result (or the exception on the streaming path).
+- **`ErrorRecoveryService` reads a mid-stream provider failure as the HTTP error it stands for.** IronHive 0.61.0's
+  `ProviderResponseException.EquivalentStatusCode` decides the category the way that status would (no failure reader
+  needed): Anthropic's mid-stream `overloaded_error` (529) is `RateLimit` and waited, OpenAI's `server_error` (500) is
+  `Network` and retried; `ErrorOccurrence.HttpStatusCode` carries the status. Before, they fell to message-text heuristics
+  (usually `Unknown`).
+- **HTTP 529 is `RateLimit`** (Anthropic «overloaded»), like 429 and 503 — before, it was `InvalidInput`.
 
 ### Dependencies
 - Re-pinned sibling package(s) `WebFlux` 0.23.0 -> 0.24.0.
@@ -19,6 +25,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `TokenMeter` 0.8.0 -> 0.9.0.
 - Re-pinned sibling package(s) `TokenMeter` 0.9.0 -> 0.10.0.
 - Re-pinned sibling package(s) `TokenMeter` 0.10.0 -> 0.11.0.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.60.0 -> 0.61.0, `IronHive.Extensions.AI` 0.60.0 -> 0.61.0, `IronProw.Core` 0.15.12 -> 0.16.0, `Ironbees.Core` 0.26.0 -> 0.27.0, `Ironbees.Autonomous` 0.26.0 -> 0.27.0.
 
 ## [0.55.1] - 2026-10-09
 
