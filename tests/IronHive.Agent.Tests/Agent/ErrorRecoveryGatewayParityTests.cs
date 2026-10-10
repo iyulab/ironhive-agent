@@ -16,7 +16,7 @@ namespace IronHive.Agent.Tests.Agent;
 /// </summary>
 public class ErrorRecoveryGatewayParityTests
 {
-    public static TheoryData<int> Statuses => new() { 400, 401, 402, 403, 404, 408, 409, 422, 429, 500, 501, 502, 503, 504 };
+    public static TheoryData<int> Statuses => new() { 400, 401, 402, 403, 404, 408, 409, 422, 429, 500, 501, 502, 503, 504, 529 };
 
     [Theory]
     [MemberData(nameof(Statuses))]
@@ -32,8 +32,26 @@ public class ErrorRecoveryGatewayParityTests
             var agentAction = new ErrorRecoveryService().AnalyzeException(exception).RecommendedAction;
             var agentRetries = agentAction is RecoveryAction.WaitAndRetry or RecoveryAction.Retry;
 
-            Assert.Equal(gatewayRetries || status is 429 or 503, agentRetries);
+            Assert.Equal(gatewayRetries || status is 429 or 503 or 529, agentRetries);
         }
+    }
+
+    // A vendor error inside a started stream (IronHive's ProviderResponseException) carries the status the vendor
+    // documents for it outside a stream. The agent reads it as that HTTP error - with no failure reader registered, as
+    // the host builds this service - so Anthropic's mid-stream overloaded_error (529) waits like a 503 instead of
+    // being read as invalid input, and OpenAI's server_error (500) is retried.
+    [Theory]
+    [MemberData(nameof(Statuses))]
+    public void AMidStreamFailure_IsHandledAsItsEquivalentHttpError(int status)
+    {
+        var midStream = new ErrorRecoveryService().AnalyzeException(
+            new ProviderResponseException("stream failed") { EquivalentStatusCode = (HttpStatusCode)status });
+        var outsideStream = new ErrorRecoveryService().AnalyzeException(
+            new HttpRequestException("refused", null, (HttpStatusCode)status));
+
+        Assert.Equal(outsideStream.Error.Category, midStream.Error.Category);
+        Assert.Equal(outsideStream.RecommendedAction, midStream.RecommendedAction);
+        Assert.Equal(status, midStream.Error.HttpStatusCode);
     }
 
     [Theory]

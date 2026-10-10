@@ -207,7 +207,7 @@ public class ErrorRecoveryService : IErrorRecoveryService
             Category = category,
             Severity = severity,
             ToolName = toolName,
-            HttpStatusCode = failure?.StatusCode,
+            HttpStatusCode = failure?.StatusCode ?? EquivalentStatus(exception),
             RetryAfter = failure?.RetryAfter,
             Context = new Dictionary<string, object?>
             {
@@ -240,7 +240,7 @@ public class ErrorRecoveryService : IErrorRecoveryService
     {
         401 or 403 => ErrorCategory.Authentication,
         402 => ErrorCategory.Billing,
-        429 or 503 => ErrorCategory.RateLimit,
+        429 or 503 or 529 => ErrorCategory.RateLimit,
         _ when _classifier.Classify(exception) == ErrorClassification.Retryable => ErrorCategory.Network,
         _ => ErrorCategory.InvalidInput,
     };
@@ -248,7 +248,10 @@ public class ErrorRecoveryService : IErrorRecoveryService
     /// <summary>
     /// The failures IronHive already types (<see cref="BillingException"/>, <see cref="ContextOverflowException"/>,
     /// <see cref="RateLimitException"/>), found anywhere in the inner-exception chain. They decide the category before any
-    /// status code or message text is read: a provider adapter that raised one has already classified the failure.
+    /// status code or message text is read: a provider adapter that raised one has already classified the failure. A vendor
+    /// error inside a started stream (<see cref="ProviderResponseException"/>) is categorized by the status the vendor
+    /// documents for it outside a stream (<see cref="ProviderResponseException.EquivalentStatusCode"/>), the way the same
+    /// HTTP error would be — without needing a failure reader registered.
     /// </summary>
     private static ErrorCategory? CategorizeTyped(Exception exception)
     {
@@ -262,6 +265,28 @@ public class ErrorRecoveryService : IErrorRecoveryService
                     return ErrorCategory.ContextLimit;
                 case RateLimitException:
                     return ErrorCategory.RateLimit;
+                case ProviderResponseException { EquivalentStatusCode: { } equivalent }:
+                    return (int)equivalent switch
+                    {
+                        401 or 403 => ErrorCategory.Authentication,
+                        402 => ErrorCategory.Billing,
+                        429 or 503 or 529 => ErrorCategory.RateLimit,
+                        408 or 500 or 502 or 504 => ErrorCategory.Network,
+                        _ => ErrorCategory.InvalidInput,
+                    };
+            }
+        }
+
+        return null;
+    }
+
+    private static int? EquivalentStatus(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is ProviderResponseException { EquivalentStatusCode: { } equivalent })
+            {
+                return (int)equivalent;
             }
         }
 
