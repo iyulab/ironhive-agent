@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Fixed
+- **A stream that fails after it started is `Network`, not `Unknown` or `FileSystem`.** `ErrorRecoveryService` read IronHive's
+  `ProviderResponseException` without a documented status (a stream that ended without its completion signal, a vendor error
+  with no status) as `Unknown`, and a connection reset mid-stream (`HttpIOException`, an `IOException`) as `FileSystem` — so
+  the host's `ErrorEvent.Code` said `unknown` or `file_system` for a failure a retry can clear. Both are `Network` now; an
+  ordinary `IOException` is still `FileSystem`.
+
 ## [0.56.0] - 2026-10-10
 
 ### Changed

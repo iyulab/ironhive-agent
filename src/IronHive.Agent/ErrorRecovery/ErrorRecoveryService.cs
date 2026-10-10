@@ -251,7 +251,8 @@ public class ErrorRecoveryService : IErrorRecoveryService
     /// status code or message text is read: a provider adapter that raised one has already classified the failure. A vendor
     /// error inside a started stream (<see cref="ProviderResponseException"/>) is categorized by the status the vendor
     /// documents for it outside a stream (<see cref="ProviderResponseException.EquivalentStatusCode"/>), the way the same
-    /// HTTP error would be — without needing a failure reader registered.
+    /// HTTP error would be — without needing a failure reader registered; without one it is <see cref="ErrorCategory.Network"/>,
+    /// as is an HTTP response stream that ended early (<see cref="HttpIOException"/>, which is an <see cref="IOException"/>).
     /// </summary>
     private static ErrorCategory? CategorizeTyped(Exception exception)
     {
@@ -274,6 +275,14 @@ public class ErrorRecoveryService : IErrorRecoveryService
                         408 or 500 or 502 or 504 => ErrorCategory.Network,
                         _ => ErrorCategory.InvalidInput,
                     };
+                // No documented status: the provider failed after it accepted the request (a stream cut short, an
+                // answer without its completion signal) - the class a retry can clear.
+                case ProviderResponseException:
+                    return ErrorCategory.Network;
+                // A response stream that ended early (connection reset). It derives from IOException, which would
+                // otherwise read as a file-system failure.
+                case HttpIOException:
+                    return ErrorCategory.Network;
             }
         }
 
