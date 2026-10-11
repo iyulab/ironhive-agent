@@ -1,3 +1,5 @@
+using Microsoft.Extensions.AI;
+
 namespace IronHive.Agent.Loop;
 
 /// <summary>
@@ -75,6 +77,24 @@ public record TurnRecord
 
     /// <summary>Why the turn ended.</summary>
     public TurnStopReason StopReason { get; init; }
+
+    /// <summary>
+    /// The messages this turn added to the conversation, in order: the user message that started it (absent for a
+    /// continuation), then the assistant and tool messages the model's response produced.
+    /// </summary>
+    /// <remarks>
+    /// A consumer that keeps the conversation itself (one that builds a loop per request and passes the history in)
+    /// appends exactly these to its record. What the loop does to its own history for sending, such as compacting it or
+    /// injecting a goal reminder, is not part of the turn and is not included.
+    /// </remarks>
+    public IReadOnlyList<ChatMessage> Messages { get; init; } = [];
+}
+
+/// <summary>Builds <see cref="TurnRecord.Messages"/> and <see cref="AgentResponse.Messages"/>.</summary>
+internal static class TurnMessages
+{
+    public static IReadOnlyList<ChatMessage> Of(ChatMessage? started, IEnumerable<ChatMessage> produced)
+        => started is null ? [.. produced] : [started, .. produced];
 }
 
 /// <summary>

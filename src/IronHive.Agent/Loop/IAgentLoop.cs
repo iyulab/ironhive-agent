@@ -206,6 +206,12 @@ public record AgentResponse
 
     /// <summary>Why the turn ended (it ended without an error; a failed turn throws).</summary>
     public TurnStopReason StopReason { get; init; }
+
+    /// <summary>
+    /// The messages this turn added to the conversation, as <see cref="TurnRecord.Messages"/> describes: the user
+    /// message that started it (absent for a continuation), then the model's assistant and tool messages.
+    /// </summary>
+    public IReadOnlyList<ChatMessage> Messages { get; init; } = [];
 }
 
 /// <summary>

@@ -844,6 +844,25 @@ per-call records: tools run inside the Ironbees framework, whose adapter returns
 `ToolResult` (no refusal kinds, no `ToolCallResult.Stats`). Use `AgentLoop` over a `UseToolInvocationPipeline()` client when a host
 needs them.
 
+### A host that keeps the conversation itself
+
+A stateless host builds a loop per request, passes the conversation in, and records what the turn added.
+`AgentResponse.Messages` and `TurnRecord.Messages` (on the stream's last chunk) are exactly those messages, in order: the user
+message that started the turn (none for a continuation), then the assistant and tool messages. Append them; do not diff
+`History`. The loop's own sending aids are not part of the turn: a compacted history and an injected goal reminder (a second
+user-role message) stay inside the loop.
+
+```csharp
+var conversation = new List<ChatMessage>();     // the host's own record, loaded from its store
+var question = "What changed since yesterday?";
+var loop = new AgentLoop(chatClient, options);
+loop.InitializeHistory(conversation);
+await foreach (var chunk in loop.RunStreamingAsync(question, ct))
+{
+    if (chunk.Turn is { } turn) conversation.AddRange(turn.Messages);
+}
+```
+
 ### Reading the record without an observer
 
 `RunStreamingAsync` always ends with one final chunk carrying `AgentResponseChunk.Turn`, whether or

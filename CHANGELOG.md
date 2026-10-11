@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **A turn reports the messages it added to the conversation.** `AgentResponse.Messages` and `TurnRecord.Messages` list the user
+  message that started the turn (none for a continuation), then the assistant and tool messages, in order. A host that keeps
+  the conversation itself appends them instead of diffing `History`. An injected goal reminder and compaction are not included.
+  `AgentLoop` and `ThinkingAgentLoop` fill them on both paths; `OrchestratedAgentLoop` fills `AgentResponse.Messages` with the
+  prompt and the final text.
+
 ## [0.58.0] - 2026-10-11
 
 ### Added

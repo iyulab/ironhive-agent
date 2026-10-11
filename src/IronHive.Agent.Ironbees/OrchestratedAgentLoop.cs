@@ -87,7 +87,8 @@ public class OrchestratedAgentLoop : IAgentLoop
         return new AgentResponse
         {
             Content = response,
-            ToolCalls = []
+            ToolCalls = [],
+            Messages = [new ChatMessage(ChatRole.User, prompt), new ChatMessage(ChatRole.Assistant, response)]
         };
     }
 

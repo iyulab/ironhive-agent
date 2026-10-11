@@ -80,8 +80,9 @@ public class AgentLoop : IAgentLoop
     /// <inheritdoc />
     public Task<AgentResponse> RunAsync(ChatMessage message, ChatOptions? overrideOptions, CancellationToken cancellationToken = default)
     {
-        _history.Add(UserTurn.Checked(message));
-        return RunTurnAsync(overrideOptions, cancellationToken);
+        var started = UserTurn.Checked(message);
+        _history.Add(started);
+        return RunTurnAsync(started, overrideOptions, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -93,17 +94,17 @@ public class AgentLoop : IAgentLoop
     {
         ContinuationGuard.EnsureContinuable(_history);
         await _hostResults.ApplyAsync(_history, cancellationToken);
-        return await RunTurnAsync(overrideOptions, cancellationToken);
+        return await RunTurnAsync(started: null, overrideOptions, cancellationToken);
     }
 
     /// <summary>One turn, as an <c>invoke_agent</c> span (<see cref="AgentTelemetry"/>).</summary>
-    private async Task<AgentResponse> RunTurnAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
+    private async Task<AgentResponse> RunTurnAsync(ChatMessage? started, ChatOptions? overrideOptions, CancellationToken cancellationToken)
     {
         using var span = AgentTelemetry.StartTurn(_options);
         using var deadline = TurnDeadline.Start(_options.MaxTurnDuration, cancellationToken);
         try
         {
-            var response = await RunTurnCoreAsync(overrideOptions, deadline.Token);
+            var response = await RunTurnCoreAsync(started, overrideOptions, deadline.Token);
             AgentTelemetry.Complete(span, response.Usage, response.ToolCalls.Count, response.StopReason);
             return response;
         }
@@ -122,12 +123,13 @@ public class AgentLoop : IAgentLoop
 
     /// <summary>One streamed turn, as an <c>invoke_agent</c> span (<see cref="AgentTelemetry"/>).</summary>
     private async IAsyncEnumerable<AgentResponseChunk> RunTurnStreamingAsync(
+        ChatMessage? started,
         ChatOptions? overrideOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var span = AgentTelemetry.StartTurn(_options);
         using var deadline = TurnDeadline.Start(_options.MaxTurnDuration, cancellationToken);
-        await using var chunks = RunTurnStreamingCoreAsync(overrideOptions, deadline.Token).GetAsyncEnumerator(deadline.Token);
+        await using var chunks = RunTurnStreamingCoreAsync(started, overrideOptions, deadline.Token).GetAsyncEnumerator(deadline.Token);
         while (true)
         {
             AgentResponseChunk chunk;
@@ -163,9 +165,10 @@ public class AgentLoop : IAgentLoop
 
     /// <summary>
     /// One turn over the current history. The caller has already put the message that starts it
-    /// (a user prompt, or the host's tool results) at its end.
+    /// (a user prompt, or the host's tool results) at its end; <paramref name="started"/> is that user prompt, or
+    /// <c>null</c> for a continuation.
     /// </summary>
-    private async Task<AgentResponse> RunTurnCoreAsync(ChatOptions? overrideOptions, CancellationToken cancellationToken)
+    private async Task<AgentResponse> RunTurnCoreAsync(ChatMessage? started, ChatOptions? overrideOptions, CancellationToken cancellationToken)
     {
         // Set goal from first user message if context manager is present
         _contextManager?.SetGoalFromHistory(_history);
@@ -182,6 +185,7 @@ public class AgentLoop : IAgentLoop
         // Add assistant response to history
         _history.AddRange(response.Messages);
         _hostResults.MarkProduced(response.Messages);
+        var added = TurnMessages.Of(started, response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
         var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
@@ -198,7 +202,7 @@ public class AgentLoop : IAgentLoop
         var thinking = LiveReasoning.ToThinkingContent(LiveReasoning.Extract(response));
         var addendum = await TurnObserverNotifier.NotifyAsync(
             _turnObservers,
-            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, ThinkingContent = thinking, StopReason = stopReason },
+            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, ThinkingContent = thinking, StopReason = stopReason, Messages = added },
             cancellationToken);
 
         return new AgentResponse
@@ -211,7 +215,8 @@ public class AgentLoop : IAgentLoop
             Usage = usage,
             ThinkingContent = thinking,
             Addendum = addendum,
-            StopReason = stopReason
+            StopReason = stopReason,
+            Messages = added
         };
     }
 
@@ -249,7 +254,7 @@ public class AgentLoop : IAgentLoop
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         _history.Add(message);
-        await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
+        await foreach (var chunk in RunTurnStreamingAsync(message, overrideOptions, cancellationToken))
         {
             yield return chunk;
         }
@@ -266,7 +271,7 @@ public class AgentLoop : IAgentLoop
     {
         ContinuationGuard.EnsureContinuable(_history);
         await _hostResults.ApplyAsync(_history, cancellationToken);
-        await foreach (var chunk in RunTurnStreamingAsync(overrideOptions, cancellationToken))
+        await foreach (var chunk in RunTurnStreamingAsync(started: null, overrideOptions, cancellationToken))
         {
             yield return chunk;
         }
@@ -274,6 +279,7 @@ public class AgentLoop : IAgentLoop
 
     /// <summary>Streaming counterpart of <see cref="RunTurnAsync"/>.</summary>
     private async IAsyncEnumerable<AgentResponseChunk> RunTurnStreamingCoreAsync(
+        ChatMessage? started,
         ChatOptions? overrideOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -374,6 +380,7 @@ public class AgentLoop : IAgentLoop
         var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
+        var streamedAdded = TurnMessages.Of(started, turnMessages);
 
         var streamedUsage = MapUsage(usageDetails);
         if (streamedUsage is not null)
@@ -391,7 +398,8 @@ public class AgentLoop : IAgentLoop
             ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
             Usage = streamedUsage,
             ThinkingContent = LiveReasoning.ToThinkingContent(reasoningBuilder.ToString()),
-            StopReason = streamedStopReason
+            StopReason = streamedStopReason,
+            Messages = streamedAdded
         };
 
         yield return new AgentResponseChunk
