@@ -118,4 +118,76 @@ public class RepeatedResultGuardTests
         doc.Reads.Should().Be(5);
         response.StopReason.Should().Be(TurnStopReason.Completed);
     }
+
+    [Fact]
+    public async Task Visits_from_an_earlier_request_do_not_count()
+    {
+        // One conversation: the first request visits part one twice (part two between); the second asks again and reads it
+        // once. That read is the request's first visit, not the conversation's third — the same reads inside one request
+        // end it (Re_reading_in_rotation_ends_the_request_on_the_third_visit_with_the_cause).
+        var (loop, _, doc) = Build(new ToolInvocationOptions(), m =>
+        {
+            Read(Read(Read(Read(m, "1"), "2"), "1"), "2").EnqueueResponse("first answer");
+            Read(m, "1").EnqueueResponse("second answer");
+        });
+
+        var first = await loop.RunAsync("read the parts", Ct);
+        var second = await loop.RunAsync("read part one again", Ct);
+
+        first.StopReason.Should().Be(TurnStopReason.Completed);
+        second.StopReason.Should().Be(TurnStopReason.Completed);
+        second.Content.Should().Be("second answer");
+        doc.Reads.Should().Be(5);
+        loop.History.SelectMany(m => m.Contents.OfType<FunctionResultContent>())
+            .Should().NotContain(r => r.Result is ToolCallRefusal);
+    }
+
+    [Fact]
+    public async Task A_streak_does_not_continue_across_requests_for_the_repeated_call_guard()
+    {
+        // The repeated-call guard reads the same request-scoped history: a request that ended on three identical reads does
+        // not make the next request's first identical read the fourth of a streak.
+        var (loop, _, doc) = Build(new ToolInvocationOptions(), m =>
+        {
+            Read(Read(Read(m, "1"), "1"), "1").EnqueueResponse("first answer"); // three in a row: at, not over, the threshold
+            Read(m, "1").EnqueueResponse("second answer");
+        });
+
+        await loop.RunAsync("read part one", Ct);
+        var second = await loop.RunAsync("read part one again", Ct);
+
+        second.Content.Should().Be("second answer");
+        doc.Reads.Should().Be(4);
+        loop.History.SelectMany(m => m.Contents.OfType<FunctionResultContent>())
+            .Should().NotContain(r => r.Result is ToolCallRefusal);
+    }
+
+    [Fact]
+    public void A_goal_reminder_does_not_start_a_new_request()
+    {
+        // The goal reminder is a user-role message added mid-request; calls before it still belong to the request.
+        var reminder = new ChatMessage(ChatRole.User, "reminder")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { [IronHive.Agent.Context.ContextManager.InjectedBlockKey] = "goal_reminder" },
+        };
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "earlier request"),
+            Call("a", "read_part"), Result("a", "x"),
+            new(ChatRole.User, "this request"),
+            Call("b", "read_part"), Result("b", "x"),
+            reminder,
+            Call("c", "read_part"), Result("c", "x"),
+        };
+
+        var completed = ToolCallHistory.Completed(messages, excludeCallId: null);
+
+        completed.Select(c => c.Call.CallId).Should().Equal("b", "c");
+    }
+
+    private static ChatMessage Call(string id, string name) =>
+        new(ChatRole.Assistant, [new FunctionCallContent(id, name, new Dictionary<string, object?> { ["part"] = "1" })]);
+
+    private static ChatMessage Result(string id, string text) =>
+        new(ChatRole.Tool, [new FunctionResultContent(id, text)]);
 }

@@ -4,10 +4,15 @@ using Microsoft.Extensions.AI;
 namespace IronHive.Agent.Invocation;
 
 /// <summary>
-/// Reads the completed tool calls of a conversation — each call the model made, paired with the result that answered
-/// it, in the order the calls were made. The loop guards derive their streaks from this instead of keeping state, so
-/// one middleware instance serves any number of conversations.
+/// Reads the completed tool calls of the current request — each call the model made since the user's latest message,
+/// paired with the result that answered it, in the order the calls were made. The loop guards derive their streaks from
+/// this instead of keeping state, so one middleware instance serves any number of conversations.
 /// </summary>
+/// <remarks>
+/// A call answered in an earlier request is history, not a repetition: asking again later («list it again») must not
+/// count against the guards. The request starts at the last <see cref="ChatRole.User"/> message that is not an injected
+/// one (<see cref="Context.ContextManager.IsInjected"/> — the goal reminder is added mid-request with the user role).
+/// </remarks>
 internal static class ToolCallHistory
 {
     public static List<(FunctionCallContent Call, FunctionResultContent Result)> Completed(
@@ -19,7 +24,18 @@ internal static class ToolCallHistory
             return completed;
         }
 
-        var list = messages as IReadOnlyList<ChatMessage> ?? [.. messages];
+        var all = messages as IReadOnlyList<ChatMessage> ?? [.. messages];
+        var start = 0;
+        for (var i = all.Count - 1; i >= 0; i--)
+        {
+            if (all[i].Role == ChatRole.User && !Context.ContextManager.IsInjected(all[i]))
+            {
+                start = i + 1;
+                break;
+            }
+        }
+
+        var list = start == 0 ? all : [.. all.Skip(start)];
         var results = new Dictionary<string, FunctionResultContent>(StringComparer.Ordinal);
         foreach (var message in list)
         {

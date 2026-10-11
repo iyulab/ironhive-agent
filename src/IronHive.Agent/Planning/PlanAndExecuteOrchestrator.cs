@@ -143,15 +143,13 @@ public sealed class PlanAndExecuteOrchestrator
 
     private static bool HasFailedDependency(TaskPlan plan, PlanStep step)
     {
+        // DependsOn names steps by Index (1-based), not by list position.
         foreach (var depIndex in step.DependsOn)
         {
-            if (depIndex >= 0 && depIndex < plan.Steps.Count)
+            var dep = plan.Steps.FirstOrDefault(s => s.Index == depIndex);
+            if (dep?.Status is StepStatus.Failed or StepStatus.Skipped)
             {
-                var dep = plan.Steps[depIndex];
-                if (dep.Status is StepStatus.Failed or StepStatus.Skipped)
-                {
-                    return true;
-                }
+                return true;
             }
         }
 

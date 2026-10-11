@@ -43,14 +43,7 @@ public class DefaultTaskPlanner : ITaskPlanner
         {
             Goal = planDto.Goal ?? goal,
             Reasoning = planDto.Reasoning,
-            Steps = planDto.Steps?.Select((s, i) => new PlanStep
-            {
-                Index = s.Index > 0 ? s.Index : i + 1,
-                Description = s.Description ?? $"Step {i + 1}",
-                Instruction = s.Instruction ?? s.Description ?? string.Empty,
-                RequiredTools = s.RequiredTools ?? [],
-                DependsOn = s.DependsOn ?? [],
-            }).ToList() ?? [],
+            Steps = ToSteps(planDto.Steps),
         };
     }
 
@@ -90,15 +83,42 @@ public class DefaultTaskPlanner : ITaskPlanner
         {
             Goal = planDto.Goal ?? currentPlan.Goal,
             Reasoning = planDto.Reasoning,
-            Steps = planDto.Steps?.Select((s, i) => new PlanStep
-            {
-                Index = s.Index > 0 ? s.Index : i + 1,
-                Description = s.Description ?? $"Step {i + 1}",
-                Instruction = s.Instruction ?? s.Description ?? string.Empty,
-                RequiredTools = s.RequiredTools ?? [],
-                DependsOn = s.DependsOn ?? [],
-            }).ToList() ?? [],
+            Steps = ToSteps(planDto.Steps),
         };
+    }
+
+    /// <summary>
+    /// Numbers the steps by position — <see cref="PlanStep.Index"/> is the 1-based position in the plan, whatever the model
+    /// wrote — and translates each <c>dependsOn</c> through the model's own numbering. A model that numbers from 0 (or skips,
+    /// or repeats a number) would otherwise give two steps one index, and every step event of the run would be ambiguous.
+    /// A dependency that names no step, or the step itself, is dropped.
+    /// </summary>
+    private static List<PlanStep> ToSteps(List<StepDto>? steps)
+    {
+        if (steps is null)
+        {
+            return [];
+        }
+
+        // The model's number -> position + 1. A repeated number keeps its first step.
+        var byModelNumber = new Dictionary<int, int>();
+        for (var i = 0; i < steps.Count; i++)
+        {
+            byModelNumber.TryAdd(steps[i].Index, i + 1);
+        }
+
+        return steps.Select((s, i) => new PlanStep
+        {
+            Index = i + 1,
+            Description = s.Description ?? $"Step {i + 1}",
+            Instruction = s.Instruction ?? s.Description ?? string.Empty,
+            RequiredTools = s.RequiredTools ?? [],
+            DependsOn = (s.DependsOn ?? [])
+                .Select(d => byModelNumber.TryGetValue(d, out var index) ? index : 0)
+                .Where(d => d > 0 && d != i + 1)
+                .Distinct()
+                .ToArray(),
+        }).ToList();
     }
 
     private static string BuildPlannerSystemPrompt(PlanningContext context)

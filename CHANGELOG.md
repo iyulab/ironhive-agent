@@ -6,6 +6,18 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Fixed
+- **The loop guards count only the current request.** `RepeatedResultGuardMiddleware`, `RepeatedCallGuardMiddleware` and
+  `RepeatedErrorGuardMiddleware` read every tool call of the conversation, so asking again in a later message («list it
+  again») could end that request as a loop on its first call, because earlier requests had already made the same call.
+  They now count the calls since the user's latest message; an injected goal reminder does not start a new request.
+- **`DefaultTaskPlanner` numbers steps by position.** A plan the model numbered from 0 came back with two steps sharing one
+  `Index` (0, 1, 2 → 1, 1, 2), so step events could not tell them apart. `PlanStep.Index` is now always the 1-based position
+  in the plan, and each `DependsOn` is translated through the model's own numbering (a dependency that names no step, or the
+  step itself, is dropped).
+- **`PlanAndExecuteOrchestrator` skips a step whose dependency failed, as documented.** It read `DependsOn` as list
+  positions, while steps name each other by `Index`; with a planner's 1-based plan it checked the step after the one named.
+
 ### Dependencies
 - Re-pinned sibling package(s) `MemoryIndexer` 0.31.0 -> 0.32.0.
 

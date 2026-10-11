@@ -271,4 +271,33 @@ public class PlanAndExecuteOrchestratorTests
         // Plan should still complete since evaluator said Continue for step 0
         events.Last().Should().BeOfType<PlanCompletedEvent>();
     }
+
+    [Fact]
+    public async Task ExecuteAsync_DependsOnNamesStepsByIndex_NotByListPosition()
+    {
+        // A planner's plan: Index is 1-based. Step 3 depends on step 1, which fails; step 2 (list position 1) succeeds.
+        var step1 = CreateStep(1, "Prerequisite step");
+        var step2 = CreateStep(2, "Independent step");
+        var step3 = CreateStep(3, "Depends on step 1", dependsOn: [1]);
+        var plan = CreatePlan("Test goal", step1, step2, step3);
+        var context = new PlanningContext();
+
+        _planner.CreatePlanAsync("Test goal", context, Arg.Any<CancellationToken>())
+            .Returns(plan);
+
+        var failResult = new StepResult { Success = false, Output = "Prerequisite failed" };
+        var okResult = new StepResult { Success = true, Output = "done" };
+        _executor.ExecuteStepAsync(plan, step1, Arg.Any<CancellationToken>())
+            .Returns(ToAsyncEnumerable(new StepCompletedEvent(1, failResult)));
+        _executor.ExecuteStepAsync(plan, step2, Arg.Any<CancellationToken>())
+            .Returns(ToAsyncEnumerable(new StepCompletedEvent(2, okResult)));
+        _evaluator.EvaluateAsync(plan, Arg.Any<PlanStep>(), Arg.Any<StepResult>(), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult { Action = EvaluationAction.Continue });
+
+        var events = await CollectEventsAsync(CreateOrchestrator().ExecuteAsync("Test goal", context, TestContext.Current.CancellationToken));
+
+        events.OfType<StepStartedEvent>().Select(e => e.StepIndex).Should().Equal(1, 2);
+        step3.Status.Should().Be(StepStatus.Skipped);
+        _executor.DidNotReceive().ExecuteStepAsync(plan, step3, Arg.Any<CancellationToken>());
+    }
 }
