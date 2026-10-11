@@ -9,6 +9,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Dependencies
 - Re-pinned sibling package(s) `IndexThinking` 0.25.0 -> 0.25.1.
 
+### Changed
+- **The nuget.org «Release Notes» of every package link to the GitHub release of its version**, whose notes are this CHANGELOG's section for that version.
+
 ## [0.59.0] - 2026-10-11
 
 ### Added
