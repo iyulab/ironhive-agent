@@ -20,6 +20,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `MemoryIndexer` 0.31.0 -> 0.32.0.
+- Re-pinned sibling package(s) `TokenMeter` 0.11.0 -> 0.12.0.
 
 ## [0.60.0] - 2026-10-11
 
