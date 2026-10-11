@@ -6,6 +6,17 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Removed
+- **Breaking: three public components that no loop or factory ever used are gone** — `PromptCacheManager`,
+  `PromptCachingOptions`, `CacheSavingsEstimate` and `CacheControl` (they wrote a cache hint into message properties that no
+  provider reads, so nothing was cached); `McpToolDiscovery`, `PluginInfo` and `DiscoveredTool` (the loop takes MCP tools from
+  `IMcpPluginManager`, and tool retrieval selects among them); `ScratchpadPlanTracker` (no plan executor reads a scratchpad).
+  The README no longer lists prompt caching. Migration: delete the use; for MCP tools call `IMcpPluginManager.GetToolsAsync`.
+
+### Documentation
+- **The README says how to combine providers with `FallbackChatClientProvider`** and that it picks one provider on first
+  use rather than failing over per call.
+
 ### Dependencies
 - Re-pinned sibling package(s) `IndexThinking` 0.25.0 -> 0.25.1.
 - Re-pinned sibling package(s) `IndexThinking` 0.25.1 -> 0.26.0.
