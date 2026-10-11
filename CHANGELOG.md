@@ -27,6 +27,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Dependencies
 - Re-pinned sibling package(s) `IndexThinking` 0.25.0 -> 0.25.1.
 - Re-pinned sibling package(s) `IndexThinking` 0.25.1 -> 0.26.0.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.27.0 -> 0.28.0, `Ironbees.Core` 0.27.0 -> 0.28.0, `WebFlux` 0.25.0 -> 0.26.0.
 
 ### Changed
 - **The nuget.org «Release Notes» of every package link to the GitHub release of its version**, whose notes are this CHANGELOG's section for that version.
