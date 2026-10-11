@@ -1,5 +1,6 @@
 using System.Text.Json;
 using IronHive.Agent.Exceptions;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Loop;
 using IronHive.Agent.Tracking;
 using IronHive.Agent.Context;
@@ -771,5 +772,28 @@ public class AgentLoopTests
         Assert.NotNull(usageChunk);
         Assert.Equal(10, usageChunk!.Usage!.TotalTokens);
         Assert.Equal(10, limiter.GetCurrentUsage().Tokens);
+    }
+
+    [Fact]
+    public async Task RunStreamingAsync_ToolRoundThenAnswer_TurnUsageSumsEveryRound()
+    {
+        // Each model call in a turn reports its own usage; the turn's record is their sum (a thinking model's large
+        // output in one round must not be lost to a later round).
+        var mockClient = new MockChatClient()
+            .EnqueueToolCallResponse("echo", """{"text":"hi"}""", usage: new UsageDetails { InputTokenCount = 100, OutputTokenCount = 60000 })
+            .EnqueueResponse("done", new UsageDetails { InputTokenCount = 150, OutputTokenCount = 20 });
+        var client = mockClient.AsBuilder().UseToolInvocationPipeline(ToolInvocationPipeline.CreateDefault(new ToolInvocationOptions())).Build();
+        var tools = new List<AITool> { AIFunctionFactory.Create((string text) => text, "echo") };
+        var agentLoop = new AgentLoop(client, new AgentOptions { Tools = tools });
+
+        TurnRecord? turn = null;
+        await foreach (var chunk in agentLoop.RunStreamingAsync("prompt", TestContext.Current.CancellationToken))
+        {
+            turn = chunk.Turn ?? turn;
+        }
+
+        Assert.NotNull(turn);
+        Assert.Equal(250, turn!.Usage!.InputTokens);
+        Assert.Equal(60020, turn.Usage.OutputTokens);
     }
 }
