@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using IronHive.Abstractions.Agent.Planning;
 using IronHive.Agent.Invocation;
 using Microsoft.Extensions.AI;
@@ -43,42 +44,85 @@ public class DefaultPlanExecutor : IPlanExecutor, IDisposable
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The step is streamed: every text delta is yielded as a <see cref="StepProgressEvent"/>, and every tool call
+    /// the step makes is yielded as a <see cref="StepToolCallEvent"/> once its result is in. The last event is always
+    /// a <see cref="StepCompletedEvent"/> whose output is the whole text. A model or transport failure ends the step
+    /// as a failed <see cref="StepCompletedEvent"/> that keeps the text streamed so far; cancellation throws.
+    /// </remarks>
     public async IAsyncEnumerable<PlanExecutionEvent> ExecuteStepAsync(
         TaskPlan plan,
         PlanStep planStep,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        StepCompletedEvent completedEvent;
+        var output = new StringBuilder();
+        var toolNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        string? error = null;
+
+        IAsyncEnumerator<ChatResponseUpdate>? updates = null;
         try
         {
             var messages = BuildStepMessages(plan, planStep);
             var options = _tools is { Count: > 0 }
                 ? new ChatOptions { Tools = _tools }
                 : null;
-
-            var response = await _chatClient.GetResponseAsync(
-                messages, options, cancellationToken);
-
-            var output = response.Text ?? string.Empty;
-            completedEvent = new StepCompletedEvent(planStep.Index,
-                new StepResult { Success = true, Output = output });
+            updates = _chatClient.GetStreamingResponseAsync(messages, options, cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw;
+            error = ex.Message;
         }
-        catch (Exception ex)
+
+        if (updates is not null)
         {
-            completedEvent = new StepCompletedEvent(planStep.Index,
-                new StepResult
+            await using (updates.ConfigureAwait(false))
+            {
+                while (true)
                 {
-                    Success = false,
-                    Output = string.Empty,
-                    Error = ex.Message,
-                });
+                    try
+                    {
+                        if (!await updates.MoveNextAsync().ConfigureAwait(false))
+                        {
+                            break;
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        error = ex.Message;
+                        break;
+                    }
+
+                    var update = updates.Current;
+                    foreach (var content in update.Contents)
+                    {
+                        switch (content)
+                        {
+                            case FunctionCallContent call:
+                                toolNames[call.CallId] = call.Name;
+                                break;
+                            case FunctionResultContent result:
+                                yield return new StepToolCallEvent(
+                                    planStep.Index,
+                                    toolNames.TryGetValue(result.CallId, out var name) ? name : result.CallId,
+                                    result.Exception is null);
+                                break;
+                        }
+                    }
+
+                    var text = update.Text;
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        output.Append(text);
+                        yield return new StepProgressEvent(planStep.Index, text);
+                    }
+                }
+            }
         }
 
-        yield return completedEvent;
+        yield return new StepCompletedEvent(planStep.Index, error is null
+            ? new StepResult { Success = true, Output = output.ToString() }
+            : new StepResult { Success = false, Output = output.ToString(), Error = error });
     }
 
     /// <summary>

@@ -13,6 +13,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `IMcpPluginManager`, and tool retrieval selects among them); `ScratchpadPlanTracker` (no plan executor reads a scratchpad).
   The README no longer lists prompt caching. Migration: delete the use; for MCP tools call `IMcpPluginManager.GetToolsAsync`.
 
+### Changed
+- **Breaking: `DefaultPlanExecutor` streams a step's text and reports its tool calls.** It now yields a `StepProgressEvent` for every
+  text delta and a `StepToolCallEvent` (tool name, whether it succeeded) for every tool call once its result is in, before
+  the `StepCompletedEvent`; before, it yielded only the completed event, so a host showing progress saw nothing until the step
+  ended. A step that fails mid-stream keeps the text streamed so far in its `Output`. The model is now called with
+  `GetStreamingResponseAsync`. Migration: a host that maps plan events with a catch-all arm adds a `StepToolCallEvent` arm (and expects `StepProgressEvent` text); a chat client that implements only `GetResponseAsync` must implement streaming.
+
 ### Documentation
 - **The README says how to combine providers with `FallbackChatClientProvider`** and that it picks one provider on first
   use rather than failing over per call.
