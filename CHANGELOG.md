@@ -36,8 +36,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `Issues` instead of being returned. Migration: if a refused entry appears in `Issues`, add the missing `command`/`url`
   or a `type`.
 - **The packages from this repository depend on each other at exactly the same version** (`[x.y.z]`), not a floor.
-  A consumer that moves one of them while another resolves at an older version now gets restore warning NU1608 naming
+  A consumer that moves one of them while a family member it depends on resolves at an older version now gets restore warning NU1608 naming
   the pair (an error where warnings are errors) — before, the mixed versions restored silently and could fail at run time.
+  A member that reaches you only through another package's floor is not covered: pin every member you load and move them together.
 
 ### Fixed
 - **A plugins file's `defaultTimeoutMs` now applies.** Every entry without its own `timeoutMs` used to be read as 30000,
