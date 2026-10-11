@@ -11,6 +11,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   final text only, so `ToolCalls` is empty and the stream has no tool chunks even when tools ran — now documented on the type
   and in the README (no behaviour change).
 
+### Dependencies
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.61.0 -> 0.62.0, `IronHive.Extensions.AI` 0.61.0 -> 0.62.0.
+
 ## [0.57.0] - 2026-10-11
 
 ### Added
