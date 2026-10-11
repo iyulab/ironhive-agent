@@ -606,6 +606,9 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     public IReadOnlyList<ChatMessage> History => _history.AsReadOnly();
 
     /// <inheritdoc />
+    public IReadOnlyList<AITool> Tools => _options.Tools is { } tools ? [.. tools] : [];
+
+    /// <inheritdoc />
     public void InitializeHistory(IEnumerable<ChatMessage> messages)
     {
         ArgumentNullException.ThrowIfNull(messages);

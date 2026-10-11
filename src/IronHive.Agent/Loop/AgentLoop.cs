@@ -491,6 +491,9 @@ public class AgentLoop : IAgentLoop
     /// </summary>
     public IReadOnlyList<ChatMessage> History => _history.AsReadOnly();
 
+    /// <inheritdoc />
+    public IReadOnlyList<AITool> Tools => _options.Tools is { } tools ? [.. tools] : [];
+
     /// <summary>
     /// Gets the context manager if one is configured.
     /// </summary>

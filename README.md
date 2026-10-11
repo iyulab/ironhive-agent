@@ -304,7 +304,10 @@ dispatched unguarded) — see `McpPluginManager.CallToolAsync`'s XML doc remarks
 
 ## Tool Invocation Pipeline
 
-An `IAgentLoop` never runs tools itself; the function-invoking client it is given does. `UseToolInvocationPipeline()`
+An `IAgentLoop` never runs tools itself; the function-invoking client it is given does. What it does hold is the catalog:
+`loop.Tools` is the registered set (`AgentOptions.Tools`). A host resolves a request's per-turn tool names against it, so
+the factory does not need to keep a copy. `OrchestratedAgentLoop` returns an empty catalog: its routed agents hold their own
+tools. `UseToolInvocationPipeline()`
 installs that client with one `FunctionInvoker`, a `ToolInvocationPipeline` folded from ordered middleware:
 
 ```csharp

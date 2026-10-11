@@ -123,6 +123,13 @@ public interface IAgentLoop
     IReadOnlyList<ChatMessage> History { get; }
 
     /// <summary>
+    /// The tools registered on this loop — the catalog a per-turn <see cref="ChatOptions.Tools"/> override selects from
+    /// (for example, a host resolving a request's tool names). Tool retrieval may narrow a turn's set further; this is the
+    /// whole registered set, not one turn's. Empty when the loop has none of its own.
+    /// </summary>
+    IReadOnlyList<AITool> Tools { get; }
+
+    /// <summary>
     /// Clears the conversation history (keeps system prompt if configured).
     /// </summary>
     void ClearHistory();

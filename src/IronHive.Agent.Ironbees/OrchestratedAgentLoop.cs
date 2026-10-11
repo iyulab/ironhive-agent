@@ -203,6 +203,10 @@ public class OrchestratedAgentLoop : IAgentLoop
         => _orchestrator.SelectAgentAsync(input, cancellationToken);
 
     /// <inheritdoc />
+    /// <remarks>Always empty: this loop routes each turn to an Ironbees agent, and the tools belong to those agents.</remarks>
+    public IReadOnlyList<AITool> Tools => [];
+
+    /// <inheritdoc />
     public IReadOnlyList<ChatMessage> History
         => GetHistoryAsync().GetAwaiter().GetResult();
 

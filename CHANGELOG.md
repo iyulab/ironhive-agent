@@ -6,6 +6,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **`IAgentLoop.Tools` returns the tools registered on the loop.** These are the catalog a per-turn `ChatOptions.Tools`
+  override selects from, for example when a host resolves a request's tool names. Before, a host holding only the loop
+  had no access to them, and each factory kept its own copy. `AgentLoop` and `ThinkingAgentLoop` return a snapshot of
+  `AgentOptions.Tools`; `OrchestratedAgentLoop` returns an empty list, because its routed agents hold their own tools.
+  **Breaking** for a class that implements `IAgentLoop`. Migration: add `Tools` and return the tools you register, or `[]`.
+  NSubstitute doubles are unaffected.
+
 ### Changed
 - **`OrchestratedAgentLoop` says that it reports no tool calls.** Its tools run inside the Ironbees framework, which returns the
   final text only, so `ToolCalls` is empty and the stream has no tool chunks even when tools ran — now documented on the type
