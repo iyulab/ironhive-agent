@@ -15,6 +15,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Dependencies
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.62.0 -> 0.63.0, `IronHive.Extensions.AI` 0.62.0 -> 0.63.0.
 - Re-pinned sibling package(s) `Iyu.Conventions.Testing` 0.6.0 -> 0.7.0, `MemoryIndexer` 0.32.0 -> 0.33.0.
+- Re-pinned sibling package(s) `IronHive.Abstractions` 0.63.0 -> 0.64.0, `IronHive.Extensions.AI` 0.63.0 -> 0.64.0.
 
 ## [0.60.1] - 2026-10-12
 
