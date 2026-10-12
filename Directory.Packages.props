@@ -4,8 +4,8 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- IronHive (LLM abstraction) -->
-    <PackageVersion Include="IronHive.Abstractions" Version="0.64.0" />
-    <PackageVersion Include="IronHive.Extensions.AI" Version="0.64.0" />
+    <PackageVersion Include="IronHive.Abstractions" Version="0.65.0" />
+    <PackageVersion Include="IronHive.Extensions.AI" Version="0.65.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
     <PackageVersion Include="IronProw.Core" Version="0.16.0" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
@@ -58,6 +58,6 @@
     <!-- README snippet compilation (tests only) -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
       <!-- Convention checks (options reachability) — iyulab conventions kit -->
-    <PackageVersion Include="Iyu.Conventions.Testing" Version="0.9.0" />
+    <PackageVersion Include="Iyu.Conventions.Testing" Version="0.10.0" />
   </ItemGroup>
 </Project>
