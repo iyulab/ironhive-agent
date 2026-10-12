@@ -208,7 +208,7 @@ public class ErrorRecoveryService : IErrorRecoveryService
             Severity = severity,
             ToolName = toolName,
             HttpStatusCode = failure?.StatusCode ?? EquivalentStatus(exception),
-            RetryAfter = failure?.RetryAfter,
+            RetryAfter = failure?.RetryAfter ?? TypedRetryAfter(exception),
             Context = new Dictionary<string, object?>
             {
                 ["StackTrace"] = exception.StackTrace,
@@ -283,6 +283,25 @@ public class ErrorRecoveryService : IErrorRecoveryService
                 // otherwise read as a file-system failure.
                 case HttpIOException:
                     return ErrorCategory.Network;
+            }
+        }
+
+        return null;
+    }
+
+    // The retry hint IronHive's provider exceptions carry (RateLimitException, ProviderHttpException), anywhere in the
+    // inner-exception chain. The built-in failure reader sees only an HttpRequestException's status, so without this the
+    // hint a provider sent would be lost unless the application registered IronProw's IronHive reader.
+    private static TimeSpan? TypedRetryAfter(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            switch (current)
+            {
+                case RateLimitException { RetryAfter: { } wait }:
+                    return wait;
+                case ProviderHttpException { RetryAfter: { } wait }:
+                    return wait;
             }
         }
 

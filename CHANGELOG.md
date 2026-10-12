@@ -6,6 +6,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Fixed
+- **`ErrorRecoveryService` keeps the retry hint IronHive's provider exceptions carry.** `RateLimitException.RetryAfter` and
+  `ProviderHttpException.RetryAfter` now reach `ErrorOccurrence.RetryAfter` (and so the recommended wait) without an IronProw
+  failure reader registered. Before, the built-in reader read only an `HttpRequestException`'s status, so a rate limit's
+  hint was dropped, and from IronHive 0.64.0 on (every provider raises `ProviderHttpException`) a 503's hint would have been too.
+
 ### Dependencies
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.62.0 -> 0.63.0, `IronHive.Extensions.AI` 0.62.0 -> 0.63.0.
 - Re-pinned sibling package(s) `Iyu.Conventions.Testing` 0.6.0 -> 0.7.0, `MemoryIndexer` 0.32.0 -> 0.33.0.

@@ -28,6 +28,23 @@ public class ErrorRecoveryHttpStatusTests
         Assert.Equal(expected, analysis.RecommendedAction);
     }
 
+    // IronHive's providers carry the retry hint on their own exceptions; the built-in reader sees only the status, so the
+    // hint is read from them by the service itself (no IronProw reader registered here).
+    [Fact]
+    public void ARetryHint_OnIronHivesProviderExceptions_ReachesTheAnalysis()
+    {
+        var service = new ErrorRecoveryService();
+
+        var http = service.AnalyzeException(new IronHive.Abstractions.Exceptions.ProviderHttpException(
+            "The server is overloaded.", HttpStatusCode.ServiceUnavailable) { RetryAfter = TimeSpan.FromSeconds(12) });
+        var rate = service.AnalyzeException(new IronHive.Abstractions.Exceptions.RateLimitException(
+            "Too many requests.") { RetryAfter = TimeSpan.FromSeconds(7) });
+
+        Assert.Equal(TimeSpan.FromSeconds(12), http.Error.RetryAfter);
+        Assert.Equal(503, http.Error.HttpStatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(7), rate.Error.RetryAfter);
+    }
+
     [Fact]
     public void AnHttpFailureWithoutAStatus_IsStillANetworkError()
     {
