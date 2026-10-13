@@ -81,6 +81,9 @@ public class ToolProvider
     private const int OutputTailChars = MaxOutputLength - OutputHeadChars;
     private const int DefaultCommandTimeout = 30000; // 30 seconds
 
+    /// <summary>How long a stopped command may take to exit before the timeout is reported anyway.</summary>
+    private static readonly TimeSpan KillWaitTimeout = TimeSpan.FromSeconds(5);
+
     public ToolProvider(string workingDirectory, FileToolOptions? options = null)
     {
         _writeInterceptor = options?.WriteInterceptor;
@@ -660,6 +663,21 @@ public class ToolProvider
         catch (OperationCanceledException)
         {
             process.Kill(entireProcessTree: true);
+
+            // Kill only requests termination; the process (and the working directory it holds open on Windows) is still
+            // there when it returns. Wait for it, bounded, so the caller's next step — the next command in that
+            // directory, or deleting it — does not race a dying process.
+            using (var exited = new CancellationTokenSource(KillWaitTimeout))
+            {
+                try
+                {
+                    await process.WaitForExitAsync(exited.Token);
+                }
+                catch (OperationCanceledException) when (exited.IsCancellationRequested)
+                {
+                    // Did not exit in time; report the timeout anyway.
+                }
+            }
 
             // A cancelled turn stops the command with it rather than leaving it running until the timeout.
             cancellationToken.ThrowIfCancellationRequested();

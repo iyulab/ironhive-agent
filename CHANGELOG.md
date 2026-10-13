@@ -6,6 +6,20 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **A tool call the model wrote as text can be run as the call it meant: `UseTextToolCallRecovery()`**
+  (`TextToolCallRecoveryChatClient`, opt-in). When an OpenAI-compatible server's parser misses a call, it arrives as
+  assistant text — Hermes / Qwen `<tool_call>{json}</tool_call>` or Qwen3-Coder `<function=…><parameter=…>` — and the turn
+  ended as completed with the work undone. Placed right after `UseToolInvocationPipeline(…)`, it turns complete blocks that
+  name an offered tool into calls, which the function-invoking client then runs; anything else passes through. Streaming
+  and non-streaming.
+
+### Fixed
+- **A shell command stopped by its timeout has exited when the timeout is reported.** `ExecuteCommand` killed the process
+  tree and threw at once, while the process could still be running; on Windows it still held its working directory, so
+  the next command there, or deleting the directory, could fail with «being used by another process». It now waits up to
+  5 s for the process to exit before throwing.
+
 ### Dependencies
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.64.0 -> 0.65.0, `IronHive.Extensions.AI` 0.64.0 -> 0.65.0, `Iyu.Conventions.Testing` 0.9.0 -> 0.10.0.
 - Re-pinned sibling package(s) `IronProw.Core` 0.16.0 -> 0.16.1, `Iyu.Conventions.Testing` 0.10.0 -> 0.10.1.

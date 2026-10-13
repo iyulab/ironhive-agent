@@ -216,6 +216,11 @@ public class BuiltInToolsTests : IDisposable
 
         // Assert
         Assert.Contains("timed out", ex.Message);
+
+        // The stopped command has exited by the time the timeout is reported: its working directory can be removed at
+        // once (on Windows a still-running child holds it open — this used to fail the test's own cleanup under load).
+        Directory.Delete(_testDir, recursive: true);
+        Directory.CreateDirectory(_testDir);
     }
 
     [Fact]
