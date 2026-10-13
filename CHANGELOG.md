@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `Ironbees.Autonomous` 0.28.1 -> 0.29.0, `Ironbees.Core` 0.28.1 -> 0.29.0.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.33.0 -> 0.34.0.
 
 ## [0.62.0] - 2026-10-14
 
