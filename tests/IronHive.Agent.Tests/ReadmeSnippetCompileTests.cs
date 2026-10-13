@@ -67,17 +67,15 @@ public class ReadmeSnippetCompileTests
         ["guard"] = "IToolResultGuard guard = null!;",
         ["availableToolsContext"] = "IAvailableToolsContext availableToolsContext = null!;",
         ["mySandboxRunner"] = "ISandboxRunner mySandboxRunner = null!;",
-        // The reader's own host-side runner, as a value: the kit adds a type stand-in only when the example itself names
-        // the type, and this block names only the value.
-        // TODO(upstream: SnippetCompiler type stand-ins referenced from a value stand-in are not added) - return to an
-        // IHostToolRunner type stand-in once the kit chains them.
-        ["host"] = "var host = new { RunAsync = (Func<ToolCallResult, CancellationToken, Task<string>>)((_, _) => Task.FromResult(\"\")) };",
+        // The reader's own host-side runner; its type is a type stand-in below.
+        ["host"] = "IHostToolRunner host = null!;",
         ["RestoreFileVersion"] = "static string RestoreFileVersion(string path, int version) => \"\";",
         ["ShowStarted"] = "static void ShowStarted(string? id, string? name) { }",
         ["ShowProgress"] = "static void ShowProgress(string? id, string? fragment) { }",
         ["ShowFinished"] = "static void ShowFinished(string? id, bool? success) { }",
 
         // Types a block uses as the reader's own (a sandbox, a middleware step), declared after the program.
+        ["IHostToolRunner"] = "public interface IHostToolRunner { Task<string> RunAsync(ToolCallResult call, CancellationToken ct); }",
         ["ISandboxRunner"] = "public interface ISandboxRunner { Task<string> RunAsync(string command); }",
         ["AuditMiddleware"] = "sealed class AuditMiddleware : IToolInvocationMiddleware { public ValueTask<object?> InvokeAsync(FunctionInvocationContext context, ToolInvocationNext next, CancellationToken cancellationToken) => next(context, cancellationToken); }",
     };

@@ -58,6 +58,6 @@
       <!-- Convention checks (options reachability) — iyulab conventions kit -->
     <PackageVersion Include="Iyu.Conventions.Testing" Version="0.10.0" />
     <!-- README snippet compilation (tests only) -->
-    <PackageVersion Include="Iyu.Conventions.Testing.Snippets" Version="0.10.0" />
+    <PackageVersion Include="Iyu.Conventions.Testing.Snippets" Version="0.10.1" />
   </ItemGroup>
 </Project>
