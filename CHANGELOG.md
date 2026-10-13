@@ -4,9 +4,22 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.62.0] - Unreleased
+
+### Added
+- **`TextToolCallRecoveryChatClient.DroppedCallMarkupKey`**: when the client drops call markup from the text (below), the
+  response's `AdditionalProperties` (the last update's, when streaming) carries the reason — `CallsNotAllowed` or
+  `Unterminated` — so a host can say the model tried to keep working instead of answering.
 
 ### Fixed
+- **`UseTextToolCallRecovery()` no longer turns text into a call on a request that allows none.** Under
+  `ChatToolMode.None` (tools listed, no call offered — a last «answer now» round) a complete block became a call and the
+  function-invoking client ran it on the round meant to end the turn. The block is now dropped and only the text before it
+  is the answer.
+- **Call markup that can never become a call no longer reaches the reader as answer text.** A response that ends inside a
+  block (`…one more time.<tool_call>\n<function=` — the server stopped mid-call) passed through as it was; the text before
+  the block is now the answer, streaming and non-streaming. Prose that names the format («the format is `<tool_call>`,
+  followed by JSON») and complete blocks naming an unknown tool still pass through.
 - **`OrchestratedAgentLoop.RunStreamingAsync` ends with the turn's record, and stores the turn.** The stream carried only
   the text deltas, so a consumer reading the final chunk's `Turn` (as every `IAgentLoop` stream ends) got nothing, and with
   a conversation store the streamed turn was never appended — only `RunAsync` stored it. Both paths now do the same.

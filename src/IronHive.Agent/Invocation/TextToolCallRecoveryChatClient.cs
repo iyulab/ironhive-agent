@@ -20,10 +20,19 @@ namespace IronHive.Agent.Invocation;
 /// <c>completed</c>.
 /// </para>
 /// <para>
-/// <b>When it acts:</b> only when the request offered tools, the response holds no structured call, and every block it
-/// finds is complete and names a tool the request offered. The reply is then the text before the first block followed by
-/// the calls; anything after the blocks is dropped. Otherwise the response passes through untouched — including a block
-/// that names an unknown tool or does not parse.
+/// <b>When it acts:</b> only when the request lists tools, its <see cref="ChatOptions.ToolMode"/> allows a call (anything
+/// but <see cref="ChatToolMode.None"/>), the response holds no structured call, and every block it finds is complete and
+/// names a tool the request offered. The reply is then the text before the first block followed by the calls; anything
+/// after the blocks is dropped. A block that names an unknown tool or does not parse passes through untouched — its text
+/// may be the model talking about a tool.
+/// </para>
+/// <para>
+/// <b>Markup that cannot become a call</b> is dropped instead of reaching the reader as answer text, keeping the text before
+/// the first block, and the response says why in <see cref="ChatResponse.AdditionalProperties"/> under
+/// <see cref="DroppedCallMarkupKey"/> (on the last update when streaming): <see cref="CallsNotAllowed"/> — the request
+/// listed tools under <see cref="ChatToolMode.None"/> and the model wrote a call to one anyway; <see cref="Unterminated"/> —
+/// the response ends inside a block (the server stopped mid-call). A host reads it to say the model tried to keep working
+/// instead of answering. A request that lists no tools is not touched.
 /// </para>
 /// <para>
 /// <b>Arguments:</b> a JSON block's <c>arguments</c> (an object, or a string holding one) are used as given. A Qwen3-Coder
@@ -42,6 +51,18 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
 {
     private static readonly string[] Markers = ["<tool_call>", "<function="];
 
+    /// <summary>
+    /// The <see cref="ChatResponse.AdditionalProperties"/> key (on the last <see cref="ChatResponseUpdate"/> when streaming)
+    /// set when call markup was dropped from the text; its value is <see cref="CallsNotAllowed"/> or <see cref="Unterminated"/>.
+    /// </summary>
+    public const string DroppedCallMarkupKey = "ironhive.invocation.dropped_call_markup";
+
+    /// <summary>The model wrote a call while the request's <see cref="ChatOptions.ToolMode"/> was <see cref="ChatToolMode.None"/>.</summary>
+    public const string CallsNotAllowed = "calls_not_allowed";
+
+    /// <summary>The response ends inside a call block, so it can never become a call.</summary>
+    public const string Unterminated = "unterminated";
+
     /// <summary>Wraps <paramref name="innerClient"/>.</summary>
     public TextToolCallRecoveryChatClient(IChatClient innerClient)
         : base(innerClient)
@@ -59,28 +80,45 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
         }
 
         var last = response.Messages[^1];
-        if (last.Role != ChatRole.Assistant || last.Contents.Any(c => c is FunctionCallContent)
-            || Recover(last.Text, tools) is not { } recovered)
+        if (last.Role != ChatRole.Assistant || last.Contents.Any(c => c is FunctionCallContent))
         {
             return response;
         }
 
-        var contents = new List<AIContent>();
-        if (recovered.Prefix.Length > 0)
+        var callsAllowed = CallsAllowed(options);
+        if (!callsAllowed || Recover(last.Text, tools) is not { } recovered)
         {
-            contents.Add(new TextContent(recovered.Prefix));
+            if (Drop(last.Text, tools, callsAllowed) is { } dropped)
+            {
+                response.Messages[^1] = Rewritten(last, dropped.Prefix, []);
+                (response.AdditionalProperties ??= [])[DroppedCallMarkupKey] = dropped.Reason;
+            }
+
+            return response;
         }
 
-        contents.AddRange(recovered.Calls);
-        contents.AddRange(last.Contents.Where(c => c is not TextContent));
-        response.Messages[^1] = new ChatMessage(ChatRole.Assistant, contents)
-        {
-            AuthorName = last.AuthorName,
-            MessageId = last.MessageId,
-            AdditionalProperties = last.AdditionalProperties,
-        };
+        response.Messages[^1] = Rewritten(last, recovered.Prefix, recovered.Calls);
         response.FinishReason = ChatFinishReason.ToolCalls;
         return response;
+    }
+
+    /// <summary><paramref name="message"/> with its text replaced by <paramref name="prefix"/> followed by <paramref name="calls"/>.</summary>
+    private static ChatMessage Rewritten(ChatMessage message, string prefix, IReadOnlyList<FunctionCallContent> calls)
+    {
+        var contents = new List<AIContent>();
+        if (prefix.Length > 0)
+        {
+            contents.Add(new TextContent(prefix));
+        }
+
+        contents.AddRange(calls);
+        contents.AddRange(message.Contents.Where(c => c is not TextContent));
+        return new ChatMessage(ChatRole.Assistant, contents)
+        {
+            AuthorName = message.AuthorName,
+            MessageId = message.MessageId,
+            AdditionalProperties = message.AdditionalProperties,
+        };
     }
 
     /// <inheritdoc />
@@ -90,6 +128,7 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var tools = OfferedTools(options);
+        var callsAllowed = CallsAllowed(options);
         var held = new List<ChatResponseUpdate>();
         var heldText = new StringBuilder();
         var holdingToEnd = false;
@@ -137,7 +176,7 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
             yield break;
         }
 
-        if (holdingToEnd && !sawStructuredCall && tools is not null && Recover(heldText.ToString(), tools) is { } recovered)
+        if (holdingToEnd && !sawStructuredCall && tools is not null && callsAllowed && Recover(heldText.ToString(), tools) is { } recovered)
         {
             var first = held[0];
             var contents = new List<AIContent>();
@@ -158,11 +197,41 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
             yield break;
         }
 
+        if (holdingToEnd && !sawStructuredCall && tools is not null && Drop(heldText.ToString(), tools, callsAllowed) is { } dropped)
+        {
+            var first = held[0];
+            var contents = new List<AIContent>();
+            if (dropped.Prefix.Length > 0)
+            {
+                contents.Add(new TextContent(dropped.Prefix));
+            }
+
+            contents.AddRange(held.SelectMany(u => u.Contents).Where(c => c is not TextContent));
+            var properties = new AdditionalPropertiesDictionary();
+            foreach (var property in held.Where(u => u.AdditionalProperties is not null).SelectMany(u => u.AdditionalProperties!))
+            {
+                properties[property.Key] = property.Value;
+            }
+
+            properties[DroppedCallMarkupKey] = dropped.Reason;
+            yield return new ChatResponseUpdate(ChatRole.Assistant, contents)
+            {
+                ResponseId = first.ResponseId,
+                MessageId = first.MessageId,
+                ModelId = held.Select(u => u.ModelId).LastOrDefault(m => m is not null),
+                FinishReason = held.Select(u => u.FinishReason).LastOrDefault(r => r is not null),
+                AdditionalProperties = properties,
+            };
+            yield break;
+        }
+
         foreach (var pending in held)
         {
             yield return pending;
         }
     }
+
+    private static bool CallsAllowed(ChatOptions? options) => options?.ToolMode is not NoneChatToolMode;
 
     private static Dictionary<string, AITool>? OfferedTools(ChatOptions? options)
     {
@@ -255,6 +324,70 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
         }
 
         return new Recovered(prefix, calls);
+    }
+
+    private sealed record Dropped(string Prefix, string Reason);
+
+    /// <summary>
+    /// The text to keep when <paramref name="text"/> holds call markup that cannot become a call — a call written while calls
+    /// are not allowed, or a block the response ends inside — or <c>null</c> to leave the text as it is.
+    /// </summary>
+    private static Dropped? Drop(string text, Dictionary<string, AITool> tools, bool callsAllowed)
+    {
+        if (!callsAllowed && Recover(text, tools) is { } forbidden)
+        {
+            return new Dropped(forbidden.Prefix, CallsNotAllowed);
+        }
+
+        if (ToolCallBlock().IsMatch(text) || FunctionBlock().IsMatch(text))
+        {
+            return null; // a complete block that is not an offered call: possibly the model talking about a tool
+        }
+
+        return UnterminatedBlockStart(text) is { } start ? new Dropped(text[..start].TrimEnd(), Unterminated) : null;
+    }
+
+    /// <summary>Where the block <paramref name="text"/> ends inside begins, or <c>null</c> when it does not end inside one.</summary>
+    /// <remarks>
+    /// A marker counts only when what follows it is a block's opening — a JSON object, a <c>&lt;function=Name&gt;</c>, a
+    /// parameter, or nothing yet — so prose that names the format («the format is &lt;tool_call&gt;, followed by JSON») stays.
+    /// </remarks>
+    private static int? UnterminatedBlockStart(string text)
+    {
+        var wrapper = text.IndexOf(Markers[0], StringComparison.Ordinal);
+        if (wrapper >= 0)
+        {
+            var rest = text.AsSpan(wrapper + Markers[0].Length).TrimStart();
+            return rest.IsEmpty || rest[0] == '{' || IsFunctionOpening(rest) ? wrapper : null;
+        }
+
+        var function = text.IndexOf(Markers[1], StringComparison.Ordinal);
+        return function >= 0 && IsFunctionOpening(text.AsSpan(function)) ? function : null;
+    }
+
+    /// <summary>Whether <paramref name="tail"/> is the start of a <c>&lt;function=Name&gt;</c> block cut off before its end.</summary>
+    private static bool IsFunctionOpening(ReadOnlySpan<char> tail)
+    {
+        var marker = Markers[1].AsSpan();
+        if (tail.Length <= marker.Length)
+        {
+            return marker.StartsWith(tail, StringComparison.Ordinal);
+        }
+
+        if (!tail.StartsWith(marker, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var afterMarker = tail[marker.Length..];
+        var close = afterMarker.IndexOf('>');
+        if (close < 0)
+        {
+            return afterMarker.IndexOfAny(" \t\r\n") < 0; // a name still being written
+        }
+
+        var body = afterMarker[(close + 1)..].TrimStart();
+        return body.IsEmpty || body[0] == '<';
     }
 
     private static FunctionCallContent? ParseBlock(string body, Dictionary<string, AITool> tools)

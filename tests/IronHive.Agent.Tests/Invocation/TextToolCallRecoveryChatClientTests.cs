@@ -181,6 +181,103 @@ public class TextToolCallRecoveryChatClientTests
         text.ToString().Should().Be(answer);
     }
 
+    // The last round of a turn: the host lists the tools but allows no call, and the model writes one anyway.
+    private const string ForbiddenCall =
+        "I need to read the page to see what happened.<tool_call>\n<function=WriteFile>\n<parameter=path>\na\n</parameter>\n<parameter=content>\nb\n</parameter>\n</function>\n</tool_call>";
+
+    [Fact]
+    public async Task UnderToolModeNone_ACompleteCall_RunsNothing_AndOnlyTheProseReachesTheReader()
+    {
+        var (client, model, probe, options) = Setup();
+        options.ToolMode = ChatToolMode.None;
+        model.EnqueueResponse(ForbiddenCall);
+
+        var response = await client.GetResponseAsync("answer now", options, Ct);
+
+        probe.Calls.Should().BeEmpty("the request allowed no call");
+        response.Text.Should().Be("I need to read the page to see what happened.");
+        response.AdditionalProperties![TextToolCallRecoveryChatClient.DroppedCallMarkupKey]
+            .Should().Be(TextToolCallRecoveryChatClient.CallsNotAllowed);
+        model.ReceivedMessages.Should().HaveCount(1, "no call was made, so the turn ends on this round");
+    }
+
+    [Fact]
+    public async Task Streaming_UnderToolModeNone_ACompleteCall_RunsNothing_AndOnlyTheProseReachesTheReader()
+    {
+        var (client, model, probe, options) = Setup();
+        options.ToolMode = ChatToolMode.None;
+        model.EnqueueResponse(ForbiddenCall);
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync("answer now", options, Ct))
+        {
+            updates.Add(update);
+        }
+
+        probe.Calls.Should().BeEmpty();
+        var response = updates.ToChatResponse();
+        response.Text.Should().Be("I need to read the page to see what happened.");
+        response.AdditionalProperties![TextToolCallRecoveryChatClient.DroppedCallMarkupKey]
+            .Should().Be(TextToolCallRecoveryChatClient.CallsNotAllowed);
+    }
+
+    [Theory]
+    [InlineData("…the final read didn't include the full text. Let me check one more time.<tool_call>\n<function=", "…the final read didn't include the full text. Let me check one more time.")]
+    [InlineData("First I'll load the wolf.<tool_call>\n<function=click>\n<", "First I'll load the wolf.")]
+    [InlineData("Saving.\n<tool_call>\n{\"name\": \"WriteFile\", \"argum", "Saving.")]
+    [InlineData("Saving.\n<function=WriteFile>\n<parameter=path>\na.txt", "Saving.")]
+    public async Task AResponseThatEndsInsideABlock_KeepsTheProse_AndSaysTheCallWasCutOff(string reply, string prose)
+    {
+        foreach (var toolMode in new ChatToolMode?[] { null, ChatToolMode.None })
+        {
+            var (client, model, probe, options) = Setup();
+            options.ToolMode = toolMode;
+            model.EnqueueResponse(reply).EnqueueResponse(reply);
+
+            var response = await client.GetResponseAsync("go", options, Ct);
+            var streamed = new List<ChatResponseUpdate>();
+            await foreach (var update in client.GetStreamingResponseAsync("go", options, Ct))
+            {
+                streamed.Add(update);
+            }
+
+            probe.Calls.Should().BeEmpty();
+            foreach (var result in new[] { response, streamed.ToChatResponse() })
+            {
+                result.Text.Should().Be(prose, $"tool mode {toolMode?.ToString() ?? "auto"}");
+                result.AdditionalProperties![TextToolCallRecoveryChatClient.DroppedCallMarkupKey]
+                    .Should().Be(TextToolCallRecoveryChatClient.Unterminated);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("Write <function=name> and then the parameters.")]   // names the format, not a block
+    [InlineData("The format is <tool_call>, followed by JSON.")]
+    public async Task ProseThatNamesTheFormat_IsNotACutOffBlock(string text)
+    {
+        var (client, model, _, options) = Setup();
+        options.ToolMode = ChatToolMode.None;
+        model.EnqueueResponse(text);
+
+        var response = await client.GetResponseAsync("x", options, Ct);
+
+        response.Text.Should().Be(text);
+        (response.AdditionalProperties?.ContainsKey(TextToolCallRecoveryChatClient.DroppedCallMarkupKey) ?? false).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task WithoutListedTools_AnUnterminatedBlockIsNotTouched()
+    {
+        var (client, model, _, _) = Setup();
+        const string reply = "Let me check.<tool_call>\n<function=";
+        model.EnqueueResponse(reply);
+
+        var response = await client.GetResponseAsync("x", new ChatOptions { ToolMode = ChatToolMode.None }, Ct);
+
+        response.Text.Should().Be(reply);
+    }
+
     [Fact]
     public void TheRecoveredCallsArguments_AreJsonValuesTheToolBindsTo()
     {

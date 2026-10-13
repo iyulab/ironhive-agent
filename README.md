@@ -332,10 +332,14 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
 - **A call the model wrote as text** (open models behind an OpenAI-compatible server whose parser missed it: Hermes /
   Qwen `<tool_call>{"name": …, "arguments": …}</tool_call>`, Qwen3-Coder `<function=Name><parameter=x>…`) ends the turn as
   a «finished» answer unless something turns it back into a call. Add `.UseTextToolCallRecovery()` right after
-  `.UseToolInvocationPipeline(…)` (opt-in, `TextToolCallRecoveryChatClient`): when the request offered tools, the response
-  has no structured call and every block is complete and names an offered tool, the blocks become the calls and the
-  function-invoking client runs them; anything else passes through unchanged. A parameter is a string unless the tool's
-  schema types it otherwise. Streaming holds text only from where a block may start.
+  `.UseToolInvocationPipeline(…)` (opt-in, `TextToolCallRecoveryChatClient`): when the request offered tools and allows a
+  call (not `ChatToolMode.None`), the response has no structured call and every block is complete and names an offered
+  tool, the blocks become the calls and the function-invoking client runs them. Markup that cannot become a call is
+  dropped and the text before it kept, with `response.AdditionalProperties[TextToolCallRecoveryChatClient.DroppedCallMarkupKey]`
+  saying why (on the last update when streaming): `CallsNotAllowed` — a call written on a round that allows none, such as a
+  last «answer now» round — or `Unterminated` — the response ends inside a block. A complete block naming an unknown tool
+  passes through unchanged. A parameter is a string unless the tool's schema types it otherwise. Streaming holds text only
+  from where a block may start.
 - Without DI, build it yourself: `.UseToolInvocationPipeline(new ToolInvocationPipeline([gate, mine], [resultStep]))`.
   `ToolInvocationPipeline.CreateDefault()` is the default loop guards alone. `UseToolInvocationPipeline()` built without
   services that hold a pipeline throws instead of running tools unguarded.
