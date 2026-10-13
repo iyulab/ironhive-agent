@@ -11,6 +11,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   the text deltas, so a consumer reading the final chunk's `Turn` (as every `IAgentLoop` stream ends) got nothing, and with
   a conversation store the streamed turn was never appended — only `RunAsync` stored it. Both paths now do the same.
 
+### Dependencies
+- Re-pinned sibling package(s) `TokenMeter` 0.13.0 -> 0.13.1.
+
 ## [0.61.0] - 2026-10-13
 
 ### Added
