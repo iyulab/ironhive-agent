@@ -8,6 +8,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.64.0 -> 0.65.0, `IronHive.Extensions.AI` 0.64.0 -> 0.65.0, `Iyu.Conventions.Testing` 0.9.0 -> 0.10.0.
+- Re-pinned sibling package(s) `IronProw.Core` 0.16.0 -> 0.16.1, `Iyu.Conventions.Testing` 0.10.0 -> 0.10.1.
 
 ## [0.60.2] - 2026-10-12
 
