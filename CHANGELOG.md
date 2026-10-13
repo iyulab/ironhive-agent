@@ -10,6 +10,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.64.0 -> 0.65.0, `IronHive.Extensions.AI` 0.64.0 -> 0.65.0, `Iyu.Conventions.Testing` 0.9.0 -> 0.10.0.
 - Re-pinned sibling package(s) `IronProw.Core` 0.16.0 -> 0.16.1, `Iyu.Conventions.Testing` 0.10.0 -> 0.10.1.
 - Re-pinned sibling package(s) `Iyu.Conventions.Testing` 0.10.1 -> 0.11.0, `Iyu.Conventions.Testing.Snippets` 0.10.1 -> 0.11.0, `TokenMeter` 0.12.0 -> 0.13.0.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.28.0 -> 0.28.1, `Ironbees.Core` 0.28.0 -> 0.28.1, `IronHive.Abstractions` 0.65.0 -> 0.65.1, `IronHive.Extensions.AI` 0.65.0 -> 0.65.1, `WebFlux` 0.26.0 -> 0.26.1.
 
 ## [0.60.2] - 2026-10-12
 
