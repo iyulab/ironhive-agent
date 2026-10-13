@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Fixed
+- **`OrchestratedAgentLoop.RunStreamingAsync` ends with the turn's record, and stores the turn.** The stream carried only
+  the text deltas, so a consumer reading the final chunk's `Turn` (as every `IAgentLoop` stream ends) got nothing, and with
+  a conversation store the streamed turn was never appended — only `RunAsync` stored it. Both paths now do the same.
+
 ## [0.61.0] - 2026-10-13
 
 ### Added

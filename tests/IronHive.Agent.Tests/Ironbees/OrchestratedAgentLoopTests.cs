@@ -1,4 +1,5 @@
 using IronHive.Agent.Ironbees;
+using IronHive.Agent.Loop;
 using Ironbees.Core;
 using Ironbees.Core.Conversation;
 using Microsoft.Extensions.AI;
@@ -44,6 +45,64 @@ public class OrchestratedAgentLoopTests
         }
 
         await Assert.ThrowsAsync<NotSupportedException>(Act);
+    }
+
+    [Fact]
+    public async Task RunStreamingAsync_EndsWithTheTurnsRecord_LikeEveryAgentLoop()
+    {
+        // Before, the stream was the text deltas only: a consumer that reads the final chunk's Turn got nothing.
+        var orchestrator = Substitute.For<IAgentOrchestrator>();
+        orchestrator.StreamAsync("Hello", Arg.Any<CancellationToken>()).Returns(Chunks("Hi ", "there!"));
+        var loop = new OrchestratedAgentLoop(orchestrator);
+
+        var chunks = new List<AgentResponseChunk>();
+        await foreach (var chunk in loop.RunStreamingAsync("Hello", TestContext.Current.CancellationToken))
+        {
+            chunks.Add(chunk);
+        }
+
+        Assert.Equal("Hi there!", string.Concat(chunks.Select(c => c.TextDelta)));
+        var turn = Assert.Single(chunks, c => c.Turn is not null).Turn!;
+        Assert.Same(chunks[^1].Turn, turn);
+        Assert.Equal("Hi there!", turn.Content);
+        Assert.Equal(TurnStopReason.Completed, turn.StopReason);
+        Assert.Equal([ChatRole.User, ChatRole.Assistant], turn.Messages.Select(m => m.Role));
+    }
+
+    [Fact]
+    public async Task RunStreamingAsync_WithAConversationStore_StoresTheTurn_AsRunAsyncDoes()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"orchestrated-stream-{Guid.NewGuid():N}");
+        try
+        {
+            using var store = new FileSystemConversationStore(directory);
+            var orchestrator = Substitute.For<IAgentOrchestrator>();
+            orchestrator.StreamAsync("Hello", Arg.Any<CancellationToken>()).Returns(Chunks("Hi"));
+            var loop = new OrchestratedAgentLoop(orchestrator, conversationStore: store);
+
+            await foreach (var _ in loop.RunStreamingAsync("Hello", TestContext.Current.CancellationToken))
+            {
+            }
+
+            var history = await loop.GetHistoryAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(["Hello", "Hi"], history.Select(m => m.Text));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    private static async IAsyncEnumerable<string> Chunks(params string[] parts)
+    {
+        foreach (var part in parts)
+        {
+            await Task.Yield();
+            yield return part;
+        }
     }
 
     // Moved from the host (its AddIronbeesOrchestration helper was removed): the loop's history is the conversation

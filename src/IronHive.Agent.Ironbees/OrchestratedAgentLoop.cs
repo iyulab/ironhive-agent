@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using Ironbees.Core;
 using Ironbees.Core.Conversation;
 using IronHive.Agent.Loop;
@@ -178,13 +179,41 @@ public class OrchestratedAgentLoop : IAgentLoop
             ? _orchestrator.StreamAsync(prompt, _preferredAgentName, cancellationToken)
             : _orchestrator.StreamAsync(prompt, cancellationToken);
 
+        var text = new StringBuilder();
         await foreach (var chunk in stream.WithCancellation(cancellationToken))
         {
+            text.Append(chunk);
             yield return new AgentResponseChunk
             {
                 TextDelta = chunk
             };
         }
+
+        // The same turn RunAsync records: stored when there is a store, and closed by the final chunk carrying the turn's
+        // record, which every IAgentLoop stream ends with — a consumer that reads «what did this turn produce» from it
+        // otherwise gets nothing from this loop.
+        var response = text.ToString();
+        if (_conversationStore is not null)
+        {
+            await _conversationStore.AppendMessageAsync(
+                _conversationId,
+                new ConversationMessage { Role = "user", Content = prompt },
+                cancellationToken);
+            await _conversationStore.AppendMessageAsync(
+                _conversationId,
+                new ConversationMessage { Role = "assistant", Content = response },
+                cancellationToken);
+        }
+
+        yield return new AgentResponseChunk
+        {
+            Turn = new TurnRecord
+            {
+                Content = response,
+                StopReason = TurnStopReason.Completed,
+                Messages = [new ChatMessage(ChatRole.User, prompt), new ChatMessage(ChatRole.Assistant, response)],
+            },
+        };
     }
 
     /// <summary>
