@@ -12,6 +12,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - `Microsoft.Extensions.AI` / `.Abstractions` 10.10.x -> 10.11.0 (the floor MemoryIndexer 0.35.0 sets).
 - Re-pinned sibling package(s) `MemoryIndexer` 0.34.0 -> 0.35.0.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.21.0 -> 0.22.0.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.22.0 -> 0.22.1.
 
 ## [0.62.0] - 2026-10-14
 

@@ -39,7 +39,7 @@
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.35.0" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
-    <PackageVersion Include="FluxGuard.Remote" Version="0.22.0" />
+    <PackageVersion Include="FluxGuard.Remote" Version="0.22.1" />
     <!-- DeepResearch dependencies -->
     <PackageVersion Include="WebFlux" Version="0.26.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
