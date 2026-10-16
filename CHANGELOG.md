@@ -14,6 +14,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `IndexThinking` 0.27.0 -> 0.28.0.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.37.1 -> 0.38.0.
 
 ## [0.64.0] - 2026-10-17
 
