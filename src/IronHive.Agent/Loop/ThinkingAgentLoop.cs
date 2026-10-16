@@ -598,6 +598,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     /// </summary>
     public void ClearHistory()
     {
+        _contextManager?.ClearRetainedResults();
         _history.Clear();
         _view.Reset();
         _stickyTools.Clear();
@@ -620,6 +621,8 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     public void InitializeHistory(IEnumerable<ChatMessage> messages)
     {
         ArgumentNullException.ThrowIfNull(messages);
+
+        _contextManager?.ClearRetainedResults();
 
         // Keep the system prompt at the beginning
         var systemPrompt = _history.FirstOrDefault(m => m.Role == ChatRole.System);

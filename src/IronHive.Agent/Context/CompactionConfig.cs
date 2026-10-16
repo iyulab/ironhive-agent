@@ -99,7 +99,9 @@ public class CompactionConfig
     /// Maximum tool result character count before compaction triggers.
     /// Default: 30,000.
     /// </summary>
-    public int MaxToolResultChars { get; set; } = 30_000;
+    public int MaxToolResultChars { get; set; } = DefaultMaxToolResultChars;
+
+    internal const int DefaultMaxToolResultChars = 30_000;
 
     /// <summary>
     /// Number of lines to keep from the beginning of a compacted tool result.

@@ -74,6 +74,7 @@ public class ContextManager
     private readonly ToolResultCompactor? _toolResultCompactor;
     private readonly ObservationMasker? _observationMasker;
     private readonly Scratchpad? _scratchpad;
+    private ToolResultArchive? _archive;
     private readonly List<ISystemInstructionContributor> _instructionContributors = [];
 
     /// <summary>
@@ -317,9 +318,23 @@ public class ContextManager
     public IReadOnlyList<ChatMessage> ReduceToolResults(IReadOnlyList<ChatMessage> history)
     {
         ArgumentNullException.ThrowIfNull(history);
-        var compactedResults = _toolResultCompactor?.CompactToolResults(history) ?? history;
-        return _observationMasker?.MaskObservations(compactedResults) ?? compactedResults;
+        var archive = _archive;
+        var compactedResults = _toolResultCompactor?.CompactToolResults(history, archive) ?? history;
+        return _observationMasker?.MaskObservations(compactedResults, archive) ?? compactedResults;
     }
+
+    /// <summary>
+    /// Turns on keeping the originals of the results this manager masks or shortens, read back by
+    /// <paramref name="toolName"/> (<see cref="CompactedResultTool"/>). Idempotent: the first call's archive is kept.
+    /// </summary>
+    internal ToolResultArchive EnableResultRetention(string toolName)
+    {
+        var archive = new ToolResultArchive(toolName, _toolResultCompactor?.MaxResultChars ?? CompactionConfig.DefaultMaxToolResultChars);
+        return Interlocked.CompareExchange(ref _archive, archive, null) ?? archive;
+    }
+
+    /// <summary>Forgets the kept originals — the loop's history they came from was cleared or replaced.</summary>
+    internal void ClearRetainedResults() => _archive?.Clear();
 
     /// <summary>
     /// Prepares the history for sending to the model.

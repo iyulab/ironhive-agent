@@ -6,6 +6,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **A masked or shortened tool result can be read back by id: `CompactedResultTool`.** Register
+  `CompactedResultTool.Create(contextManager)` in the loop's `Tools` and the model gets `retrieve_tool_result(id, offset?)`:
+  the context manager keeps the original of each result it masks or shortens (also inside a turn), and the placeholder
+  names the tool and the id instead of asking for the same call again — the call may have side effects or answer
+  differently by now. A long original comes back in parts of at most `MaxToolResultChars`. Without the tool nothing is kept
+  and the placeholders are unchanged. The tool is read-only for planning mode and approval rules.
+
 ### Changed
 - **Breaking: compaction no longer rewrites the loop's history.** `AgentLoop` and `ThinkingAgentLoop` kept what context
   management prepared — summaries, masked and trimmed tool results, the goal reminder — as their history, so the originals

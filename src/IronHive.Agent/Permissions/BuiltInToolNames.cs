@@ -18,6 +18,7 @@ internal static class BuiltInToolNames
         "GlobFiles", "glob*",
         "GrepFiles", "grep*",
         "advisor",
+        "retrieve_tool_result",
     ];
 
     /// <summary>Maps the PascalCase built-in names to the snake_case ones the rules are written for.</summary>

@@ -24,6 +24,9 @@ public record ToolResultCompaction(
 public class ToolResultCompactor
 {
     private readonly int _maxResultChars;
+
+    /// <summary>Results longer than this are shortened.</summary>
+    internal int MaxResultChars => _maxResultChars;
     private readonly int _keepHeadLines;
     private readonly int _keepTailLines;
 
@@ -94,7 +97,13 @@ public class ToolResultCompactor
     /// </summary>
     /// <param name="history">The conversation history.</param>
     /// <returns>History with large tool results compacted, or the original if nothing changed.</returns>
-    public IReadOnlyList<ChatMessage> CompactToolResults(IReadOnlyList<ChatMessage> history)
+    public IReadOnlyList<ChatMessage> CompactToolResults(IReadOnlyList<ChatMessage> history) => CompactToolResults(history, archive: null);
+
+    /// <summary>
+    /// As <see cref="CompactToolResults(IReadOnlyList{ChatMessage})"/>; with an <paramref name="archive"/>, each shortened
+    /// result's full text is kept in it, and the shortened text ends with how to read the whole of it.
+    /// </summary>
+    internal IReadOnlyList<ChatMessage> CompactToolResults(IReadOnlyList<ChatMessage> history, ToolResultArchive? archive)
     {
         if (history.Count == 0)
         {
@@ -112,7 +121,7 @@ public class ToolResultCompactor
                 continue;
             }
 
-            var compacted = CompactToolMessage(message);
+            var compacted = CompactToolMessage(message, archive);
             result.Add(compacted);
             if (!ReferenceEquals(compacted, message))
             {
@@ -123,7 +132,7 @@ public class ToolResultCompactor
         return anyCompacted ? result : history;
     }
 
-    private ChatMessage CompactToolMessage(ChatMessage toolMessage)
+    private ChatMessage CompactToolMessage(ChatMessage toolMessage, ToolResultArchive? archive)
     {
         var needsCompaction = false;
 
@@ -155,7 +164,20 @@ public class ToolResultCompactor
                 if (resultText.Length > _maxResultChars)
                 {
                     var compaction = Compact(resultText);
-                    compactedContents.Add(new FunctionResultContent(frc.CallId, compaction.CompactedResult));
+                    if (archive is null)
+                    {
+                        compactedContents.Add(new FunctionResultContent(frc.CallId, compaction.CompactedResult));
+                        continue;
+                    }
+
+                    // The id goes on the shortened result too, so the masker keeps it under the same id (not a hash of
+                    // the shortened text) and never replaces the original with the shortened copy.
+                    var id = archive.Retain(frc, resultText);
+                    compactedContents.Add(new FunctionResultContent(frc.CallId, string.Concat(compaction.CompactedResult,
+                        $"\n[Shortened. Call {archive.ToolName} with id \"{id}\" to read the whole result.]"))
+                    {
+                        AdditionalProperties = new AdditionalPropertiesDictionary { [ToolResultArchive.IdProperty] = id },
+                    });
                 }
                 else
                 {

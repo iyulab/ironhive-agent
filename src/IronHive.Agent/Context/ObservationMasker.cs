@@ -79,7 +79,13 @@ public class ObservationMasker
     /// </summary>
     /// <param name="history">The conversation history.</param>
     /// <returns>History with old observations masked, or the original history if nothing was masked.</returns>
-    public IReadOnlyList<ChatMessage> MaskObservations(IReadOnlyList<ChatMessage> history)
+    public IReadOnlyList<ChatMessage> MaskObservations(IReadOnlyList<ChatMessage> history) => MaskObservations(history, archive: null);
+
+    /// <summary>
+    /// As <see cref="MaskObservations(IReadOnlyList{ChatMessage})"/>; with an <paramref name="archive"/>, each masked result's
+    /// text is kept in it and the placeholder names the tool that reads it back, with the id.
+    /// </summary>
+    internal IReadOnlyList<ChatMessage> MaskObservations(IReadOnlyList<ChatMessage> history, ToolResultArchive? archive)
     {
         if (history.Count == 0)
         {
@@ -108,7 +114,7 @@ public class ObservationMasker
 
             var maskAll = i < turnStartIndex;
             var masked = MaskToolMessage(
-                message, calls, frc => maskAll || (overBudget is not null && overBudget.Contains(frc)));
+                message, calls, frc => maskAll || (overBudget is not null && overBudget.Contains(frc)), archive);
             result.Add(masked);
             anyMasked |= !ReferenceEquals(masked, message);
         }
@@ -230,7 +236,8 @@ public class ObservationMasker
     /// length. Returns the message itself when nothing in it is masked.
     /// </summary>
     private ChatMessage MaskToolMessage(
-        ChatMessage toolMessage, Dictionary<string, FunctionCallContent> calls, Func<FunctionResultContent, bool> shouldMask)
+        ChatMessage toolMessage, Dictionary<string, FunctionCallContent> calls, Func<FunctionResultContent, bool> shouldMask,
+        ToolResultArchive? archive)
     {
         if (toolMessage.Contents is null || toolMessage.Contents.Count == 0)
         {
@@ -247,7 +254,8 @@ public class ObservationMasker
                 if (resultText.Length >= _minimumResultLength)
                 {
                     maskedContents ??= [.. toolMessage.Contents.Take(i)];
-                    maskedContents.Add(new FunctionResultContent(frc.CallId, Placeholder(frc, resultText, calls)));
+                    var retainedId = archive?.Retain(frc, resultText);
+                    maskedContents.Add(new FunctionResultContent(frc.CallId, Placeholder(frc, resultText, calls, archive, retainedId)));
                     continue;
                 }
             }
@@ -261,20 +269,23 @@ public class ObservationMasker
     private static string ResultText(FunctionResultContent frc) => ToolResultText.Of(frc.Result);
 
     /// <summary>
-    /// The text that replaces a masked result: the call that produced it, how large it was, and that it can be fetched
-    /// again with the same call.
+    /// The text that replaces a masked result: the call that produced it, how large it was, and how to read it again — by
+    /// id through the archive's tool when the result is kept, else with the same call.
     /// </summary>
     private static string Placeholder(
-        FunctionResultContent frc, string resultText, Dictionary<string, FunctionCallContent> calls)
+        FunctionResultContent frc, string resultText, Dictionary<string, FunctionCallContent> calls,
+        ToolResultArchive? archive, string? retainedId)
     {
         var call = frc.CallId is not null && calls.TryGetValue(frc.CallId, out var found) ? found : null;
         var toolName = call?.Name ?? "tool";
         var arguments = FormatArguments(call);
         var lineCount = resultText.Count(c => c == '\n') + 1;
         var invocation = arguments.Length > 0 ? $"{toolName} {arguments}" : toolName;
-        var again = call is not null
-            ? $"call {toolName} again with the same arguments if you need it"
-            : "repeat the call that produced it if you need it";
+        var again = archive is not null && retainedId is not null
+            ? $"call {archive.ToolName} with id \"{retainedId}\" to read it again (do not repeat the call)"
+            : call is not null
+                ? $"call {toolName} again with the same arguments if you need it"
+                : "repeat the call that produced it if you need it";
         return string.Create(CultureInfo.InvariantCulture,
             $"[Masked: {invocation} result, {resultText.Length:N0} chars, ~{lineCount} lines. The content is no longer visible here; {again}.]");
     }
