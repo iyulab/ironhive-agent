@@ -719,7 +719,7 @@ Then the gate runs `IToolCallPolicy.Evaluate` and acts on `RiskAssessment.Verdic
 |---|---|
 | `Allow` | the tool runs |
 | `Deny` | the tool does not run; the model receives `Permission denied: <reason>` as the result |
-| `Ask` | `IHumanApprovalService.RequestApprovalAsync` is called; approval runs the tool (with `ModifiedArguments` applied if the approver edited them), rejection returns `Approval rejected: <reason>` |
+| `Ask` | `IHumanApprovalService.RequestApprovalAsync` is called; approval runs the tool (with `ModifiedArguments` applied if the approver edited them), rejection returns `Approval rejected: <reason>`, and `ApprovalResult.Defer(note)` returns `AwaitingApproval` — the call did not run, its outcome comes in a later message (the approver delivers it) |
 
 A refusal is always a tool *result*, never an exception, so the model can read it and change course.
 An `Ask` verdict with **no approval service registered is refused**, not passed through — a gate that
@@ -941,7 +941,8 @@ The loop **extracts** the calls the model requested — it does not invoke them.
 check needs the outcome too, confirm your client wraps function invocation.
 
 A call the tool invocation pipeline refused has `Success = false` and a `RefusalKind` (`Denied`, `ApprovalUnavailable`,
-`Rejected`, a loop guard, `InvalidArguments`, `ResultWithheld`); a tool that ran and failed has `RefusalKind = null`.
+`Rejected`, `AwaitingApproval`, a loop guard, `InvalidArguments`, `ResultWithheld`, `TimedOut`); a tool that ran and failed has
+`RefusalKind = null`.
 
 ## Tracing
 

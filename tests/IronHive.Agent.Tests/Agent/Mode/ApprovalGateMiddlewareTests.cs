@@ -138,6 +138,24 @@ public class ApprovalGateMiddlewareTests
     }
 
     [Fact]
+    public async Task AskVerdict_Deferred_DoesNotInvoke_AndTellsTheModelTheCallIsWaiting()
+    {
+        var approval = Substitute.For<IHumanApprovalService>();
+        approval.RequestApprovalAsync(Arg.Any<ApprovalRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ApprovalResult.Defer("request r-1"));
+        var (loop, probe, _) = Build(PermissionConfig.CreateDefault(), approval, "WriteFile", """{"path":"app.json","content":"{}"}""");
+
+        var response = await loop.RunAsync("write", TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, probe.Invocations);
+        Assert.False(response.ToolCalls[0].Success);
+        Assert.Equal(ToolCallRefusalKind.AwaitingApproval, response.ToolCalls[0].RefusalKind);
+        Assert.Contains("waiting for approval (request r-1)", response.ToolCalls[0].Result);
+        Assert.Contains("later message", response.ToolCalls[0].Result);
+        Assert.DoesNotContain("rejected", response.ToolCalls[0].Result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Refusal_ReachesTheModel_InBothTransportForms()
     {
         // The refusal is a typed result on the FunctionResultContent the model receives next turn.

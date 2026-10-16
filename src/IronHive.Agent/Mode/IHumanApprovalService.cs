@@ -82,6 +82,13 @@ public record ApprovalResult
     public string? RejectionReason { get; init; }
 
     /// <summary>
+    /// The approver has not answered yet and will not hold the call: the call does not run now, the model is told it is
+    /// waiting for approval (<see cref="ToolCallRefusalKind.AwaitingApproval"/>), and the approver delivers the outcome
+    /// later on its own. <see cref="Approved"/> is false. <see cref="RejectionReason"/> carries the note the model reads.
+    /// </summary>
+    public bool Deferred { get; init; }
+
+    /// <summary>
     /// Creates an approved result.
     /// </summary>
     public static ApprovalResult Approve(bool alwaysApprove = false) => new()
@@ -97,5 +104,16 @@ public record ApprovalResult
     {
         Approved = false,
         RejectionReason = reason
+    };
+
+    /// <summary>
+    /// Creates a deferred result (<see cref="Deferred"/>): the call does not run now and its outcome comes later.
+    /// </summary>
+    /// <param name="note">What the model reads about the wait (for example which request it is waiting on).</param>
+    public static ApprovalResult Defer(string? note = null) => new()
+    {
+        Approved = false,
+        Deferred = true,
+        RejectionReason = note
     };
 }

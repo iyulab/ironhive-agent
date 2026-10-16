@@ -4,7 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.63.0] - Unreleased
+
+### Added
+- **An approver can defer a call instead of holding it: `ApprovalResult.Defer(note)`.** The gate does not run the call and
+  returns a `ToolCallRefusal` of the new kind `ToolCallRefusalKind.AwaitingApproval` — the model reads that the call has not
+  run, is waiting for approval and that its outcome arrives in a later message — so the turn can end while a person takes
+  hours to answer. The approver delivers the outcome itself (IronHive.Host does this for `run --server`). A `switch` over
+  `ToolCallRefusalKind` without a default arm needs the new member.
 
 ### Dependencies
 - Re-pinned sibling package(s) `Ironbees.Autonomous` 0.28.1 -> 0.29.0, `Ironbees.Core` 0.28.1 -> 0.29.0.

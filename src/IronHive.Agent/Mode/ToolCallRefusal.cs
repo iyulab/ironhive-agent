@@ -36,7 +36,13 @@ public enum ToolCallRefusalKind
     /// The tool ran past its time limit (<c>ToolInvocationOptions.MaxInvocationDuration</c>, or the tool's own
     /// <c>ToolInvocationHints.WithMaxDuration</c>) and was stopped; it produced no result.
     /// </summary>
-    TimedOut
+    TimedOut,
+
+    /// <summary>
+    /// The rules said <c>Ask</c> and the approver deferred the call (<see cref="ApprovalResult.Deferred"/>): it has not
+    /// run, it is still waiting for an answer, and its outcome arrives in a later message. Not a refusal of the call.
+    /// </summary>
+    AwaitingApproval
 }
 
 /// <summary>
@@ -63,6 +69,9 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.RepeatedError => $"Tool call stopped: {Reason}",
         ToolCallRefusalKind.RepeatedResult => $"Tool call stopped: {Reason}",
         ToolCallRefusalKind.TimedOut => $"Tool call stopped: {Reason}",
+        ToolCallRefusalKind.AwaitingApproval =>
+            $"Tool call not run yet: it is waiting for approval ({Reason}). Its outcome will arrive in a later message; "
+            + "do not assume it ran, and do not repeat the call.",
         _ => $"Tool call refused: {Reason}"
     };
 

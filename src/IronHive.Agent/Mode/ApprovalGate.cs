@@ -105,6 +105,13 @@ public sealed partial class ApprovalGate
                     CallId = callId
                 }, cancellationToken);
 
+                if (result.Deferred)
+                {
+                    LogDeferred(_logger, toolName);
+                    return GateDecision.Refuse(new ToolCallRefusal(
+                        ToolCallRefusalKind.AwaitingApproval, result.RejectionReason ?? "no answer yet"));
+                }
+
                 if (!result.Approved)
                 {
                     var hasReason = !string.IsNullOrWhiteSpace(result.RejectionReason);
@@ -121,6 +128,9 @@ public sealed partial class ApprovalGate
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} denied by permission rules")]
     private static partial void LogDenied(ILogger logger, string toolName);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tool {ToolName} deferred by the approver; it waits for a later answer")]
+    private static partial void LogDeferred(ILogger logger, string toolName);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} requires approval but no IHumanApprovalService is configured; refusing")]
     private static partial void LogNoApprovalService(ILogger logger, string toolName);
