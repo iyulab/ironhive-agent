@@ -1,3 +1,4 @@
+using IndexThinking.Reduction;
 using IronHive.Abstractions.Exceptions;
 using Microsoft.Extensions.AI;
 
@@ -72,7 +73,7 @@ public class ContextManager
     private int _overflowHandlers;
     private readonly GoalReminder _goalReminder;
     private readonly ToolResultCompactor? _toolResultCompactor;
-    private readonly ObservationMasker? _observationMasker;
+    private readonly ToolResultMasker? _observationMasker;
     private readonly Scratchpad? _scratchpad;
     private ToolResultArchive? _archive;
     private readonly List<ISystemInstructionContributor> _instructionContributors = [];
@@ -98,7 +99,7 @@ public class ContextManager
         IHistoryCompactor? historyCompactor = null,
         GoalReminderOptions? goalReminderOptions = null,
         ToolResultCompactor? toolResultCompactor = null,
-        ObservationMasker? observationMasker = null,
+        ToolResultMasker? observationMasker = null,
         Scratchpad? scratchpad = null,
         IEnumerable<ISystemInstructionContributor>? instructionContributors = null)
     {
@@ -320,7 +321,7 @@ public class ContextManager
         ArgumentNullException.ThrowIfNull(history);
         var archive = _archive;
         var compactedResults = _toolResultCompactor?.CompactToolResults(history, archive) ?? history;
-        return _observationMasker?.MaskObservations(compactedResults, archive) ?? compactedResults;
+        return _observationMasker?.Mask(compactedResults, archive) ?? compactedResults;
     }
 
     /// <summary>
@@ -579,12 +580,13 @@ public class ContextManager
                 config.ToolResultKeepTailLines)
             : null;
 
-        ObservationMasker? observationMasker = config.EnableObservationMasking
-            ? new ObservationMasker(
+        // The masking rule is IndexThinking's; it measures its token budget with this manager's counter.
+        ToolResultMasker? observationMasker = config.EnableObservationMasking
+            ? new ToolResultMasker(
                 config.ObservationMaskingProtectedTurns,
                 config.ObservationMaskingMinResultLength,
                 config.ObservationMaskingProtectedTokens,
-                tokenCounter)
+                new ContextTokenCounterAdapter(tokenCounter))
             : null;
 
         return new ContextManager(

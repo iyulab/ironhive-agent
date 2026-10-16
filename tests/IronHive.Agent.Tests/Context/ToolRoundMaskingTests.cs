@@ -1,3 +1,4 @@
+using IndexThinking.Reduction;
 using IronHive.Agent.Context;
 using IronHive.Agent.Loop;
 using Microsoft.Extensions.AI;
@@ -38,9 +39,9 @@ public class ToolRoundMaskingTests
     public void A_Token_Budget_Keeps_The_Recent_Results_That_Fit_And_Masks_The_Rest()
     {
         // Each result is ~2,012 chars: a 4,100 budget holds the newest two.
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: new ContextTokenCounterAdapter(Chars));
 
-        var masked = masker.MaskObservations(OneTurnWithRounds(5));
+        var masked = masker.Mask(OneTurnWithRounds(5));
 
         Assert.True(IsMasked(masked, "c1"));
         Assert.True(IsMasked(masked, "c3"));
@@ -55,11 +56,11 @@ public class ToolRoundMaskingTests
     public void Without_A_Budget_One_Turn_Is_Never_Masked()
     {
         // Positive control: the documented user-turn rule alone protects the whole turn.
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200);
 
         var history = OneTurnWithRounds(5);
 
-        Assert.Same(history, masker.MaskObservations(history));
+        Assert.Same(history, masker.Mask(history));
     }
 
     [Fact]
@@ -81,13 +82,13 @@ public class ToolRoundMaskingTests
             history.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent($"write{w}", "ok")]));
         }
 
-        var fits = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 20_000, tokenCounter: Chars)
-            .MaskObservations(history);
+        var fits = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 20_000, tokenCounter: new ContextTokenCounterAdapter(Chars))
+            .Mask(history);
         Assert.Same(history, fits);
 
         // Positive control: the same history with a budget smaller than the reads masks the oldest of them.
-        var tight = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 7_000, tokenCounter: Chars)
-            .MaskObservations(history);
+        var tight = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 7_000, tokenCounter: new ContextTokenCounterAdapter(Chars))
+            .Mask(history);
         Assert.True(IsMasked(tight, "read1"));
         Assert.True(IsMasked(tight, "read4"));
         Assert.StartsWith("part 5:", ResultOf(tight, "read5"));
@@ -97,9 +98,9 @@ public class ToolRoundMaskingTests
     [Fact]
     public void The_Newest_Rounds_Results_Are_Kept_Even_When_They_Alone_Exceed_The_Budget()
     {
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 500, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 500, tokenCounter: new ContextTokenCounterAdapter(Chars));
 
-        var masked = masker.MaskObservations(OneTurnWithRounds(3));
+        var masked = masker.Mask(OneTurnWithRounds(3));
 
         Assert.StartsWith("section 3:", ResultOf(masked, "c3"));
         Assert.True(IsMasked(masked, "c2"));
@@ -119,9 +120,9 @@ public class ToolRoundMaskingTests
             new(ChatRole.Assistant, [new FunctionCallContent("idx", "read_index")]),
             new(ChatRole.Tool, [new FunctionResultContent("idx", "index: 5 files")]),
         };
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: new ContextTokenCounterAdapter(Chars));
 
-        var masked = masker.MaskObservations(history);
+        var masked = masker.Mask(history);
 
         Assert.True(IsMasked(masked, "f1"));
         Assert.True(IsMasked(masked, "f3"));
@@ -134,12 +135,12 @@ public class ToolRoundMaskingTests
     {
         // A local server that reuses its prompt cache re-reads everything after the first changed byte: a result that
         // flips back to whole, or a placeholder that changes, would cost a full re-read every round.
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: new ContextTokenCounterAdapter(Chars));
         string[]? previous = null;
 
         for (var rounds = 1; rounds <= 6; rounds++)
         {
-            var results = masker.MaskObservations(OneTurnWithRounds(rounds))
+            var results = masker.Mask(OneTurnWithRounds(rounds))
                 .SelectMany(m => m.Contents).OfType<FunctionResultContent>().Select(r => r.Result!.ToString()!).ToArray();
             if (previous is not null)
             {
@@ -170,9 +171,9 @@ public class ToolRoundMaskingTests
             new(ChatRole.Assistant, [new FunctionCallContent("w3", "write_file")]),
             new(ChatRole.Tool, [new FunctionResultContent("w3", "ok")]),
         };
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 10, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 10, tokenCounter: new ContextTokenCounterAdapter(Chars));
 
-        var placeholder = ResultOf(masker.MaskObservations(history), "r3");
+        var placeholder = ResultOf(masker.Mask(history), "r3");
 
         Assert.Equal(
             "[Masked: read_document {\"path\":\"standard.pdf\",\"part\":3} result, 2,000 chars, ~1 lines. "
@@ -192,18 +193,12 @@ public class ToolRoundMaskingTests
             new(ChatRole.Assistant, [new FunctionCallContent("w", "write_file")]),
             new(ChatRole.Tool, [new FunctionResultContent("w", "ok")]),
         };
-        var masker = new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 10, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 10, tokenCounter: new ContextTokenCounterAdapter(Chars));
 
-        var placeholder = ResultOf(masker.MaskObservations(history), "s");
+        var placeholder = ResultOf(masker.Mask(history), "s");
 
         Assert.Contains("…", placeholder, StringComparison.Ordinal);
         Assert.True(placeholder.Length < 500, placeholder);
-    }
-
-    [Fact]
-    public void A_Budget_Without_A_Token_Counter_Is_Refused()
-    {
-        Assert.Throws<ArgumentException>(() => new ObservationMasker(protectedTokens: 1_000));
     }
 
     [Fact]
@@ -213,9 +208,9 @@ public class ToolRoundMaskingTests
         var history = OneTurnWithRounds(1);
         history.Add(new ChatMessage(ChatRole.Assistant, "noted"));
         history.AddRange(OneTurnWithRounds(1).Select(m => m.Role == ChatRole.User ? new ChatMessage(ChatRole.User, "next") : m));
-        var masker = new ObservationMasker(protectedTurns: 1, minimumResultLength: 200, protectedTokens: 1_000_000, tokenCounter: Chars);
+        var masker = new ToolResultMasker(protectedTurns: 1, minimumResultLength: 200, protectedTokens: 1_000_000, tokenCounter: new ContextTokenCounterAdapter(Chars));
 
-        var masked = masker.MaskObservations(history);
+        var masked = masker.Mask(history);
 
         Assert.StartsWith("[Masked:", ResultOf(masked.Take(4).ToList(), "c1"));
     }

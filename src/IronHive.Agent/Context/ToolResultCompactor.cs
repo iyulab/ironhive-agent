@@ -17,7 +17,7 @@ public record ToolResultCompaction(
 
 /// <summary>
 /// Compacts large tool results by applying head+tail truncation.
-/// Unlike ObservationMasker (which replaces old results with tiny placeholders),
+/// Unlike the masking stage (IndexThinking's ToolResultMasker, which replaces old results with tiny placeholders),
 /// this compactor preserves the most useful portions of large results regardless of age.
 /// </summary>
 public class ToolResultCompactor

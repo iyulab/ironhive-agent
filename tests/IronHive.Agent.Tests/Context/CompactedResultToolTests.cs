@@ -1,3 +1,4 @@
+using IndexThinking.Reduction;
 using IronHive.Agent.Context;
 using IronHive.Agent.Loop;
 using IronHive.Agent.Permissions;
@@ -34,7 +35,7 @@ public class CompactedResultToolTests
     private static ContextManager MaskingManager(ToolResultCompactor? compactor = null) => new(
         new CharTokenCounter(),
         toolResultCompactor: compactor,
-        observationMasker: new ObservationMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: new CharTokenCounter()));
+        observationMasker: new ToolResultMasker(protectedTurns: 2, minimumResultLength: 200, protectedTokens: 4_100, tokenCounter: new ContextTokenCounterAdapter(new CharTokenCounter())));
 
     private static async Task<string> RetrieveAsync(AIFunction tool, string id, int? offset = null)
     {

@@ -7,13 +7,21 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [Unreleased]
 
 ### Changed
+- **Breaking: observation masking is IndexThinking's `ToolResultMasker`; `ObservationMasker` is removed.** The rule
+  `ContextManager` masks old tool results with (outside the newest user turns, or past `ObservationMaskingProtectedTokens`)
+  now lives in IndexThinking, shared with its `ContextBudgetChatReducer`, so an M.E.AI pipeline that reduces with it masks
+  a result to the same placeholder. Placeholders and the `retrieve_tool_result` id are unchanged. Migration: the
+  `ContextManager` constructor's `observationMasker` parameter takes `IndexThinking.Reduction.ToolResultMasker`
+  (`new ToolResultMasker(protectedTurns, minimumResultLength, protectedTokens, tokenCounter)` — its token counter is an
+  IndexThinking `ITokenCounter`, default the same approximate counter `ContextTokenCounter` uses); `CompactionConfig` /
+  `ContextManager.ForModel` users change nothing. A token budget without a counter is no longer refused.
 - **Tool-result compaction is IndexThinking's `ToolResultTrimmer`** — the rule `ToolResultCompactor` applied (first 50 and
   last 20 lines past 30 000 characters) now lives there, shared with IndexThinking's `ContextBudgetChatReducer`, so any
   M.E.AI pipeline that reduces with it trims a result the same way. Output is unchanged; an invalid limit now names the
   trimmer's parameter (`maxChars`, `keepHeadLines`, `keepTailLines`).
 
 ### Dependencies
-- Re-pinned sibling package(s) `IndexThinking` 0.27.0 -> 0.28.0.
+- Re-pinned sibling package(s) `IndexThinking` 0.27.0 -> 0.29.0.
 - Re-pinned sibling package(s) `MemoryIndexer` 0.37.1 -> 0.38.0.
 
 ## [0.64.0] - 2026-10-17

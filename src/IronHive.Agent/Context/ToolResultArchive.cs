@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using IndexThinking.Reduction;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -10,7 +11,7 @@ namespace IronHive.Agent.Context;
 /// again through <see cref="CompactedResultTool"/> instead of repeating the call. Filled at reduction time — on every
 /// request, so a result masked in the middle of a turn is kept before it reaches the loop's history.
 /// </summary>
-internal sealed class ToolResultArchive
+internal sealed class ToolResultArchive : IToolResultRetention
 {
     /// <summary>Marks a shortened result with the id its original is kept under, so a later masking of it reuses the id.</summary>
     internal const string IdProperty = "ironhive.retained_result_id";
