@@ -9,9 +9,6 @@ namespace IronHive.Agent.Context;
 /// </summary>
 public static class ToolResultText
 {
-    /// <summary>Token estimate charged for one image, the same figure the counter uses for an image message part.</summary>
-    public const int ImageTokens = 85;
-
     /// <summary>The result's text: a string as is, content as its text parts with images named, anything else via <c>ToString()</c>.</summary>
     public static string Of(object? result) => result switch
     {
@@ -20,14 +17,6 @@ public static class ToolResultText
         AIContent content => Describe(content),
         IEnumerable<AIContent> contents => string.Join("\n", contents.Select(Describe)),
         _ => result.ToString() ?? string.Empty,
-    };
-
-    /// <summary>The number of images a result carries (each charged <see cref="ImageTokens"/>).</summary>
-    public static int ImageCount(object? result) => result switch
-    {
-        DataContent data when IsImage(data) => 1,
-        IEnumerable<AIContent> contents => contents.OfType<DataContent>().Count(IsImage),
-        _ => 0,
     };
 
     private static bool IsImage(DataContent data) => data.MediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);

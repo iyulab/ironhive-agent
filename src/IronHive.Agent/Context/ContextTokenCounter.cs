@@ -8,16 +8,14 @@ namespace IronHive.Agent.Context;
 /// Token counter for chat messages using character-based estimation and TokenMeter model catalog.
 /// </summary>
 /// <remarks>
-/// Text is estimated per script with IndexThinking's <see cref="ApproximateTokenCounter"/>: about four characters per token
-/// for Latin text, and one to one and a half for Korean, Japanese and Chinese — a single four-characters-per-token rule
-/// would count CJK text at a third or a quarter of its size, and every budget measured with it would let that much more
-/// through.
+/// Counts are IndexThinking's <see cref="ApproximateTokenCounter"/>: letters, digits, punctuation and whitespace counted
+/// apart per script, with ratios fitted to o200k (within a few percent on English, Korean, mixed prose, code and JSON) - a
+/// single four-characters-per-token rule counts Korean text at a third of its size, and every budget measured with it lets
+/// that much more through.
 /// </remarks>
 public class ContextTokenCounter : IContextTokenCounter
 {
     private int _maxContextTokens;
-
-    private const int MessageOverhead = 4;
 
     public ContextTokenCounter(string modelName = "gpt-4o", int? maxContextTokens = null)
     {
@@ -57,19 +55,16 @@ public class ContextTokenCounter : IContextTokenCounter
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Everything the message sends counts: its text, a tool call's name and arguments, a tool result (a content result
+    /// such as an MCP tool's text and images by its parts), reasoning text, and
+    /// <see cref="ApproximateTokenCounter.ImageTokens"/> per image - IndexThinking's message count, so a budget measured
+    /// here matches the estimate the chat client checks against the window.
+    /// </remarks>
     public int CountTokens(ChatMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
-
-        // Text is counted from its TextContent items below; message.Text is their concatenation, not more text.
-        var tokens = MessageOverhead;
-
-        foreach (var content in message.Contents)
-        {
-            tokens += CountContentTokens(content);
-        }
-
-        return tokens;
+        return Estimator.Count(message);
     }
 
     /// <inheritdoc />
@@ -85,32 +80,6 @@ public class ContextTokenCounter : IContextTokenCounter
 
         total += 3; // conversation priming overhead
         return total;
-    }
-
-    private static int CountContentTokens(AIContent content)
-    {
-        return content switch
-        {
-            TextContent text => EstimateTokens(text.Text ?? string.Empty),
-            FunctionCallContent func => CountFunctionCallTokens(func),
-            FunctionResultContent result => EstimateTokens(ToolResultText.Of(result.Result))
-                + (ToolResultText.ImageCount(result.Result) * ToolResultText.ImageTokens),
-            // An image a user sent with the request: charged like an image a tool returned, not as nothing.
-            DataContent data when data.HasTopLevelMediaType("image") => ToolResultText.ImageTokens,
-            UriContent uri when uri.HasTopLevelMediaType("image") => ToolResultText.ImageTokens,
-            _ when content.GetType().Name.Contains("Image", StringComparison.OrdinalIgnoreCase) => ToolResultText.ImageTokens,
-            _ => 0
-        };
-    }
-
-    private static int CountFunctionCallTokens(FunctionCallContent func)
-    {
-        var tokens = EstimateTokens(func.Name);
-        if (func.Arguments is not null)
-        {
-            tokens += EstimateTokens(System.Text.Json.JsonSerializer.Serialize(func.Arguments));
-        }
-        return tokens + 10;
     }
 
     private static readonly ApproximateTokenCounter Estimator = new();

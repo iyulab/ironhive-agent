@@ -16,11 +16,13 @@ public class CompactOnOverflowTests
 
     private static List<ChatMessage> LongConversation(int exchanges)
     {
+        // Words, not one repeated letter: a tokenizer packs a run of one letter into few tokens, and so does the estimate
+        var words = string.Join(' ', Enumerable.Repeat("word", 500)); // about 470 estimated tokens
         var history = new List<ChatMessage>();
         for (var i = 1; i <= exchanges; i++)
         {
-            history.Add(new ChatMessage(ChatRole.User, $"question {i}: " + new string('q', 2_000)));
-            history.Add(new ChatMessage(ChatRole.Assistant, $"answer {i}: " + new string('a', 2_000)));
+            history.Add(new ChatMessage(ChatRole.User, $"question {i}: " + words));
+            history.Add(new ChatMessage(ChatRole.Assistant, $"answer {i}: " + words));
         }
         history.Add(new ChatMessage(ChatRole.User, "latest question"));
         return history;

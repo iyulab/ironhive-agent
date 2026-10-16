@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using IndexThinking.Tokenization;
 using IronHive.Agent.Context;
 using Microsoft.Extensions.AI;
 using Xunit;
@@ -18,7 +19,6 @@ public class McpToolResultContentTests
     public void ToolResultText_NamesTheImage_NeverTheTypeOrTheBytes()
     {
         ToolResultText.Of(ImageResult()).Should().Be("redline\n[image image/png, 2 KB]");
-        ToolResultText.ImageCount(ImageResult()).Should().Be(1);
         ToolResultText.Of(new TextContent("plain")).Should().Be("plain");
         ToolResultText.Of(null).Should().BeEmpty();
     }
@@ -27,9 +27,9 @@ public class McpToolResultContentTests
     public void TokenCounter_ChargesTheImage_NotTheTypeName()
     {
         var withImage = new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", ImageResult(10))]);
-        var textOnly = new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "redline\n[image image/png, 10 B]")]);
+        var textOnly = new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "redline")]);
 
         var counter = new ContextTokenCounter();
-        (counter.CountTokens([withImage]) - counter.CountTokens([textOnly])).Should().Be(ToolResultText.ImageTokens);
+        (counter.CountTokens([withImage]) - counter.CountTokens([textOnly])).Should().Be(ApproximateTokenCounter.ImageTokens);
     }
 }

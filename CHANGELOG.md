@@ -22,6 +22,16 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   hundred characters. The anchored compactor also takes error codes from tool results into its state block. The prompts
   asked for a quarter of the target length (`targetTokens / 4`, a leftover of a characters-to-tokens conversion); they now
   ask for the target.
+- **Breaking: `ContextTokenCounter` counts a message the way IndexThinking 0.27.0 does.** Its own message count charged a
+  tool call 10 tokens of structure and each image 85, and its text estimate undercounted Korean by about a quarter and JSON by
+  a third; it now returns `ApproximateTokenCounter.Count(message)` - text, tool calls and results (content results by their
+  parts), reasoning text, 1,000 per image, ratios fitted to o200k - so the agent's budgets and the chat client's window check
+  agree. Counts grow for most histories, so compaction starts earlier. `ToolResultText.ImageTokens` and
+  `ToolResultText.ImageCount` are removed. Migration: use `ApproximateTokenCounter.ImageTokens`; for an image count, count
+  the image `DataContent` parts of the result.
+
+### Dependencies
+- IndexThinking 0.27.0.
 
 ## [0.63.0] - 2026-10-16
 
