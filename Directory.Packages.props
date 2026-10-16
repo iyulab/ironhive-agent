@@ -37,9 +37,9 @@
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.12" />
     <!-- MemoryIndexer (conversation memory, session management) -->
-    <PackageVersion Include="MemoryIndexer" Version="0.36.0" />
+    <PackageVersion Include="MemoryIndexer" Version="0.37.0" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
-    <PackageVersion Include="FluxGuard.Remote" Version="0.23.1" />
+    <PackageVersion Include="FluxGuard.Remote" Version="0.24.0" />
     <!-- DeepResearch dependencies -->
     <PackageVersion Include="WebFlux" Version="0.26.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
