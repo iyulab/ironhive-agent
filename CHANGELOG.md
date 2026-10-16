@@ -18,6 +18,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.23.0 -> 0.23.1.
 - Re-pinned sibling package(s) `MemoryIndexer` 0.35.0 -> 0.36.0.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.23.1 -> 0.24.0, `MemoryIndexer` 0.36.0 -> 0.37.0.
+- Re-pinned sibling package(s) `MemoryIndexer` 0.37.0 -> 0.37.1.
 
 ## [0.62.0] - 2026-10-14
 
