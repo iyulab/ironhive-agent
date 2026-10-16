@@ -27,6 +27,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.23.1 -> 0.24.0, `MemoryIndexer` 0.36.0 -> 0.37.0.
 - Re-pinned sibling package(s) `MemoryIndexer` 0.37.0 -> 0.37.1.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.66.0 -> 0.66.1, `IronHive.Extensions.AI` 0.66.0 -> 0.66.1.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.29.0 -> 0.29.1, `Ironbees.Core` 0.29.0 -> 0.29.1, `IronProw.Core` 0.16.1 -> 0.16.2.
 
 ## [0.62.0] - 2026-10-14
 
