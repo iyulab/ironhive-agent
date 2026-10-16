@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -23,12 +22,10 @@ public record ToolResultCompaction(
 /// </summary>
 public class ToolResultCompactor
 {
-    private readonly int _maxResultChars;
+    private readonly IndexThinking.Reduction.ToolResultTrimmer _trimmer;
 
     /// <summary>Results longer than this are shortened.</summary>
-    internal int MaxResultChars => _maxResultChars;
-    private readonly int _keepHeadLines;
-    private readonly int _keepTailLines;
+    internal int MaxResultChars => _trimmer.MaxChars;
 
     /// <summary>
     /// Creates a new tool result compactor.
@@ -38,13 +35,9 @@ public class ToolResultCompactor
     /// <param name="keepTailLines">Number of lines to keep from the end. Default: 20.</param>
     public ToolResultCompactor(int maxResultChars = 30_000, int keepHeadLines = 50, int keepTailLines = 20)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResultChars);
-        ArgumentOutOfRangeException.ThrowIfNegative(keepHeadLines);
-        ArgumentOutOfRangeException.ThrowIfNegative(keepTailLines);
-
-        _maxResultChars = maxResultChars;
-        _keepHeadLines = keepHeadLines;
-        _keepTailLines = keepTailLines;
+        // The rule itself is IndexThinking's (ToolResultTrimmer), shared with its ContextBudgetChatReducer, so a pipeline
+        // that reduces with either trims a result the same way.
+        _trimmer = new IndexThinking.Reduction.ToolResultTrimmer(maxResultChars, keepHeadLines, keepTailLines);
     }
 
     /// <summary>
@@ -54,40 +47,8 @@ public class ToolResultCompactor
     /// <returns>Compaction result with metadata.</returns>
     public ToolResultCompaction Compact(string result)
     {
-        if (result.Length <= _maxResultChars)
-        {
-            return new ToolResultCompaction(result, false, result.Length, result.Length);
-        }
-
-        // Normalize CRLF to LF before line splitting to avoid trailing \r artifacts
-        var normalized = result.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-        // Try line-based truncation (head + tail)
-        var lines = normalized.Split('\n');
-        var totalKeep = _keepHeadLines + _keepTailLines;
-
-        if (lines.Length > totalKeep && totalKeep > 0)
-        {
-            var head = lines.AsSpan(0, _keepHeadLines);
-            var tail = lines.AsSpan(lines.Length - _keepTailLines);
-            var omitted = lines.Length - totalKeep;
-
-            var compacted = string.Concat(
-                string.Join('\n', head.ToArray()),
-                string.Create(CultureInfo.InvariantCulture,
-                    $"\n\n[... {omitted:N0} lines omitted ({result.Length:N0} chars total) ...]\n\n"),
-                string.Join('\n', tail.ToArray()));
-
-            return new ToolResultCompaction(compacted, true, result.Length, compacted.Length);
-        }
-
-        // Fallback: character-based truncation
-        var truncated = string.Concat(
-            result.AsSpan(0, _maxResultChars),
-            string.Create(CultureInfo.InvariantCulture,
-                $"\n[... truncated ({result.Length:N0} chars total) ...]"));
-
-        return new ToolResultCompaction(truncated, true, result.Length, truncated.Length);
+        var compacted = _trimmer.Trim(result);
+        return new ToolResultCompaction(compacted, !ReferenceEquals(compacted, result), result.Length, compacted.Length);
     }
 
     /// <summary>
@@ -141,7 +102,7 @@ public class ToolResultCompactor
             if (content is FunctionResultContent frc)
             {
                 var resultText = ToolResultText.Of(frc.Result);
-                if (resultText.Length > _maxResultChars)
+                if (resultText.Length > _trimmer.MaxChars)
                 {
                     needsCompaction = true;
                     break;
@@ -161,7 +122,7 @@ public class ToolResultCompactor
             if (content is FunctionResultContent frc)
             {
                 var resultText = ToolResultText.Of(frc.Result);
-                if (resultText.Length > _maxResultChars)
+                if (resultText.Length > _trimmer.MaxChars)
                 {
                     var compaction = Compact(resultText);
                     if (archive is null)

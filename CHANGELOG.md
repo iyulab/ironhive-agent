@@ -6,6 +6,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Changed
+- **Tool-result compaction is IndexThinking's `ToolResultTrimmer`** — the rule `ToolResultCompactor` applied (first 50 and
+  last 20 lines past 30 000 characters) now lives there, shared with IndexThinking's `ContextBudgetChatReducer`, so any
+  M.E.AI pipeline that reduces with it trims a result the same way. Output is unchanged; an invalid limit now names the
+  trimmer's parameter (`maxChars`, `keepHeadLines`, `keepTailLines`).
+
 ### Dependencies
 - Re-pinned sibling package(s) `IndexThinking` 0.27.0 -> 0.28.0.
 
