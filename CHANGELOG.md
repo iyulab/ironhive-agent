@@ -15,6 +15,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.22.0 -> 0.22.1.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.65.1 -> 0.66.0, `IronHive.Extensions.AI` 0.65.1 -> 0.66.0.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.22.1 -> 0.23.0.
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.23.0 -> 0.23.1.
 
 ## [0.62.0] - 2026-10-14
 
