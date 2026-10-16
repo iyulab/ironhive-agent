@@ -59,27 +59,6 @@ public class TokenBasedHistoryCompactor : HistoryCompactorBase
         return CreateResult(history, compactedHistory, originalTokens, prunableRegion.Count - compactedPrunable.Count);
     }
 
-    private static (List<ChatMessage> system, List<ChatMessage> conversation) SplitSystemMessages(
-        IReadOnlyList<ChatMessage> history)
-    {
-        var system = new List<ChatMessage>();
-        var conversation = new List<ChatMessage>();
-
-        foreach (var message in history)
-        {
-            if (message.Role == ChatRole.System)
-            {
-                system.Add(message);
-            }
-            else
-            {
-                conversation.Add(message);
-            }
-        }
-
-        return (system, conversation);
-    }
-
     /// <summary>
     /// Keeps the important groups of the prunable region whole and replaces the rest with a summary (or, without a
     /// summarizer, a marker naming how many messages were left out). Important: user messages — small, and the one

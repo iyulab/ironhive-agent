@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 
 namespace IronHive.Agent.Context;
@@ -12,8 +15,15 @@ namespace IronHive.Agent.Context;
 /// (<see cref="SplitRecent"/>). Every result also passes <see cref="RemoveUnpairedToolContent"/>, so no compactor
 /// returns a tool result without its call, or a call without its result, before the end of the history.
 /// </remarks>
-public abstract class HistoryCompactorBase : IHistoryCompactor
+public abstract partial class HistoryCompactorBase : IHistoryCompactor
 {
+    /// <summary>How a summary message starts; the next compaction reads it as earlier context and folds it in.</summary>
+    protected const string SummaryPrefix = "[Previous conversation summary]: ";
+
+    // How much of one tool call's arguments and of one result the summarizer reads
+    private const int RenderedArgumentsChars = 300;
+    private const int RenderedResultChars = 600;
+
     private readonly IContextTokenCounter _tokenCounter;
     private readonly IChatClient? _summarizer;
 
@@ -89,17 +99,13 @@ public abstract class HistoryCompactorBase : IHistoryCompactor
             throw new InvalidOperationException("Summarizer is not available.");
         }
 
-        var conversationText = new StringBuilder();
-        foreach (var message in messages)
-        {
-            conversationText.AppendLine(System.Globalization.CultureInfo.InvariantCulture,
-                $"[{message.Role}]: {message.Text}");
-        }
+        var conversationText = RenderForSummary(messages);
 
         var summarizationPrompt = $"""
-            Summarize the following conversation history concisely.
-            Preserve key information: decisions made, tasks completed, important context.
-            Keep the summary under {targetTokens / 4} tokens.
+            Summarize the following conversation history concisely, as one summary that replaces any earlier summary in it.
+            Preserve key information: decisions made, tasks completed, important context, and the exact file paths, ids
+            and error codes from the tool calls and results.
+            Keep the summary under {targetTokens} tokens.
 
             Conversation:
             {conversationText}
@@ -110,8 +116,102 @@ public abstract class HistoryCompactorBase : IHistoryCompactor
         var response = await Summarizer.GetResponseAsync(summarizationPrompt, cancellationToken: cancellationToken);
         var summary = response.Text ?? string.Empty;
 
-        return [new ChatMessage(ChatRole.System, $"[Previous conversation summary]: {summary}")];
+        return [new ChatMessage(ChatRole.System, $"{SummaryPrefix}{summary}")];
     }
+
+    /// <summary>
+    /// True for a message an earlier compaction produced in place of history - a summary or an «earlier messages omitted»
+    /// marker. It belongs with the conversation it stands for, not with the system prompt: the next compaction folds it into
+    /// its own summary, so a twice-compacted history carries one summary, not one per compaction.
+    /// </summary>
+    protected static bool IsEarlierCompaction(ChatMessage message) =>
+        message.Role == ChatRole.System && message.Text is { } text
+        && (text.StartsWith(SummaryPrefix, StringComparison.Ordinal)
+            || text.StartsWith("[Earlier conversation omitted", StringComparison.Ordinal)
+            || OmittedMarker().IsMatch(text));
+
+    [GeneratedRegex(@"^\[\d+ earlier messages omitted\]$", RegexOptions.CultureInvariant)]
+    private static partial Regex OmittedMarker();
+
+    /// <summary>
+    /// Splits the history into the system messages kept as they are and the conversation a compactor may reduce. An
+    /// earlier compaction's output (<see cref="IsEarlierCompaction"/>) opens the conversation.
+    /// </summary>
+    protected static (List<ChatMessage> System, List<ChatMessage> Conversation) SplitSystemMessages(IReadOnlyList<ChatMessage> history)
+    {
+        var system = new List<ChatMessage>();
+        var conversation = new List<ChatMessage>();
+        foreach (var message in history)
+        {
+            if (message.Role == ChatRole.System && !IsEarlierCompaction(message))
+            {
+                system.Add(message);
+            }
+            else
+            {
+                conversation.Add(message);
+            }
+        }
+
+        return (system, conversation);
+    }
+
+    /// <summary>
+    /// The conversation as the summarizer reads it: each message's text, each tool call with its arguments and each tool
+    /// result (both cut to a few hundred characters), and an earlier summary as such. Before, the summarizer read only
+    /// <see cref="ChatMessage.Text"/>, so the file paths, error codes and outputs of tool rounds never reached a summary.
+    /// </summary>
+    protected static string RenderForSummary(IEnumerable<ChatMessage> messages)
+    {
+        var text = new StringBuilder();
+        foreach (var message in messages)
+        {
+            if (IsEarlierCompaction(message))
+            {
+                text.AppendLine(CultureInfo.InvariantCulture, $"[Earlier summary]: {message.Text![(message.Text.StartsWith(SummaryPrefix, StringComparison.Ordinal) ? SummaryPrefix.Length : 0)..]}");
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(message.Text))
+            {
+                text.AppendLine(CultureInfo.InvariantCulture, $"[{message.Role}]: {message.Text}");
+            }
+
+            foreach (var content in message.Contents)
+            {
+                switch (content)
+                {
+                    case FunctionCallContent call:
+                        text.AppendLine(CultureInfo.InvariantCulture, $"[{message.Role} calls {call.Name}]: {Cut(Json(call.Arguments), RenderedArgumentsChars)}");
+                        break;
+                    case FunctionResultContent result:
+                        text.AppendLine(CultureInfo.InvariantCulture, $"[tool result]: {Cut(ToolResultText.Of(result.Result), RenderedResultChars)}");
+                        break;
+                }
+            }
+        }
+
+        return text.ToString();
+    }
+
+    private static string Json(IDictionary<string, object?>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0)
+        {
+            return "{}";
+        }
+
+        try
+        {
+            return JsonSerializer.Serialize(arguments, AIJsonUtilities.DefaultOptions);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or JsonException)
+        {
+            return string.Join(", ", arguments.Select(kv => $"{kv.Key}={kv.Value}"));
+        }
+    }
+
+    private static string Cut(string text, int max) => text.Length <= max ? text : string.Concat(text.AsSpan(0, max), " …");
 
     /// <summary>
     /// Truncates messages from the beginning to fit within target tokens.

@@ -72,7 +72,8 @@ public class GoalReminderAccumulationTests
     {
         var retriever = new RecordingRetriever();
         var manager = Manager();
-        var loop = new AgentLoop(new EchoClient(),
+        var client = new EchoClient();
+        var loop = new AgentLoop(client,
             new AgentOptions { Tools = [AIFunctionFactory.Create(() => "ok", "GrepFiles")] },
             contextManager: manager, toolRetriever: retriever);
         var history = ThreeTurnChat();
@@ -82,7 +83,9 @@ public class GoalReminderAccumulationTests
         await loop.RunAsync("And in docs/ too", TestContext.Current.CancellationToken);
 
         Assert.Equal(["Use GrepFiles to search for PROBE_TOKEN", "And in docs/ too"], retriever.Queries);
-        Assert.Single(Reminders(loop.History));
+        // The reminder is a sending aid: one in what the model received, none in the loop's history
+        Assert.Single(Reminders(client.Requests[^1]));
+        Assert.Empty(Reminders(loop.History));
     }
 
     [Fact]
@@ -111,9 +114,14 @@ public class GoalReminderAccumulationTests
 
     private sealed class EchoClient : IChatClient
     {
+        public List<List<ChatMessage>> Requests { get; } = [];
+
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+        {
+            Requests.Add([.. messages]);
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+        }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)

@@ -23,6 +23,9 @@ public class AgentLoop : IAgentLoop
     private readonly StickyToolSelection _stickyTools = new();
     private readonly IReadOnlyList<ITurnObserver> _turnObservers;
     private readonly List<ChatMessage> _history = [];
+
+    // What context management made of the history for the model; the history itself keeps every message
+    private readonly ModelView _view = new();
     private readonly HostToolResultStage _hostResults;
 
     public AgentLoop(
@@ -425,15 +428,10 @@ public class AgentLoop : IAgentLoop
             return _history.AsReadOnly();
         }
 
-        var preparedHistory = await _contextManager.PrepareHistoryAsync(_history, cancellationToken);
-
-        // If history was modified (compaction or goal reminder injection),
-        // update our internal history to stay in sync
-        if (!ReferenceEquals(preparedHistory, _history))
-        {
-            _history.Clear();
-            _history.AddRange(preparedHistory);
-        }
+        // The history keeps every message; what compaction and masking made of it is the model's view, kept apart and
+        // extended on the next turn (before 0.64.0 it replaced the history, and the originals were gone for good)
+        var preparedHistory = await _contextManager.PrepareHistoryAsync(_view.Compose(_history), cancellationToken);
+        _view.Update(preparedHistory, _history);
 
         return preparedHistory;
     }
@@ -486,6 +484,7 @@ public class AgentLoop : IAgentLoop
     public void ClearHistory()
     {
         _history.Clear();
+        _view.Reset();
         _stickyTools.Clear();
 
         if (!string.IsNullOrWhiteSpace(_options.SystemPrompt))
@@ -512,7 +511,7 @@ public class AgentLoop : IAgentLoop
     /// </summary>
     public ContextUsage? GetContextUsage()
     {
-        return _contextManager?.GetUsage(_history);
+        return _contextManager?.GetUsage(_view.Compose(_history));
     }
 
     /// <inheritdoc />
@@ -523,6 +522,7 @@ public class AgentLoop : IAgentLoop
         // Keep the system prompt at the beginning
         var systemPrompt = _history.FirstOrDefault(m => m.Role == ChatRole.System);
         _history.Clear();
+        _view.Reset();
         _stickyTools.Clear();
 
         if (systemPrompt is not null)

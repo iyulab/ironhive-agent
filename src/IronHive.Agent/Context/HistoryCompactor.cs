@@ -83,7 +83,7 @@ public class HistoryCompactor : HistoryCompactorBase
 
         // Head: System message(s)
         var index = 0;
-        while (index < history.Count && history[index].Role == ChatRole.System)
+        while (index < history.Count && history[index].Role == ChatRole.System && !IsEarlierCompaction(history[index]))
         {
             head.Add(history[index]);
             index++;

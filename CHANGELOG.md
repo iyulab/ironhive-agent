@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Changed
+- **Breaking: compaction no longer rewrites the loop's history.** `AgentLoop` and `ThinkingAgentLoop` kept what context
+  management prepared — summaries, masked and trimmed tool results, the goal reminder — as their history, so the originals
+  were gone for good (only a repeated tool call could bring a result back, which a tool with side effects cannot).
+  `History` now keeps every message as it happened; what is sent is a reduced view kept apart and extended turn by turn (a
+  summary is made once, not redone from the whole history). Migration: code that persisted `History` to keep a session
+  small now persists the full conversation — trim it yourself, or persist the turn's `Messages` as before; the goal reminder
+  (`ContextManager.IsInjected`) is no longer in `History`.
+- **A history compacted twice carries one summary.** A summary or an «earlier messages omitted» marker was kept with the
+  system messages, so each compaction added one and they piled up at the front; it now opens the conversation the next
+  compaction reduces, and the summarizer folds it into the new summary (it reads it as «earlier summary»).
+- **The summarizer reads tool calls and results.** It read message text only, so the file paths, ids, error codes and
+  outputs of tool rounds never reached a summary; each call (name and arguments) and each result now goes in, cut to a few
+  hundred characters. The anchored compactor also takes error codes from tool results into its state block. The prompts
+  asked for a quarter of the target length (`targetTokens / 4`, a leftover of a characters-to-tokens conversion); they now
+  ask for the target.
+
 ## [0.63.0] - 2026-10-16
 
 ### Added

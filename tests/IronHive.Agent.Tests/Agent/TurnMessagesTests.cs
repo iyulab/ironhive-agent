@@ -80,8 +80,8 @@ public class TurnMessagesTests
     [Fact]
     public async Task An_injected_goal_reminder_is_not_part_of_the_turn_and_a_stateless_round_trip_matches_the_loop()
     {
-        // The reminder is a second user-role message the loop puts into its own history mid-turn: the case a consumer's
-        // «after the last user message» diff cuts in half.
+        // The reminder is a second user-role message the loop sends mid-turn: the case a consumer's «after the last user
+        // message» diff cuts in half. Since 0.64.0 it lives only in what is sent, not in the loop's history.
         var reminders = new GoalReminderOptions { Enabled = true, MinMessagesBeforeReminder = 1 };
         var model = new ScriptedModel("first answer", "second answer");
         var kept = new AgentLoop(model, contextManager: new ContextManager(new ContextTokenCounter("gpt-4o", 8000), goalReminderOptions: reminders));
@@ -91,7 +91,7 @@ public class TurnMessagesTests
         var second = await kept.RunAsync("and the rollback?", Ct);
         record.AddRange(second.Messages);
 
-        Assert.Contains(kept.History, ContextManager.IsInjected);
+        Assert.DoesNotContain(kept.History, ContextManager.IsInjected);
         Assert.DoesNotContain(second.Messages, ContextManager.IsInjected);
         Assert.Equal((ChatRole.User, "and the rollback?"), (second.Messages[0].Role, second.Messages[0].Text));
         Assert.Equal((ChatRole.Assistant, "second answer"), (second.Messages[^1].Role, second.Messages[^1].Text));

@@ -84,27 +84,6 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
     #region History Splitting
 
-    private static (List<ChatMessage> system, List<ChatMessage> conversation) SplitSystemMessages(
-        IReadOnlyList<ChatMessage> history)
-    {
-        var system = new List<ChatMessage>();
-        var conversation = new List<ChatMessage>();
-
-        foreach (var message in history)
-        {
-            if (message.Role == ChatRole.System)
-            {
-                system.Add(message);
-            }
-            else
-            {
-                conversation.Add(message);
-            }
-        }
-
-        return (system, conversation);
-    }
-
     #endregion
 
     #region Anchored Compaction
@@ -176,7 +155,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
         if (!string.IsNullOrWhiteSpace(summary))
         {
-            result.Add(new ChatMessage(ChatRole.System, $"[Previous conversation summary]: {summary}"));
+            result.Add(new ChatMessage(ChatRole.System, $"{SummaryPrefix}{summary}"));
         }
 
         result.AddRange(groups.Where((_, g) => keep[g]).SelectMany(x => x));
@@ -244,8 +223,12 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
                 }
             }
 
-            // Extract error codes from any message text
+            // Extract error codes from any message text, and from tool results - where a build or test run reports them
             ExtractErrorCodes(message.Text, anchors);
+            foreach (var result in message.Contents?.OfType<FunctionResultContent>() ?? [])
+            {
+                ExtractErrorCodes(ToolResultText.Of(result.Result), anchors);
+            }
         }
 
         return anchors;
@@ -371,15 +354,10 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         int summaryTargetTokens,
         CancellationToken cancellationToken)
     {
-        var conversationText = new StringBuilder();
-        foreach (var message in messages)
-        {
-            conversationText.AppendLine(System.Globalization.CultureInfo.InvariantCulture,
-                $"[{message.Role}]: {message.Text}");
-        }
+        var conversationText = RenderForSummary(messages);
 
         var prompt = $"""
-            Summarize the following conversation concisely.
+            Summarize the following conversation concisely, as one summary that replaces any earlier summary in it.
             The user's messages are kept separately, word for word; do not restate their instructions.
             Preserve ALL of these critical details:
             - Goals and objectives discussed
@@ -388,7 +366,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
             - Specific file paths, error codes, and technical details
             - Current progress and next steps
 
-            Keep the summary under {summaryTargetTokens / 4} tokens.
+            Keep the summary under {summaryTargetTokens} tokens.
             Focus on actionable information needed to continue the work.
 
             Conversation:
