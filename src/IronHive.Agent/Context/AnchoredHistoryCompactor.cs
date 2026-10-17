@@ -127,7 +127,8 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         {
             try
             {
-                var summary = await SummarizeAsync(rest, Math.Max(SummaryFloorTokens, restTargetTokens), cancellationToken);
+                var facts = merged.HasContent ? merged.FormatRecordedFacts(_config.MaxAnchorStateChars) : string.Empty;
+                var summary = await SummarizeAsync(rest, facts, Math.Max(SummaryFloorTokens, restTargetTokens), cancellationToken);
                 return Assemble(stateBlock, summary, groups, keep);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -403,10 +404,21 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
     private async Task<string> SummarizeAsync(
         List<ChatMessage> messages,
+        string recordedFacts,
         int summaryTargetTokens,
         CancellationToken cancellationToken)
     {
         var conversationText = RenderForSummary(messages);
+
+        // The state block goes next to the summary, word for word; a summary that contradicts it («no error codes occurred»
+        // beside an Errors list) is the one the model believes. Its facts are shown without the goal: the user's words stay
+        // out of the summarizer's prompt, or a one-turn instruction comes back as a standing rule.
+        var recorded = recordedFacts.Length == 0 ? string.Empty : $"""
+
+            These facts are kept separately, word for word; do not contradict them or say they are absent:
+            {recordedFacts}
+
+            """;
 
         var prompt = $"""
             Summarize the following conversation concisely, as one summary that replaces any earlier summary in it.
@@ -420,7 +432,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
             Keep the summary under {summaryTargetTokens} tokens.
             Focus on actionable information needed to continue the work.
-
+            {recorded}
             Conversation:
             {conversationText}
 
@@ -535,9 +547,17 @@ public sealed class ConversationAnchors
     /// Formats the anchors within <paramref name="maxChars"/> characters, leaving out the oldest entries first: completed
     /// steps, then errors, references, modified files and key decisions, and failed approaches last. Zero or less means no limit.
     /// </summary>
-    public string FormatStateBlock(int maxChars)
+    public string FormatStateBlock(int maxChars) => FormatWithin(SessionGoal, maxChars);
+
+    /// <summary>
+    /// The state block without the goal, within <paramref name="maxChars"/> — the recorded facts a summarizer is told not to
+    /// contradict. The goal is the user's own words, which stay out of a summarizer's prompt.
+    /// </summary>
+    internal string FormatRecordedFacts(int maxChars) => FormatWithin(null, maxChars);
+
+    private string FormatWithin(string? sessionGoal, int maxChars)
     {
-        var block = FormatStateBlock();
+        var block = Format(sessionGoal, CompletedSteps, FilesModified.Order(), References, FailedApproaches, KeyDecisions, ErrorsEncountered);
         if (maxChars <= 0 || block.Length <= maxChars)
         {
             return block;
@@ -549,7 +569,7 @@ public sealed class ConversationAnchors
         List<string> references = [.. References];
         List<string> decisions = [.. KeyDecisions];
         List<string> failed = [.. FailedApproaches];
-        var goal = SessionGoal;
+        var goal = sessionGoal;
         List<string>[] dropOrder = [completed, errors, references, files, decisions, failed];
         while (block.Length > maxChars && dropOrder.FirstOrDefault(entries => entries.Count > 0) is { } oldest)
         {

@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Fixed
+- **A history summary no longer says an error never happened when the tool result named it on its last line.** The
+  summarizer was shown the first 600 characters of each tool result, so the outcome a build, a test run or a log puts at its
+  end never reached it — one summary wrote «no explicit error codes have occurred» beside a state block that listed the
+  exception, and the model believed the summary. Results are shown by their start and their end, and the anchored compactor
+  tells the summarizer the facts its state block keeps word for word (paths, references, errors — not the user's goal) so the
+  summary does not contradict them.
+
 ## [0.66.0] - 2026-10-17
 
 ### Added

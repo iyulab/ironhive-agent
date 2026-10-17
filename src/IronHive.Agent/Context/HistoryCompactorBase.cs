@@ -185,7 +185,7 @@ public abstract partial class HistoryCompactorBase : IHistoryCompactor
                         text.AppendLine(CultureInfo.InvariantCulture, $"[{message.Role} calls {call.Name}]: {Cut(Json(call.Arguments), RenderedArgumentsChars)}");
                         break;
                     case FunctionResultContent result:
-                        text.AppendLine(CultureInfo.InvariantCulture, $"[tool result]: {Cut(ToolResultText.Of(result.Result), RenderedResultChars)}");
+                        text.AppendLine(CultureInfo.InvariantCulture, $"[tool result]: {HeadAndTail(ToolResultText.Of(result.Result), RenderedResultChars)}");
                         break;
                 }
             }
@@ -212,6 +212,22 @@ public abstract partial class HistoryCompactorBase : IHistoryCompactor
     }
 
     private static string Cut(string text, int max) => text.Length <= max ? text : string.Concat(text.AsSpan(0, max), " …");
+
+    // A tool result's end is where a build, a test run or a log puts its outcome (the final error, the totals): the summarizer
+    // is shown its start and its end. Showing only the start, a summary wrote «no error codes occurred» about a log whose last
+    // line named the exception.
+    private static string HeadAndTail(string text, int max)
+    {
+        if (text.Length <= max)
+        {
+            return text;
+        }
+
+        var head = max * 3 / 5;
+        var tail = max - head;
+        return string.Concat(text.AsSpan(0, head),
+            string.Create(CultureInfo.InvariantCulture, $" … [{text.Length - max:N0} chars] … "), text.AsSpan(text.Length - tail));
+    }
 
     /// <summary>
     /// Truncates messages from the beginning to fit within target tokens.
