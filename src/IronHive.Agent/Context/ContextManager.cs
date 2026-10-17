@@ -479,30 +479,6 @@ public class ContextManager
         return (Math.Min(protect, maxCtx / 2), Math.Min(prune, maxCtx / 4));
     }
 
-    private static CompactionConfig CloneWithClampedProtect(CompactionConfig source, int protect, int prune)
-        => new()
-        {
-            ProtectRecentTokens = protect,
-            MinimumPruneTokens = prune,
-            ProtectedToolOutputs = source.ProtectedToolOutputs,
-            TargetRatio = source.TargetRatio,
-            UseTokenBasedCompaction = source.UseTokenBasedCompaction,
-            ThresholdPercentage = source.ThresholdPercentage,
-            EnableObservationMasking = source.EnableObservationMasking,
-            ObservationMaskingProtectedTurns = source.ObservationMaskingProtectedTurns,
-            ObservationMaskingMinResultLength = source.ObservationMaskingMinResultLength,
-            ObservationMaskingProtectedTokens = source.ObservationMaskingProtectedTokens,
-            GoalReminder = source.GoalReminder,
-            EnableToolResultCompaction = source.EnableToolResultCompaction,
-            MaxToolResultChars = source.MaxToolResultChars,
-            ToolResultKeepHeadLines = source.ToolResultKeepHeadLines,
-            ToolResultKeepTailLines = source.ToolResultKeepTailLines,
-            UseAnchoredCompaction = source.UseAnchoredCompaction,
-            MaxAnchorStateChars = source.MaxAnchorStateChars,
-            MaxContextTokens = source.MaxContextTokens,
-            CompactOnOverflow = source.CompactOnOverflow,
-        };
-
     /// <summary>
     /// Creates a context manager with default settings for a model.
     /// </summary>
@@ -557,7 +533,7 @@ public class ContextManager
                 var (effectiveProtect, effectivePrune) = ClampToContext(
                     config.ProtectRecentTokens, config.MinimumPruneTokens, maxContextTokens);
                 return (new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune),
-                    new AnchoredHistoryCompactor(tokenCounter, CloneWithClampedProtect(config, effectiveProtect, effectivePrune), summarizer));
+                    new AnchoredHistoryCompactor(tokenCounter, config.WithProtect(effectiveProtect, effectivePrune), summarizer));
             }
 
             if (config.UseTokenBasedCompaction)
@@ -565,7 +541,7 @@ public class ContextManager
                 var (effectiveProtect, effectivePrune) = ClampToContext(
                     config.ProtectRecentTokens, config.MinimumPruneTokens, maxContextTokens);
                 return (new TokenBasedCompactionTrigger(effectiveProtect, effectivePrune),
-                    new TokenBasedHistoryCompactor(tokenCounter, CloneWithClampedProtect(config, effectiveProtect, effectivePrune), summarizer));
+                    new TokenBasedHistoryCompactor(tokenCounter, config.WithProtect(effectiveProtect, effectivePrune), summarizer));
             }
 
             return (new ThresholdCompactionTrigger(config.ThresholdPercentage), new HistoryCompactor(tokenCounter, summarizer));
@@ -586,7 +562,8 @@ public class ContextManager
                 config.ObservationMaskingProtectedTurns,
                 config.ObservationMaskingMinResultLength,
                 config.ObservationMaskingProtectedTokens,
-                new ContextTokenCounterAdapter(tokenCounter))
+                new ContextTokenCounterAdapter(tokenCounter),
+                config.ObservationMaskingMinimumClearTokens)
             : null;
 
         return new ContextManager(

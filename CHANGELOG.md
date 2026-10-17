@@ -14,11 +14,19 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   scanned (a search returns dozens of links); short hashes and `#123` numbers are not kept.
 
 ### Changed
+- **Old tool results are masked in batches, so the prompt prefix — and a provider's prompt cache — stays stable between
+  them.** Each new turn moved the masking boundary by one turn and masked that turn's results, so the prompt changed three
+  turns back on every turn. `CompactionConfig.ObservationMaskingMinimumClearTokens` (default 2,000) waits until the results
+  past the boundary add up to that many tokens and masks them together. An `ObservationMaskingProtectedTokens` budget is
+  still enforced at once. Set it to 0 for the previous behaviour.
 - **History compaction keeps more of what failed.** The anchored compactor's «Errors» list read .NET analyzer codes only
   (`CS`/`CA`/`IDE`/`SA` + digits); it now also keeps NuGet, MSBuild and SDK codes (`NU1102`, `MSB4018`, `NETSDK1045`),
   TypeScript (`TS2304`) and Rust (`E0425`) codes, exception and error type names (`FileNotFoundException`, `TypeError`) and HTTP
   error statuses (`HTTP/1.1 404`) from messages and tool results — known forms only, so hashes, dates and version strings are not
   kept — and records each once.
+
+### Dependencies
+- IndexThinking 0.30.0 (a stored placeholder or trimmed result is not reduced again).
 
 ## [0.65.0] - 2026-10-17
 

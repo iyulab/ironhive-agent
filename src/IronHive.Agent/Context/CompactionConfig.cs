@@ -82,6 +82,16 @@ public class CompactionConfig
     public int? ObservationMaskingProtectedTokens { get; set; }
 
     /// <summary>
+    /// Mask only when the tool results past the protection boundary add up to at least this many tokens (default 2,000;
+    /// 0 masks at every move). Masking changes the prompt from the first newly masked result on, so a provider's prompt
+    /// cache misses from there — and each new turn moves the boundary by one turn. Waiting until enough has piled up masks
+    /// several turns' results at once and keeps the prompt prefix stable in between, at the cost of sending up to this many
+    /// tokens a little longer. Results already masked do not count. The turn boundary only: an
+    /// <see cref="ObservationMaskingProtectedTokens"/> budget is always enforced. Measured with the manager's token counter.
+    /// </summary>
+    public int ObservationMaskingMinimumClearTokens { get; set; } = 2_000;
+
+    /// <summary>
     /// Goal reminder options for a context manager built from this config (<see cref="ContextManager.ForModel(string, CompactionConfig, Microsoft.Extensions.AI.IChatClient?)"/>).
     /// <c>null</c> (default): the reminder's own defaults (on, after 6 messages). Set <c>new GoalReminderOptions { Enabled = false }</c>
     /// to turn it off.
@@ -153,4 +163,16 @@ public class CompactionConfig
     /// </para>
     /// </summary>
     public bool CompactOnOverflow { get; set; } = true;
+
+    /// <summary>
+    /// A copy with the protected and minimum-prune token counts replaced — every other setting carried over (a member-wise
+    /// copy, so a setting added later cannot be left out the way a hand-written copy lets it).
+    /// </summary>
+    internal CompactionConfig WithProtect(int protectRecentTokens, int minimumPruneTokens)
+    {
+        var copy = (CompactionConfig)MemberwiseClone();
+        copy.ProtectRecentTokens = protectRecentTokens;
+        copy.MinimumPruneTokens = minimumPruneTokens;
+        return copy;
+    }
 }
