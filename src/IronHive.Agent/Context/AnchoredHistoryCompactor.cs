@@ -273,7 +273,11 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
                key.Equals("filePath", StringComparison.OrdinalIgnoreCase);
     }
 
-    [GeneratedRegex(@"(?:CS|CA|IDE|SA)\d{4,5}")]
+    // What a build, a test run or a request reports as its failure, in forms a tool result carries verbatim: compiler and
+    // analyzer codes (C#, .NET analyzers, NuGet, MSBuild, the SDK, TypeScript, Rust), exception and error type names
+    // (FileNotFoundException, TypeError), and HTTP error statuses. Known prefixes only: a bare «letters + digits» pattern would
+    // fill the anchors with SHA256, ISO8601 and version strings.
+    [GeneratedRegex(@"\b(?:CS|CA|IDE|SA|NU|MSB|NETSDK|TS)\d{4,5}\b|\bE0\d{3}\b|\b[A-Z][A-Za-z0-9]*(?:Exception|Error)\b|\bHTTP(?:/\d(?:\.\d)?)?\s+[45]\d\d\b")]
     private static partial Regex ErrorCodePattern();
 
     private static void ExtractErrorCodes(string? text, ConversationAnchors anchors)
@@ -285,7 +289,10 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
         foreach (Match match in ErrorCodePattern().Matches(text))
         {
-            anchors.ErrorsEncountered.Add(match.Value);
+            if (!anchors.ErrorsEncountered.Contains(match.Value, StringComparer.Ordinal))
+            {
+                anchors.ErrorsEncountered.Add(match.Value);
+            }
         }
     }
 

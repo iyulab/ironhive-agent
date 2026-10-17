@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Changed
+- **History compaction keeps more of what failed.** The anchored compactor's «Errors» list read .NET analyzer codes only
+  (`CS`/`CA`/`IDE`/`SA` + digits); it now also keeps NuGet, MSBuild and SDK codes (`NU1102`, `MSB4018`, `NETSDK1045`),
+  TypeScript (`TS2304`) and Rust (`E0425`) codes, exception and error type names (`FileNotFoundException`, `TypeError`) and HTTP
+  error statuses (`HTTP/1.1 404`) from messages and tool results — known forms only, so hashes, dates and version strings are not
+  kept — and records each once.
+
 ## [0.65.0] - 2026-10-17
 
 ### Changed

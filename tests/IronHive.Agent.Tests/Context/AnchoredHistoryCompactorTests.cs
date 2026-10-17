@@ -295,6 +295,43 @@ public class AnchoredHistoryCompactorTests
         Assert.Contains("IDE0011", stateMessage.Text!);
     }
 
+    [Fact]
+    public void ExtractAnchors_KeepsFailureCodesFromToolResults_BeyondDotNetAnalyzers()
+    {
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Restore and test the repo"),
+            new(ChatRole.Tool, [new FunctionResultContent("c1",
+                "error NU1102: Unable to find package X\nerror MSB4018: task failed\nNETSDK1045 the SDK does not support net10.0")]),
+            new(ChatRole.Tool, [new FunctionResultContent("c2",
+                "src/app.ts(3,1): error TS2304: Cannot find name 'x'\nerror[E0425]: cannot find value `y`")]),
+            new(ChatRole.Tool, [new FunctionResultContent("c3",
+                "Unhandled exception. System.IO.FileNotFoundException: missing\nTypeError: undefined is not a function\nHTTP/1.1 404 Not Found")]),
+            new(ChatRole.Assistant, "The cache key is SHA256 and dates are ISO8601; version 10.0.402. Error handling is fine."),
+        };
+
+        var anchors = AnchoredHistoryCompactor.ExtractAnchorsFromMessages(history);
+
+        Assert.Equal(
+            ["NU1102", "MSB4018", "NETSDK1045", "TS2304", "E0425", "FileNotFoundException", "TypeError", "HTTP/1.1 404"],
+            anchors.ErrorsEncountered);
+    }
+
+    [Fact]
+    public void ExtractAnchors_RecordsEachFailureCodeOnce()
+    {
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Build"),
+            new(ChatRole.Tool, [new FunctionResultContent("c1", "error CS0246 in A.cs\nerror CS0246 in B.cs")]),
+            new(ChatRole.Assistant, "CS0246 again"),
+        };
+
+        var anchors = AnchoredHistoryCompactor.ExtractAnchorsFromMessages(history);
+
+        Assert.Equal(["CS0246"], anchors.ErrorsEncountered);
+    }
+
     #endregion
 
     #region Anchor State Persistence
