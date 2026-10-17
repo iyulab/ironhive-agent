@@ -27,6 +27,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - IndexThinking 0.30.0 (a stored placeholder or trimmed result is not reduced again).
+- Re-pinned sibling package(s) `MemoryIndexer` 0.38.0 -> 0.39.0.
 
 ## [0.65.0] - 2026-10-17
 
