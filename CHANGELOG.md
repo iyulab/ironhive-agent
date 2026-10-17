@@ -11,6 +11,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   `IMemoryService.RememberAsync`, so 0.67.0 (built against 0.39.0) fails with `MissingMethodException` when an application
   resolves MemoryIndexer 0.40.0. This release is built against it; move `IronHive.Agent.Memory` together with MemoryIndexer.
 
+### Dependencies
+- Re-pinned sibling package(s) `MemoryIndexer` 0.39.0 -> 0.40.0.
+
 ## [0.67.0] - 2026-10-18
 
 ### Changed
