@@ -357,6 +357,42 @@ public class AnchoredHistoryCompactorTests
     }
 
     [Fact]
+    public void ExtractAnchors_AnErrorFromAToolResult_NamesTheCallThatReportedIt()
+    {
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Read the logs"),
+            new(ChatRole.Assistant, "I expect a LeaseQuorumLostException somewhere."),
+            new(ChatRole.Assistant, [new FunctionCallContent("c1", "ReadFile", new Dictionary<string, object?> { ["path"] = "logs/start.log" })]),
+            new(ChatRole.Tool, [new FunctionResultContent("c1", "ERROR lease-manager unhandled LeaseQuorumLostException: quorum lost")]),
+            new(ChatRole.Assistant, [new FunctionCallContent("c2", "run_build")]),
+            new(ChatRole.Tool, [new FunctionResultContent("c2", "error CS0246: type not found")]),
+            new(ChatRole.Tool, [new FunctionResultContent("orphan", "error NU1102: package missing")]),
+        };
+
+        var anchors = AnchoredHistoryCompactor.ExtractAnchorsFromMessages(history);
+
+        // One entry per code: the source a tool result gives replaces the bare mention made in a message before it
+        Assert.Equal(
+            ["LeaseQuorumLostException (from ReadFile logs/start.log)", "CS0246 (from run_build)", "NU1102"],
+            anchors.ErrorsEncountered);
+    }
+
+    [Fact]
+    public void MergeAnchors_KeepsOneErrorPerCode_WithItsSource()
+    {
+        var existing = new ConversationAnchors();
+        existing.ErrorsEncountered.Add("CS0246 (from run_build)");
+        var fresh = new ConversationAnchors();
+        fresh.ErrorsEncountered.Add("CS0246");
+        fresh.ErrorsEncountered.Add("CS0103 (from run_build)");
+
+        var merged = AnchoredHistoryCompactor.MergeAnchors(ConversationAnchors.Parse(existing.FormatStateBlock()), fresh);
+
+        Assert.Equal(["CS0246 (from run_build)", "CS0103 (from run_build)"], merged.ErrorsEncountered);
+    }
+
+    [Fact]
     public void ExtractAnchors_DoesNotRepeatAModifiedFileAsAReference()
     {
         var history = new List<ChatMessage>

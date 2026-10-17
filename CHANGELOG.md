@@ -6,6 +6,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Changed
+- **The anchored compactor says where an error came from.** An «Errors» entry found in a tool result names the call that
+  reported it — `LeaseQuorumLostException (from ReadFile logs/start.log)`, `CS0246 (from run_build)` — so a later question
+  such as «which exception did the first log report» is answerable from the state block alone. One entry per code: a code
+  first mentioned in a message gains its source when a tool result reports it.
+
 ### Fixed
 - **A history summary no longer says an error never happened when the tool result named it on its last line.** The
   summarizer was shown the first 600 characters of each tool result, so the outcome a build, a test run or a log puts at its

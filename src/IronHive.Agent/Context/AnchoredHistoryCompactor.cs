@@ -191,6 +191,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
     {
         var anchors = new ConversationAnchors();
         var goalFound = false;
+        var calls = new Dictionary<string, FunctionCallContent>(StringComparer.Ordinal);
 
         foreach (var message in messages)
         {
@@ -220,6 +221,10 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
                     if (content is FunctionCallContent functionCall)
                     {
                         ExtractFromToolCall(functionCall, anchors);
+                        if (functionCall.CallId is not null)
+                        {
+                            calls[functionCall.CallId] = functionCall;
+                        }
                     }
                 }
             }
@@ -234,7 +239,10 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
             }
             foreach (var result in message.Contents?.OfType<FunctionResultContent>() ?? [])
             {
-                ExtractErrorCodes(ToolResultText.Of(result.Result), anchors);
+                // A code from a tool result names the call that reported it: «the first log's exception» is then answerable
+                // from the state block alone
+                var source = result.CallId is not null && calls.TryGetValue(result.CallId, out var call) ? CallLabel(call) : null;
+                ExtractErrorCodes(ToolResultText.Of(result.Result), anchors, source);
             }
         }
 
@@ -325,7 +333,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
     [GeneratedRegex(@"\b(?:CS|CA|IDE|SA|NU|MSB|NETSDK|TS)\d{4,5}\b|\bE0\d{3}\b|\b[A-Z][A-Za-z0-9]*(?:Exception|Error)\b|\bHTTP(?:/\d(?:\.\d)?)?\s+[45]\d\d\b")]
     private static partial Regex ErrorCodePattern();
 
-    private static void ExtractErrorCodes(string? text, ConversationAnchors anchors)
+    private static void ExtractErrorCodes(string? text, ConversationAnchors anchors, string? source = null)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -334,11 +342,15 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
         foreach (Match match in ErrorCodePattern().Matches(text))
         {
-            if (!anchors.ErrorsEncountered.Contains(match.Value, StringComparer.Ordinal))
-            {
-                anchors.ErrorsEncountered.Add(match.Value);
-            }
+            anchors.AddError(source is null ? match.Value : $"{match.Value} (from {source})");
         }
+    }
+
+    // «ReadFile logs/start.log»: the tool and the path (or URL) it was given, when it was given one
+    private static string CallLabel(FunctionCallContent call)
+    {
+        var target = call.Arguments?.FirstOrDefault(kv => IsPathArgument(kv.Key)).Value?.ToString();
+        return string.IsNullOrWhiteSpace(target) ? call.Name : $"{call.Name} {target}";
     }
 
     #endregion
@@ -368,7 +380,10 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
         MergeList(merged.References, existing.References, newAnchors.References);
         MergeList(merged.FailedApproaches, existing.FailedApproaches, newAnchors.FailedApproaches);
         MergeList(merged.KeyDecisions, existing.KeyDecisions, newAnchors.KeyDecisions);
-        MergeList(merged.ErrorsEncountered, existing.ErrorsEncountered, newAnchors.ErrorsEncountered);
+        foreach (var error in existing.ErrorsEncountered.Concat(newAnchors.ErrorsEncountered))
+        {
+            merged.AddError(error);
+        }
 
         return merged;
     }
@@ -527,6 +542,32 @@ public sealed class ConversationAnchors
         FailedApproaches.Count > 0 ||
         KeyDecisions.Count > 0 ||
         ErrorsEncountered.Count > 0;
+
+    /// <summary>
+    /// Adds <paramref name="error"/> unless its code is already listed: «CS0246» and «CS0246 (from build)» are one error. The
+    /// first entry with a source is the one kept — a code first seen in a message gains the source when a tool result reports it.
+    /// </summary>
+    internal void AddError(string error)
+    {
+        var code = ErrorCode(error);
+        var at = ErrorsEncountered.FindIndex(e => string.Equals(ErrorCode(e), code, StringComparison.Ordinal));
+        if (at < 0)
+        {
+            ErrorsEncountered.Add(error);
+        }
+        else if (!HasSource(ErrorsEncountered[at]) && HasSource(error))
+        {
+            ErrorsEncountered[at] = error;
+        }
+    }
+
+    private static bool HasSource(string entry) => entry.Contains(" (from ", StringComparison.Ordinal);
+
+    private static string ErrorCode(string entry)
+    {
+        var at = entry.IndexOf(" (from ", StringComparison.Ordinal);
+        return at < 0 ? entry : entry[..at];
+    }
 
     /// <summary>Adds <paramref name="reference"/> unless it is already a reference or a modified file.</summary>
     internal void AddReference(string reference)
