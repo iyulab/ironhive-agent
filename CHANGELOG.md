@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Fixed
+- **`IronHive.Agent.Memory` works with MemoryIndexer 0.40.0.** MemoryIndexer 0.40.0 adds a `sourceRef` parameter to
+  `IMemoryService.RememberAsync`, so 0.67.0 (built against 0.39.0) fails with `MissingMethodException` when an application
+  resolves MemoryIndexer 0.40.0. This release is built against it; move `IronHive.Agent.Memory` together with MemoryIndexer.
+
 ## [0.67.0] - 2026-10-18
 
 ### Changed
