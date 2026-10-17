@@ -6,6 +6,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **History compaction keeps the paths, links and IDs a later turn has to repeat exactly.** The anchored compactor's state block
+  has a «References» section (`ConversationAnchors.References`): paths a tool read or listed (a modifying tool's path stays under
+  «Files modified»), URLs from tool arguments and from user and assistant messages, GUIDs and full 40-character commit hashes —
+  word for word, merged across compactions, and dropped after errors when the block is over its size limit. Tool results are not
+  scanned (a search returns dozens of links); short hashes and `#123` numbers are not kept.
+
 ### Changed
 - **History compaction keeps more of what failed.** The anchored compactor's «Errors» list read .NET analyzer codes only
   (`CS`/`CA`/`IDE`/`SA` + digits); it now also keeps NuGet, MSBuild and SDK codes (`NU1102`, `MSB4018`, `NETSDK1045`),

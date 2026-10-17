@@ -225,6 +225,12 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
             // Extract error codes from any message text, and from tool results - where a build or test run reports them
             ExtractErrorCodes(message.Text, anchors);
+
+            // URLs and IDs the user or the model wrote in text (tool results are left out: a search or a listing returns dozens)
+            if (message.Role == ChatRole.User || message.Role == ChatRole.Assistant)
+            {
+                ExtractReferences(message.Text, anchors);
+            }
             foreach (var result in message.Contents?.OfType<FunctionResultContent>() ?? [])
             {
                 ExtractErrorCodes(ToolResultText.Of(result.Result), anchors);
@@ -241,19 +247,36 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
             return;
         }
 
-        // Look for file-modifying tool calls to track modified files
-        if (IsFileModifyingTool(functionCall.Name) && functionCall.Arguments is not null)
+        if (functionCall.Arguments is null)
         {
-            foreach (var kvp in functionCall.Arguments)
+            return;
+        }
+
+        // A file-modifying tool's path is a modified file; any other tool's path (a read, a listing, a search root) is a reference,
+        // and so is every URL or ID among the arguments
+        var modifying = IsFileModifyingTool(functionCall.Name);
+        foreach (var kvp in functionCall.Arguments)
+        {
+            var value = kvp.Value?.ToString();
+            if (string.IsNullOrWhiteSpace(value))
             {
-                if (IsPathArgument(kvp.Key))
+                continue;
+            }
+
+            if (IsPathArgument(kvp.Key))
+            {
+                if (modifying)
                 {
-                    var path = kvp.Value?.ToString();
-                    if (!string.IsNullOrWhiteSpace(path))
-                    {
-                        anchors.FilesModified.Add(path);
-                    }
+                    anchors.FilesModified.Add(value);
                 }
+                else
+                {
+                    anchors.AddReference(value);
+                }
+            }
+            else
+            {
+                ExtractReferences(value, anchors);
             }
         }
     }
@@ -270,7 +293,28 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
     {
         return key.Equals("path", StringComparison.OrdinalIgnoreCase) ||
                key.Equals("file_path", StringComparison.OrdinalIgnoreCase) ||
-               key.Equals("filePath", StringComparison.OrdinalIgnoreCase);
+               key.Equals("filePath", StringComparison.OrdinalIgnoreCase) ||
+               key.Equals("directory", StringComparison.OrdinalIgnoreCase) ||
+               key.Equals("url", StringComparison.OrdinalIgnoreCase) ||
+               key.Equals("uri", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // What a later turn has to name exactly and a summary paraphrases: web addresses, GUIDs and full commit hashes. Short hex, issue
+    // numbers and bare numbers are left out - they match colors, counts and line numbers as often as identifiers.
+    [GeneratedRegex(@"\bhttps?://[^\s<>""'`)\]]+|\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b|\b[0-9a-f]{40}\b")]
+    private static partial Regex ReferencePattern();
+
+    private static void ExtractReferences(string? text, ConversationAnchors anchors)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        foreach (Match match in ReferencePattern().Matches(text))
+        {
+            anchors.AddReference(match.Value.TrimEnd('.', ',', ';', ':'));
+        }
     }
 
     // What a build, a test run or a request reports as its failure, in forms a tool result carries verbatim: compiler and
@@ -320,6 +364,7 @@ public partial class AnchoredHistoryCompactor : HistoryCompactorBase
 
         MergeList(merged.CompletedSteps, existing.CompletedSteps, newAnchors.CompletedSteps);
         MergeSet(merged.FilesModified, existing.FilesModified, newAnchors.FilesModified);
+        MergeList(merged.References, existing.References, newAnchors.References);
         MergeList(merged.FailedApproaches, existing.FailedApproaches, newAnchors.FailedApproaches);
         MergeList(merged.KeyDecisions, existing.KeyDecisions, newAnchors.KeyDecisions);
         MergeList(merged.ErrorsEncountered, existing.ErrorsEncountered, newAnchors.ErrorsEncountered);
@@ -446,6 +491,12 @@ public sealed class ConversationAnchors
     /// <summary>Files that were modified during the conversation.</summary>
     public HashSet<string> FilesModified { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Paths a tool read or listed, and the URLs and IDs (GUIDs, full commit hashes) the conversation named - kept word for word,
+    /// since a later turn has to repeat them exactly. Modified files are in <see cref="FilesModified"/> instead.
+    /// </summary>
+    public List<string> References { get; } = [];
+
     /// <summary>Approaches that were tried and failed.</summary>
     public List<string> FailedApproaches { get; } = [];
 
@@ -460,19 +511,29 @@ public sealed class ConversationAnchors
         SessionGoal is not null ||
         CompletedSteps.Count > 0 ||
         FilesModified.Count > 0 ||
+        References.Count > 0 ||
         FailedApproaches.Count > 0 ||
         KeyDecisions.Count > 0 ||
         ErrorsEncountered.Count > 0;
+
+    /// <summary>Adds <paramref name="reference"/> unless it is already a reference or a modified file.</summary>
+    internal void AddReference(string reference)
+    {
+        if (!FilesModified.Contains(reference) && !References.Contains(reference, StringComparer.Ordinal))
+        {
+            References.Add(reference);
+        }
+    }
 
     /// <summary>
     /// Formats the anchors as a structured state block for insertion into conversation history.
     /// </summary>
     public string FormatStateBlock()
-        => Format(SessionGoal, CompletedSteps, FilesModified.Order(), FailedApproaches, KeyDecisions, ErrorsEncountered);
+        => Format(SessionGoal, CompletedSteps, FilesModified.Order(), References, FailedApproaches, KeyDecisions, ErrorsEncountered);
 
     /// <summary>
     /// Formats the anchors within <paramref name="maxChars"/> characters, leaving out the oldest entries first: completed
-    /// steps, then errors, modified files and key decisions, and failed approaches last. Zero or less means no limit.
+    /// steps, then errors, references, modified files and key decisions, and failed approaches last. Zero or less means no limit.
     /// </summary>
     public string FormatStateBlock(int maxChars)
     {
@@ -485,21 +546,22 @@ public sealed class ConversationAnchors
         List<string> completed = [.. CompletedSteps];
         List<string> errors = [.. ErrorsEncountered];
         List<string> files = [.. FilesModified.Order()];
+        List<string> references = [.. References];
         List<string> decisions = [.. KeyDecisions];
         List<string> failed = [.. FailedApproaches];
         var goal = SessionGoal;
-        List<string>[] dropOrder = [completed, errors, files, decisions, failed];
+        List<string>[] dropOrder = [completed, errors, references, files, decisions, failed];
         while (block.Length > maxChars && dropOrder.FirstOrDefault(entries => entries.Count > 0) is { } oldest)
         {
             oldest.RemoveAt(0);
-            block = Format(goal, completed, files, failed, decisions, errors);
+            block = Format(goal, completed, files, references, failed, decisions, errors);
         }
 
         if (block.Length > maxChars && goal is not null)
         {
             var keep = goal.Length - (block.Length - maxChars) - 3;
             goal = keep > 0 ? goal[..keep] + "..." : null;
-            block = Format(goal, completed, files, failed, decisions, errors);
+            block = Format(goal, completed, files, references, failed, decisions, errors);
         }
 
         return block;
@@ -509,6 +571,7 @@ public sealed class ConversationAnchors
         string? sessionGoal,
         IEnumerable<string> completedSteps,
         IEnumerable<string> filesModified,
+        IEnumerable<string> references,
         IEnumerable<string> failedApproaches,
         IEnumerable<string> keyDecisions,
         IEnumerable<string> errorsEncountered)
@@ -523,6 +586,7 @@ public sealed class ConversationAnchors
 
         AppendSection(sb, "Completed:", completedSteps);
         AppendSection(sb, "Files modified:", filesModified);
+        AppendSection(sb, "References:", references);
         AppendSection(sb, "Failed approaches:", failedApproaches);
         AppendSection(sb, "Key decisions:", keyDecisions);
         AppendSection(sb, "Errors:", errorsEncountered);
@@ -583,6 +647,10 @@ public sealed class ConversationAnchors
             {
                 currentSection = "files";
             }
+            else if (line is "References:")
+            {
+                currentSection = "references";
+            }
             else if (line is "Failed approaches:")
             {
                 currentSection = "failed";
@@ -605,6 +673,9 @@ public sealed class ConversationAnchors
                         break;
                     case "files":
                         anchors.FilesModified.Add(item);
+                        break;
+                    case "references":
+                        anchors.References.Add(item);
                         break;
                     case "failed":
                         anchors.FailedApproaches.Add(item);

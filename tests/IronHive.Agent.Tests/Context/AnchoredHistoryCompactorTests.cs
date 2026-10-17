@@ -332,6 +332,62 @@ public class AnchoredHistoryCompactorTests
         Assert.Equal(["CS0246"], anchors.ErrorsEncountered);
     }
 
+    [Fact]
+    public void ExtractAnchors_KeepsReadPathsUrlsAndIdsAsReferences()
+    {
+        const string guid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+        const string sha = "35a28b4c1d2e3f40516273849a0b1c2d3e4f5061";
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, $"Fix the bug in run {guid}, see https://example.com/issues/42."),
+            new(ChatRole.Assistant, [
+                new FunctionCallContent("c1", "read_file", new Dictionary<string, object?> { ["path"] = "src/Parser.cs" }),
+                new FunctionCallContent("c2", "write_file", new Dictionary<string, object?> { ["path"] = "src/Lexer.cs", ["content"] = "x" }),
+                new FunctionCallContent("c3", "web_fetch", new Dictionary<string, object?> { ["url"] = "https://docs.example.org/api" }),
+                new FunctionCallContent("c4", "git_show", new Dictionary<string, object?> { ["commit"] = sha }),
+            ]),
+            new(ChatRole.Tool, [new FunctionResultContent("c3", "See https://elsewhere.example.net/a and https://elsewhere.example.net/b")]),
+            new(ChatRole.Assistant, "Read src/Parser.cs; color #ff0000, issue #12 and short hash 35a28b4 are not references."),
+        };
+
+        var anchors = AnchoredHistoryCompactor.ExtractAnchorsFromMessages(history);
+
+        Assert.Equal([guid, "https://example.com/issues/42", "src/Parser.cs", "https://docs.example.org/api", sha], anchors.References);
+        Assert.Equal(["src/Lexer.cs"], anchors.FilesModified);
+    }
+
+    [Fact]
+    public void ExtractAnchors_DoesNotRepeatAModifiedFileAsAReference()
+    {
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Edit it"),
+            new(ChatRole.Assistant, [
+                new FunctionCallContent("c1", "edit_file", new Dictionary<string, object?> { ["path"] = "src/A.cs" }),
+                new FunctionCallContent("c2", "read_file", new Dictionary<string, object?> { ["path"] = "src/A.cs" }),
+            ]),
+        };
+
+        var anchors = AnchoredHistoryCompactor.ExtractAnchorsFromMessages(history);
+
+        Assert.Empty(anchors.References);
+        Assert.Equal(["src/A.cs"], anchors.FilesModified);
+    }
+
+    [Fact]
+    public void MergeAnchors_KeepsEarlierReferencesAcrossCompactions()
+    {
+        var existing = new ConversationAnchors();
+        existing.References.Add("https://example.com/first");
+        var fresh = new ConversationAnchors();
+        fresh.References.Add("https://example.com/first");
+        fresh.References.Add("src/B.cs");
+
+        var merged = AnchoredHistoryCompactor.MergeAnchors(ConversationAnchors.Parse(existing.FormatStateBlock()), fresh);
+
+        Assert.Equal(["https://example.com/first", "src/B.cs"], merged.References);
+    }
+
     #endregion
 
     #region Anchor State Persistence
@@ -404,6 +460,8 @@ public class AnchoredHistoryCompactorTests
         original.CompletedSteps.Add("Identify patterns");
         original.FilesModified.Add("src/Auth.cs");
         original.FilesModified.Add("tests/AuthTests.cs");
+        original.References.Add("docs/auth.md");
+        original.References.Add("https://example.com/rfc6749");
         original.FailedApproaches.Add("Pattern A caused stack overflow");
         original.KeyDecisions.Add("Use NSubstitute for mocking");
         original.ErrorsEncountered.Add("CS8600");
@@ -411,6 +469,8 @@ public class AnchoredHistoryCompactorTests
 
         var stateBlock = original.FormatStateBlock();
         var parsed = ConversationAnchors.Parse(stateBlock);
+
+        Assert.Equal(["docs/auth.md", "https://example.com/rfc6749"], parsed.References);
 
         Assert.Equal("Refactor auth module", parsed.SessionGoal);
         Assert.Equal(2, parsed.CompletedSteps.Count);
