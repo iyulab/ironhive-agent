@@ -813,6 +813,14 @@ request — `History` keeps them in full.
 `ToolRoundContextChatClient` also applies tool-result compaction (`EnableToolResultCompaction`) per round. It makes no LLM
 call of its own, except to compact after an overflow (below); summarizing compaction otherwise runs once per turn in the loop.
 
+### The same preparation in another pipeline
+
+A loop that is not `AgentLoop` — your own, or a framework's that takes an M.E.AI `IChatReducer` — can send its message list
+through the same manager: `chatClient.AsBuilder().UseChatReducer(contextManager.AsChatReducer()).Build()`
+(`ContextManagerChatReducer`). Every call then sends the manager's preparation (tool-result compaction, observation masking,
+compaction when over budget, goal reminder, instruction blocks); the caller's list is left as it is, and a list that was already
+reduced reduces to the same request.
+
 ### When the context window is not known
 
 A server that does not report its window (many OpenAI-compatible servers) leaves `MaxContextTokens` unset, and for a model

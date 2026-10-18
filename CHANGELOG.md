@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **A `ContextManager` as an M.E.AI `IChatReducer`: `contextManager.AsChatReducer()` (`ContextManagerChatReducer`).** A
+  pipeline other than `AgentLoop` — `ChatClientBuilder.UseChatReducer(…)`, or a framework that takes a reducer — sends its
+  message list through the manager's whole preparation (tool-result compaction, observation masking, compaction when over
+  budget, goal reminder, instruction blocks). The caller's list is not changed; reducing a reduced list gives the same request.
+
 ## [0.68.0] - 2026-10-18
 
 ### Added
