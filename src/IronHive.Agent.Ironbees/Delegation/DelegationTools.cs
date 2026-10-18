@@ -88,6 +88,8 @@ public static partial class DelegationTools
             await gate.WaitAsync(cancellationToken);
             var depth = CurrentDepth.Value;
             CurrentDepth.Value = depth + 1;
+            // The delegated run's tool calls go through the session's approval path; the scope names who asked.
+            using var asking = DelegationScope.Enter(agent.AgentName);
             try
             {
                 var result = await orchestrator.ProcessStructuredAsync(

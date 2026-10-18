@@ -102,7 +102,8 @@ public sealed partial class ApprovalGate
                     Arguments = arguments,
                     RiskAssessment = risk,
                     Description = risk.ApprovalPrompt ?? risk.Reason,
-                    CallId = callId
+                    CallId = callId,
+                    DelegatedBy = Delegation.DelegationScope.AgentName
                 }, cancellationToken);
 
                 if (result.Deferred)

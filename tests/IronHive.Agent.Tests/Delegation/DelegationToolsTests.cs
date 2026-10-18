@@ -97,6 +97,24 @@ public class DelegationToolsTests
     }
 
     [Fact]
+    public async Task TheDelegatedRun_IsInsideADelegationScopeNamingTheAgent_SoItsApprovalsSayWhoAsked()
+    {
+        var orchestrator = Orchestrator();
+        string? during = "not observed";
+        orchestrator.ProcessStructuredAsync(Arg.Any<string>(), Arg.Any<ProcessOptions>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                during = DelegationScope.AgentName;
+                return new AgentRunResult { Text = "done" };
+            });
+
+        await InvokeAsync(DelegationTools.Create(orchestrator, new DelegatedAgent { AgentName = "research" }), "look it up");
+
+        Assert.Equal("research", during);
+        Assert.Null(DelegationScope.AgentName);
+    }
+
+    [Fact]
     public async Task TheDelegatedRunsUsage_IsRecorded_AndCountsAgainstTheParentsLimit()
     {
         var orchestrator = Orchestrator();

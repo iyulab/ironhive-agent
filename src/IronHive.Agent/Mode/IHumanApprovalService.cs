@@ -54,6 +54,13 @@ public record ApprovalRequest
     /// on a wire pair the request with the call's start/end events. Null when the gate is used outside a pipeline.
     /// </summary>
     public string? CallId { get; init; }
+
+    /// <summary>
+    /// The delegated agent that asked for the call (<see cref="Delegation.DelegationScope.AgentName"/> when the request was
+    /// made) — null for a call of the session's own agent. A delegated run calls its tools through the session's approval
+    /// path; this is how the person approving it can tell who asked.
+    /// </summary>
+    public string? DelegatedBy { get; init; }
 }
 
 /// <summary>

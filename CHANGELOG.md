@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **An approval request names the delegated agent that asked: `ApprovalRequest.DelegatedBy`.** A delegated run calls its
+  tools through the session's approval path, so the approver used to see a delegated agent's call exactly like the session's
+  own. `DelegationTools` now runs each delegation inside `DelegationScope.Enter(agentName)` (new, beside
+  `ToolInvocationScope`), and `ApprovalGate` copies `DelegationScope.AgentName` into the request — the innermost agent under
+  nested delegation, null outside a delegated run. A host with its own delegation tool enters the scope the same way.
+
 ## [0.69.0] - 2026-10-18
 
 ### Added

@@ -148,7 +148,7 @@ IronHive.Agent/
 ├── Mode/           # Plan/Work/HITL mode system
 ├── Mcp/            # MCP plugin management and tool discovery
 ├── Tools/          # Built-in tools (BuiltInTools, TodoTool)
-├── Delegation/     # The advisor tool (AdvisorTool) and ToolInvocationScope
+├── Delegation/     # The advisor tool (AdvisorTool), ToolInvocationScope and DelegationScope
 ├── Planning/       # Plan-and-execute orchestration (DefaultTaskPlanner, DefaultPlanExecutor, HeuristicPlanEvaluator, PlannerTriggerDetector)
 ├── Permissions/    # Permission evaluation and configuration
 ├── Tracking/       # Usage tracking and limits
@@ -733,7 +733,11 @@ An `Ask` verdict with **no approval service registered is refused**, not passed 
 lets "ask" through when nobody can be asked is a silent no-op. Either register an
 `IHumanApprovalService`, set the rule (or `DefaultAction`) to `Allow`, or leave the gate out. Remembering an
 `ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time. `ApprovalRequest.CallId` carries the
-call's id, so an approver on a wire can pair its request with the call's start and end events.
+call's id, so an approver on a wire can pair its request with the call's start and end events. `ApprovalRequest.DelegatedBy`
+names the delegated agent that asked when the call comes from a delegated run (`DelegationTools` enters
+`DelegationScope.Enter(agentName)` around the run; nested delegation reports the innermost agent), and is null for the
+session's own calls — a delegated agent's tools go through the same approval path, and this is how the person can tell who
+wants to run them. A host with its own delegation tool enters `DelegationScope` the same way.
 
 Steps registered after the gate run only for calls it let through. The Ironbees adapter (`ChatClientFrameworkAdapter`,
 `IronHive.Agent.Ironbees`) runs its own tool loop through the same pipeline, so a verdict means the same thing on both
