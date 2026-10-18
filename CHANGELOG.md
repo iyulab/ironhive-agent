@@ -12,6 +12,15 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   message list through the manager's whole preparation (tool-result compaction, observation masking, compaction when over
   budget, goal reminder, instruction blocks). The caller's list is not changed; reducing a reduced list gives the same request.
 
+### Changed
+- **`ContextTokenCounter` counts a local Gemma or Qwen model with that tokenizer's ratios** (IndexThinking
+  `ApproximateTokenCounter.ForModel`). With the o200k-fitted ratios a JSON tool result counted a fifth to a quarter low for
+  these models, so compaction and masking budgets on a small local window let that much more through. Counts for ids naming
+  `gemma` or `qwen` (e.g. `gguf:qwen3-fast`) rise, most on JSON and code; other models are unchanged.
+
+### Dependencies
+- Re-pinned sibling package(s) `IndexThinking` 0.30.0 -> 0.31.0.
+
 ## [0.68.0] - 2026-10-18
 
 ### Added

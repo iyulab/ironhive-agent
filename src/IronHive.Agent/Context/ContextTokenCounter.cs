@@ -9,9 +9,10 @@ namespace IronHive.Agent.Context;
 /// </summary>
 /// <remarks>
 /// Counts are IndexThinking's <see cref="ApproximateTokenCounter"/>: letters, digits, punctuation and whitespace counted
-/// apart per script, with ratios fitted to o200k (within a few percent on English, Korean, mixed prose, code and JSON) - a
-/// single four-characters-per-token rule counts Korean text at a third of its size, and every budget measured with it lets
-/// that much more through.
+/// apart per script, with the ratios of the model's tokenizer family (<see cref="ApproximateTokenCounter.ForModel"/>: fitted to
+/// Gemma's or Qwen's tokenizer for those local models, to o200k otherwise — within a few percent on English, Korean, mixed prose,
+/// code and JSON). With o200k's ratios a local model's JSON tool results counted a fifth to a quarter low, and every budget
+/// measured with them let that much more through.
 /// </remarks>
 public class ContextTokenCounter : IContextTokenCounter
 {
@@ -20,6 +21,7 @@ public class ContextTokenCounter : IContextTokenCounter
     public ContextTokenCounter(string modelName = "gpt-4o", int? maxContextTokens = null)
     {
         ModelName = modelName;
+        _estimator = ApproximateTokenCounter.ForModel(modelName);
         var known = maxContextTokens ?? ModelCatalog.FindModel(modelName)?.ContextWindow;
         _maxContextTokens = known ?? 8192;
         IsContextWindowEstimated = known is null;
@@ -64,7 +66,7 @@ public class ContextTokenCounter : IContextTokenCounter
     public int CountTokens(ChatMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        return Estimator.Count(message);
+        return _estimator.Count(message);
     }
 
     /// <inheritdoc />
@@ -82,9 +84,9 @@ public class ContextTokenCounter : IContextTokenCounter
         return total;
     }
 
-    private static readonly ApproximateTokenCounter Estimator = new();
+    private readonly ApproximateTokenCounter _estimator;
 
-    private static int EstimateTokens(string text) => Estimator.Count(text);
+    private int EstimateTokens(string text) => _estimator.Count(text);
 
     public static ContextTokenCounter ForGpt4o() => new("gpt-4o", 128000);
     public static ContextTokenCounter ForClaude35Sonnet() => new("claude-3.5-sonnet", 200000);
