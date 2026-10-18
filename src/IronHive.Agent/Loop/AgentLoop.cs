@@ -185,6 +185,9 @@ public class AgentLoop : IAgentLoop
         var response = await _guards.CallWithRecoveryAsync(
             ct => _chatClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken);
 
+        // Suggestion blocks leave the answer before the caller or the history sees it
+        var suggestions = new TurnSuggestions(_options.Suggestions).Strip(response.Messages);
+
         // Add assistant response to history
         _history.AddRange(response.Messages);
         _hostResults.MarkProduced(response.Messages);
@@ -205,7 +208,7 @@ public class AgentLoop : IAgentLoop
         var thinking = LiveReasoning.ToThinkingContent(LiveReasoning.Extract(response));
         var addendum = await TurnObserverNotifier.NotifyAsync(
             _turnObservers,
-            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, ThinkingContent = thinking, StopReason = stopReason, Messages = added },
+            new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, ThinkingContent = thinking, StopReason = stopReason, Suggestions = suggestions, Messages = added },
             cancellationToken);
 
         return new AgentResponse
@@ -218,6 +221,7 @@ public class AgentLoop : IAgentLoop
             Usage = usage,
             ThinkingContent = thinking,
             Addendum = addendum,
+            Suggestions = suggestions,
             StopReason = stopReason,
             Messages = added
         };
@@ -303,6 +307,7 @@ public class AgentLoop : IAgentLoop
         // honest Success instead of an unknown one.
         var toolResults = new List<FunctionResultContent>();
         var historyBuilder = new StreamingTurnHistoryBuilder();
+        var streamedSuggestions = new TurnSuggestions(_options.Suggestions);
         UsageDetails? usageDetails = null;
         ChatFinishReason? finishReason = null;
 
@@ -332,13 +337,14 @@ public class AgentLoop : IAgentLoop
             }
 
             // Yield and collect text content
-            if (!string.IsNullOrEmpty(update.Text))
+            var visible = string.IsNullOrEmpty(update.Text) ? update.Text : streamedSuggestions.Feed(update.Text);
+            if (!string.IsNullOrEmpty(visible))
             {
-                responseBuilder.Append(update.Text);
-                historyBuilder.AppendText(update.Text);
+                responseBuilder.Append(visible);
+                historyBuilder.AppendText(visible);
                 yield return new AgentResponseChunk
                 {
-                    TextDelta = update.Text
+                    TextDelta = visible
                 };
             }
 
@@ -350,6 +356,14 @@ public class AgentLoop : IAgentLoop
             }
 
             // Yield and collect tool call updates
+            // Text before a tool call is complete: what the suggestion parser held back is text after all.
+            if (update.Contents.OfType<FunctionCallContent>().Any() && streamedSuggestions.Flush() is { Length: > 0 } heldBeforeCall)
+            {
+                responseBuilder.Append(heldBeforeCall);
+                historyBuilder.AppendText(heldBeforeCall);
+                yield return new AgentResponseChunk { TextDelta = heldBeforeCall };
+            }
+
             if (update.Contents.OfType<FunctionCallContent>().Any())
             {
                 foreach (var functionCall in update.Contents.OfType<FunctionCallContent>())
@@ -379,6 +393,13 @@ public class AgentLoop : IAgentLoop
 
         // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
         // non-streaming path leaves behind -- tool results included, and in the order they arrived.
+        if (streamedSuggestions.Flush() is { Length: > 0 } heldAtEnd)
+        {
+            responseBuilder.Append(heldAtEnd);
+            historyBuilder.AppendText(heldAtEnd);
+            yield return new AgentResponseChunk { TextDelta = heldAtEnd };
+        }
+
         var turnMessages = historyBuilder.Build();
         var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
         _history.AddRange(turnMessages);
@@ -402,6 +423,7 @@ public class AgentLoop : IAgentLoop
             Usage = streamedUsage,
             ThinkingContent = LiveReasoning.ToThinkingContent(reasoningBuilder.ToString()),
             StopReason = streamedStopReason,
+            Suggestions = streamedSuggestions.Drain(),
             Messages = streamedAdded
         };
 
@@ -460,7 +482,7 @@ public class AgentLoop : IAgentLoop
             tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
         }
 
-        return ChatOptionsOverride.Apply(ChatOptionsOverride.Baseline(_options, tools), overrideOptions);
+        return TurnSuggestions.Request(ChatOptionsOverride.Apply(ChatOptionsOverride.Baseline(_options, tools), overrideOptions), _options.Suggestions);
     }
 
     private string GetLatestUserQuery()
@@ -594,6 +616,15 @@ public class AgentOptions
     /// the provider's default applies.
     /// </summary>
     public ReasoningOptions? Reasoning { get; set; }
+
+    /// <summary>
+    /// Asks the model to end its answer with follow-up suggestions — a question and a few answers the user can pick — as
+    /// <c>MessageRequest.Suggestions</c> does on the IronHive message loop, with the same instruction and block format
+    /// (<see cref="IronHive.Abstractions.Messages.SuggestionCollector"/>). The blocks are taken out of the answer text (streamed or not, and out of the
+    /// history the next turn sends) and returned as <see cref="AgentResponse.Suggestions"/> / <see cref="TurnRecord.Suggestions"/>.
+    /// Null (the default): no instruction is added and the text is left as the model wrote it.
+    /// </summary>
+    public IronHive.Abstractions.Messages.SuggestionOptions? Suggestions { get; set; }
 
     /// <summary>
     /// Available tools for the agent.

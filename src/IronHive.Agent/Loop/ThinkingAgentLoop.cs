@@ -208,6 +208,9 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var response = await _guards.CallWithRecoveryAsync(
             ct => _thinkingClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken);
 
+        // Suggestion blocks leave the answer before the caller or the history sees it
+        var suggestions = new TurnSuggestions(_options.Suggestions).Strip(response.Messages);
+
         // Add assistant response to history
         _history.AddRange(response.Messages);
         _hostResults.MarkProduced(response.Messages);
@@ -235,6 +238,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                 Usage = usage,
                 ThinkingContent = thinkingContent,
                 StopReason = stopReason,
+                Suggestions = suggestions,
                 Messages = added
             },
             cancellationToken);
@@ -247,6 +251,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             Usage = usage,
             ThinkingContent = thinkingContent,
             Addendum = addendum,
+            Suggestions = suggestions,
             StopReason = stopReason,
             Messages = added
         };
@@ -328,6 +333,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var toolCalls = new List<FunctionCallContent>();
         var toolResults = new List<FunctionResultContent>();
         var historyBuilder = new StreamingTurnHistoryBuilder();
+        var streamedSuggestions = new TurnSuggestions(_options.Suggestions);
         var thinkingBuilder = new StringBuilder();
         UsageDetails? usageDetails = null;
         ChatFinishReason? finishReason = null;
@@ -374,13 +380,14 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
                 }
             }
 
-            if (!string.IsNullOrEmpty(update.Text))
+            var visible = string.IsNullOrEmpty(update.Text) ? update.Text : streamedSuggestions.Feed(update.Text);
+            if (!string.IsNullOrEmpty(visible))
             {
-                responseBuilder.Append(update.Text);
-                historyBuilder.AppendText(update.Text);
+                responseBuilder.Append(visible);
+                historyBuilder.AppendText(visible);
                 yield return new AgentResponseChunk
                 {
-                    TextDelta = update.Text
+                    TextDelta = visible
                 };
             }
 
@@ -388,6 +395,14 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             foreach (var fragment in update.Contents.OfType<IronHive.Extensions.AI.FunctionCallDeltaContent>())
             {
                 yield return new AgentResponseChunk { ToolCallDelta = ToolCallChunkFactory.FromDelta(fragment) };
+            }
+
+            // Text before a tool call is complete: what the suggestion parser held back is text after all.
+            if (update.Contents.OfType<FunctionCallContent>().Any() && streamedSuggestions.Flush() is { Length: > 0 } heldBeforeCall)
+            {
+                responseBuilder.Append(heldBeforeCall);
+                historyBuilder.AppendText(heldBeforeCall);
+                yield return new AgentResponseChunk { TextDelta = heldBeforeCall };
             }
 
             if (update.Contents.OfType<FunctionCallContent>().Any())
@@ -418,6 +433,13 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         }
 
         // Same rebuild as AgentLoop -- the peer implementation lost tool results in exactly the same way.
+        if (streamedSuggestions.Flush() is { Length: > 0 } heldAtEnd)
+        {
+            responseBuilder.Append(heldAtEnd);
+            historyBuilder.AppendText(heldAtEnd);
+            yield return new AgentResponseChunk { TextDelta = heldAtEnd };
+        }
+
         var turnMessages = historyBuilder.Build();
         var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient));
         _history.AddRange(turnMessages);
@@ -444,6 +466,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             Usage = streamedUsage,
             ThinkingContent = thinking,
             StopReason = streamedStopReason,
+            Suggestions = streamedSuggestions.Drain(),
             Messages = streamedAdded
         };
 
@@ -549,7 +572,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             tools = ToolSchemaCompressor.CompressTools(tools, _options.ToolSchemaCompression);
         }
 
-        return ChatOptionsOverride.Apply(ChatOptionsOverride.Baseline(_options, tools), overrideOptions);
+        return TurnSuggestions.Request(ChatOptionsOverride.Apply(ChatOptionsOverride.Baseline(_options, tools), overrideOptions), _options.Suggestions);
     }
 
     private string GetLatestUserQuery()

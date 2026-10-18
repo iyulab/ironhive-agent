@@ -204,6 +204,12 @@ public record AgentResponse
     /// </remarks>
     public string? Addendum { get; init; }
 
+    /// <summary>
+    /// The follow-up suggestions the model ended its answer with, when <see cref="AgentOptions.Suggestions"/> is set and the
+    /// model wrote any; <c>null</c> otherwise. Their blocks are not part of <see cref="Content"/>.
+    /// </summary>
+    public IReadOnlyList<IronHive.Abstractions.Messages.Suggestion>? Suggestions { get; init; }
+
     /// <summary>Why the turn ended (it ended without an error; a failed turn throws).</summary>
     public TurnStopReason StopReason { get; init; }
 

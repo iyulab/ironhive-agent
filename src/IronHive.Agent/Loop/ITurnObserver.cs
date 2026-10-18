@@ -75,6 +75,12 @@ public record TurnRecord
     /// </summary>
     public ThinkingContent? ThinkingContent { get; init; }
 
+    /// <summary>
+    /// The follow-up suggestions the model ended this turn's answer with (<see cref="AgentOptions.Suggestions"/>), or
+    /// <c>null</c>. On a streamed turn this is where they arrive: the closing chunk's <see cref="AgentResponseChunk.Turn"/>.
+    /// </summary>
+    public IReadOnlyList<IronHive.Abstractions.Messages.Suggestion>? Suggestions { get; init; }
+
     /// <summary>Why the turn ended.</summary>
     public TurnStopReason StopReason { get; init; }
 

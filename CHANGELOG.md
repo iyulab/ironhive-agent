@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **Follow-up suggestions on the agent loop: `AgentOptions.Suggestions`.** Set it (`SuggestionOptions` from
+  `IronHive.Abstractions.Messages`) and every call asks the model to end its answer with a suggestion block — a question
+  and a few answers the user can pick — exactly as `MessageRequest.Suggestions` does on the IronHive message loop. The
+  blocks are taken out of the answer text, streamed or not, and out of the history the next turn sends, and come back as
+  `AgentResponse.Suggestions` and `TurnRecord.Suggestions` (on a stream, in the closing chunk's `Turn`). Both
+  `AgentLoop` and `ThinkingAgentLoop`. A host moving from the message loop maps `MessageRequest.Suggestions` →
+  `AgentOptions.Suggestions` and `MessageResponse.Suggestions` → `AgentResponse.Suggestions`.
+
+### Dependencies
+- IronHive 0.67.0 (the suggestion protocol is public there: `SuggestionCollector`).
+
 ## [0.67.1] - 2026-10-18
 
 ### Fixed
