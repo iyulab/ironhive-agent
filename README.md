@@ -975,6 +975,20 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Name = "librarian", Mode
   `AgentTelemetry.SourceName` too.
 - No span exists while nothing listens, and message content is never recorded.
 
+## Moving from the IronHive message loop
+
+An app that runs its tool rounds in IronHive's `IMessageService` (`MessageRequest` with `Tools`) moves to `AgentLoop` over
+`ChatClientAdapter` (`generator.AsChatClient(model)` from `IronHive.Extensions.AI`, then `.UseFunctionInvocation()`):
+
+| Message loop (`IronHive.Core`) | Agent loop |
+|---|---|
+| `MessageRequest.System` | `ChatOptions.Instructions` or a system message in the history |
+| `MessageRequest.ThinkingEffort` | `AgentOptions.Reasoning = new ReasoningOptions { Effort = … }` (`XHigh` = `ReasoningEffort.ExtraHigh`); per turn `ChatOptions.Reasoning` |
+| `MessageRequest.Suggestions` / `MessageResponse.Suggestions` | `AgentOptions.Suggestions` / `AgentResponse.Suggestions` (`TurnRecord.Suggestions` on a stream) |
+| `MessageRequest.MaxTurns` | `FunctionInvokingChatClient.MaximumIterationsPerRequest` (at the cap the turn ends with `StopReason = StepLimit`) |
+| per-result limits (`ToolOptions.OnAfterInvoke` + `TextCompactor`) | `CompactionConfig.MaxToolResultChars` (head + tail lines kept; default 30,000 characters) |
+| `ToolResultBudgetMiddleware(maxTotalChars)` — a call-wide total, then tools are withdrawn | `CompactionConfig.ObservationMaskingProtectedTokens` with `.UseToolRoundContext()` ([Long single-message tasks](#long-single-message-tasks)): every round of the turn is sent with the newest results whole and older ones masked (re-readable by the same call), so the request stays bounded without cutting the model off; the round cap above ends a turn that keeps calling |
+
 ## Requirements
 
 - .NET 10.0+
