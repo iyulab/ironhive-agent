@@ -1,6 +1,9 @@
 using AwesomeAssertions;
 using IndexThinking.Agents;
+using IronHive.Abstractions.Messages;
+using IronHive.Abstractions.Messages.Content;
 using IronHive.Agent.Loop;
+using IronHive.Extensions.AI;
 using IronHive.Agent.Tests.Mocks;
 using Microsoft.Extensions.AI;
 using NSubstitute;
@@ -42,6 +45,34 @@ public class AgentOptionsReasoningTests
 
         mock.ReceivedOptions[0]!.Reasoning!.Effort.Should().Be(ReasoningEffort.None);
         mock.ReceivedOptions[1]!.Reasoning!.Effort.Should().Be(ReasoningEffort.Low);
+    }
+
+    [Theory]
+    [InlineData(ReasoningEffort.None, MessageThinkingEffort.None)]
+    [InlineData(ReasoningEffort.Low, MessageThinkingEffort.Low)]
+    [InlineData(ReasoningEffort.High, MessageThinkingEffort.High)]
+    [InlineData(ReasoningEffort.ExtraHigh, MessageThinkingEffort.XHigh)]
+    public async Task Over_an_IronHive_generator_the_effort_reaches_the_provider_request(ReasoningEffort effort, MessageThinkingEffort expected)
+    {
+        // The whole path a host takes when it moves from the Core message loop to AgentLoop: loop option -> ChatOptions ->
+        // ChatClientAdapter -> the generator's request, where a provider reads ThinkingEffort.
+        var generator = Substitute.For<IMessageGenerator>();
+        var requests = new List<MessageGenerationRequest>();
+        generator.GenerateMessageAsync(Arg.Do<MessageGenerationRequest>(requests.Add), Arg.Any<CancellationToken>())
+            .Returns(new MessageResponse
+            {
+                ResponseId = "r",
+                Message = new Message { Role = MessageRole.Assistant, Content = { new TextMessageContent { Value = "answer" } } },
+            });
+        using var client = new ChatClientAdapter(generator, "model");
+        var loop = new AgentLoop(client, new AgentOptions { Reasoning = new ReasoningOptions { Effort = effort } });
+
+        await loop.RunAsync("first", Ct);
+        await loop.RunAsync("second", new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Medium } }, Ct);
+
+        requests.Should().HaveCount(2);
+        requests[0].ThinkingEffort.Should().Be(expected);
+        requests[1].ThinkingEffort.Should().Be(MessageThinkingEffort.Medium, "a per-turn override reaches the provider too");
     }
 
     [Fact]
