@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
+using ToolCallParser;
 
 namespace IronHive.Agent.Invocation;
 
@@ -46,11 +46,13 @@ namespace IronHive.Agent.Invocation;
 /// <b>Placement:</b> directly inside the function-invoking client, so the calls it produces are the ones that client runs:
 /// <c>builder.UseToolInvocationPipeline(…).UseTextToolCallRecovery()</c>.
 /// </para>
+/// <para>
+/// The markup is read by <see cref="ToolCallMarkup"/>; this client decides which blocks become calls and types their
+/// arguments against the offered tools.
+/// </para>
 /// </remarks>
-public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClient
+public sealed class TextToolCallRecoveryChatClient : DelegatingChatClient
 {
-    private static readonly string[] Markers = ["<tool_call>", "<function="];
-
     /// <summary>
     /// The <see cref="ChatResponse.AdditionalProperties"/> key (on the last <see cref="ChatResponseUpdate"/> when streaming)
     /// set when call markup was dropped from the text; its value is <see cref="CallsNotAllowed"/> or <see cref="Unterminated"/>.
@@ -152,12 +154,12 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
 
             held.Add(update);
             heldText.Append(update.Text);
-            switch (Scan(heldText.ToString()))
+            switch (ToolCallMarkup.Scan(heldText.ToString()))
             {
-                case MarkerScan.Found when !sawStructuredCall:
+                case ToolCallMarkupScan.Found when !sawStructuredCall:
                     holdingToEnd = true;
                     break;
-                case MarkerScan.Partial when !sawStructuredCall:
+                case ToolCallMarkupScan.Partial when !sawStructuredCall:
                     break; // keep holding until the next update says whether a block starts here
                 default:
                     foreach (var pending in held)
@@ -249,81 +251,31 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
         return byName;
     }
 
-    private enum MarkerScan { None, Partial, Found }
-
-    /// <summary>Whether <paramref name="text"/> holds a block marker, or ends with what may become one.</summary>
-    private static MarkerScan Scan(string text)
-    {
-        foreach (var marker in Markers)
-        {
-            if (text.Contains(marker, StringComparison.Ordinal))
-            {
-                return MarkerScan.Found;
-            }
-        }
-
-        var lastOpen = text.LastIndexOf('<');
-        if (lastOpen < 0)
-        {
-            return MarkerScan.None;
-        }
-
-        var tail = text.AsSpan(lastOpen);
-        foreach (var marker in Markers)
-        {
-            if (marker.AsSpan().StartsWith(tail, StringComparison.Ordinal))
-            {
-                return MarkerScan.Partial;
-            }
-        }
-
-        return MarkerScan.None;
-    }
-
     private sealed record Recovered(string Prefix, IReadOnlyList<FunctionCallContent> Calls);
 
     /// <summary>The calls written in <paramref name="text"/>, or <c>null</c> unless every block is complete and offered.</summary>
-    private static Recovered? Recover(string text, Dictionary<string, AITool> tools)
+    private static Recovered? Recover(string text, Dictionary<string, AITool> tools) =>
+        Recover(ToolCallMarkup.Read(text), tools);
+
+    private static Recovered? Recover(ToolCallMarkupText read, Dictionary<string, AITool> tools)
     {
-        var blocks = new List<(int Start, string Body)>();
-        foreach (Match m in ToolCallBlock().Matches(text))
-        {
-            blocks.Add((m.Index, m.Groups["body"].Value));
-        }
-
-        if (blocks.Count == 0)
-        {
-            // Qwen3-Coder sometimes leaves out the <tool_call> wrapper.
-            foreach (Match m in FunctionBlock().Matches(text))
-            {
-                blocks.Add((m.Index, m.Value));
-            }
-        }
-
-        if (blocks.Count == 0)
+        if (read.Blocks.Count == 0)
         {
             return null;
         }
 
-        var calls = new List<FunctionCallContent>();
-        foreach (var (_, body) in blocks)
+        var calls = new List<FunctionCallContent>(read.Blocks.Count);
+        foreach (var block in read.Blocks)
         {
-            if (ParseBlock(body.Trim(), tools) is not { } call)
+            if (block.Name is not { } name || !tools.TryGetValue(name, out var tool))
             {
                 return null;
             }
 
-            calls.Add(call);
+            calls.Add(new FunctionCallContent(NewCallId(), tool.Name, Arguments(block, tool)));
         }
 
-        // A wrapper opened but never closed («<tool_call> <function=…>…</function>») is part of the call, not of the prose.
-        var prefix = text[..blocks[0].Start].TrimEnd();
-        if (prefix.EndsWith(Markers[0], StringComparison.Ordinal))
-        {
-            prefix = prefix[..^Markers[0].Length].TrimEnd();
-        }
-
-        return new Recovered(prefix, calls);
+        return new Recovered(read.Prefix, calls);
     }
 
     private sealed record Dropped(string Prefix, string Reason);
@@ -334,133 +286,40 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
     /// </summary>
     private static Dropped? Drop(string text, Dictionary<string, AITool> tools, bool callsAllowed)
     {
-        if (!callsAllowed && Recover(text, tools) is { } forbidden)
+        var read = ToolCallMarkup.Read(text);
+        if (!callsAllowed && Recover(read, tools) is { } forbidden)
         {
             return new Dropped(forbidden.Prefix, CallsNotAllowed);
         }
 
-        if (ToolCallBlock().IsMatch(text) || FunctionBlock().IsMatch(text))
+        if (read.Blocks.Count > 0)
         {
             return null; // a complete block that is not an offered call: possibly the model talking about a tool
         }
 
-        return UnterminatedBlockStart(text) is { } start ? new Dropped(text[..start].TrimEnd(), Unterminated) : null;
+        return read.UnterminatedAt is { } start ? new Dropped(text[..start].TrimEnd(), Unterminated) : null;
     }
 
-    /// <summary>Where the block <paramref name="text"/> ends inside begins, or <c>null</c> when it does not end inside one.</summary>
-    /// <remarks>
-    /// A marker counts only when what follows it is a block's opening — a JSON object, a <c>&lt;function=Name&gt;</c>, a
-    /// parameter, or nothing yet — so prose that names the format («the format is &lt;tool_call&gt;, followed by JSON») stays.
-    /// </remarks>
-    private static int? UnterminatedBlockStart(string text)
+    private static Dictionary<string, object?> Arguments(ToolCallMarkupBlock block, AITool tool)
     {
-        var wrapper = text.IndexOf(Markers[0], StringComparison.Ordinal);
-        if (wrapper >= 0)
-        {
-            var rest = text.AsSpan(wrapper + Markers[0].Length).TrimStart();
-            return rest.IsEmpty || rest[0] == '{' || IsFunctionOpening(rest) ? wrapper : null;
-        }
-
-        var function = text.IndexOf(Markers[1], StringComparison.Ordinal);
-        return function >= 0 && IsFunctionOpening(text.AsSpan(function)) ? function : null;
-    }
-
-    /// <summary>Whether <paramref name="tail"/> is the start of a <c>&lt;function=Name&gt;</c> block cut off before its end.</summary>
-    private static bool IsFunctionOpening(ReadOnlySpan<char> tail)
-    {
-        var marker = Markers[1].AsSpan();
-        if (tail.Length <= marker.Length)
-        {
-            return marker.StartsWith(tail, StringComparison.Ordinal);
-        }
-
-        if (!tail.StartsWith(marker, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var afterMarker = tail[marker.Length..];
-        var close = afterMarker.IndexOf('>');
-        if (close < 0)
-        {
-            return afterMarker.IndexOfAny(" \t\r\n") < 0; // a name still being written
-        }
-
-        var body = afterMarker[(close + 1)..].TrimStart();
-        return body.IsEmpty || body[0] == '<';
-    }
-
-    private static FunctionCallContent? ParseBlock(string body, Dictionary<string, AITool> tools)
-    {
-        if (body.StartsWith('{'))
-        {
-            return ParseJsonBlock(body, tools);
-        }
-
-        var function = FunctionBlock().Match(body);
-        if (!function.Success || !tools.TryGetValue(function.Groups["name"].Value.Trim(), out var tool))
-        {
-            return null;
-        }
-
         var arguments = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (Match parameter in ParameterBlock().Matches(function.Groups["params"].Value))
+        if (block.Arguments is { } json)
         {
-            var name = parameter.Groups["name"].Value.Trim();
-            arguments[name] = Coerce(TrimOneNewline(parameter.Groups["value"].Value), ParameterType(tool, name));
-        }
-
-        return new FunctionCallContent(NewCallId(), tool.Name, arguments);
-    }
-
-    private static FunctionCallContent? ParseJsonBlock(string body, Dictionary<string, AITool> tools)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("name", out var nameElement) || nameElement.ValueKind != JsonValueKind.String
-                || !tools.TryGetValue(nameElement.GetString()!, out var tool))
+            using var doc = JsonDocument.Parse(json);
+            foreach (var property in doc.RootElement.EnumerateObject())
             {
-                return null;
+                arguments[property.Name] = property.Value.Clone();
             }
 
-            var arguments = new Dictionary<string, object?>(StringComparer.Ordinal);
-            if (root.TryGetProperty("arguments", out var args) || root.TryGetProperty("parameters", out args))
-            {
-                if (args.ValueKind == JsonValueKind.String)
-                {
-                    using var inner = JsonDocument.Parse(args.GetString()!);
-                    if (inner.RootElement.ValueKind != JsonValueKind.Object)
-                    {
-                        return null;
-                    }
-
-                    foreach (var property in inner.RootElement.EnumerateObject())
-                    {
-                        arguments[property.Name] = property.Value.Clone();
-                    }
-                }
-                else if (args.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var property in args.EnumerateObject())
-                    {
-                        arguments[property.Name] = property.Value.Clone();
-                    }
-                }
-                else if (args.ValueKind != JsonValueKind.Null)
-                {
-                    return null;
-                }
-            }
-
-            return new FunctionCallContent(NewCallId(), tool.Name, arguments);
+            return arguments;
         }
-        catch (JsonException)
+
+        foreach (var (name, value) in block.Parameters)
         {
-            return null;
+            arguments[name] = Coerce(value, ParameterType(tool, name));
         }
+
+        return arguments;
     }
 
     /// <summary>The JSON Schema <c>type</c> of <paramref name="parameter"/>, when the tool declares one.</summary>
@@ -498,37 +357,5 @@ public sealed partial class TextToolCallRecoveryChatClient : DelegatingChatClien
         }
     }
 
-    private static string TrimOneNewline(string value)
-    {
-        if (value.StartsWith("\r\n", StringComparison.Ordinal))
-        {
-            value = value[2..];
-        }
-        else if (value.StartsWith('\n'))
-        {
-            value = value[1..];
-        }
-
-        if (value.EndsWith("\r\n", StringComparison.Ordinal))
-        {
-            value = value[..^2];
-        }
-        else if (value.EndsWith('\n'))
-        {
-            value = value[..^1];
-        }
-
-        return value;
-    }
-
     private static string NewCallId() => "text_call_" + Guid.NewGuid().ToString("N")[..12];
-
-    [GeneratedRegex(@"<tool_call>(?<body>.*?)</tool_call>", RegexOptions.Singleline)]
-    private static partial Regex ToolCallBlock();
-
-    [GeneratedRegex(@"<function=(?<name>[^>\n]+)>(?<params>.*?)</function>", RegexOptions.Singleline)]
-    private static partial Regex FunctionBlock();
-
-    [GeneratedRegex(@"<parameter=(?<name>[^>\n]+)>(?<value>.*?)</parameter>", RegexOptions.Singleline)]
-    private static partial Regex ParameterBlock();
 }

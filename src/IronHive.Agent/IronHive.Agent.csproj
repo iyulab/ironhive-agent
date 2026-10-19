@@ -41,6 +41,8 @@
   <ItemGroup>
     <!-- TokenMeter (token counting, multi-provider pricing) -->
     <PackageReference Include="TokenMeter" />
+    <!-- ToolCallParser (reads tool calls written as text: TextToolCallRecoveryChatClient) -->
+    <PackageReference Include="ToolCallParser" />
     <!-- IronHive (LLM abstraction) -->
     <PackageReference Include="IronHive.Abstractions" />
     <!-- FunctionCallDeltaContent: the tool-argument fragments the IronHive IChatClient bridge streams (AgentOptions.StreamToolArguments). -->

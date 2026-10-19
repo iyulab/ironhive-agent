@@ -9,7 +9,13 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Fixed
 - **The packages link to the repository as their project site** (`PackageProjectUrl`), and `IronHive.Agent` has search tags.
 
+### Changed
+- **`TextToolCallRecoveryChatClient` reads the markup with `ToolCallParser`'s `ToolCallMarkup`** — the same Hermes /
+  Qwen 2.5 / Qwen3-Coder grammar, now in one package other hosts can use for their own leak checks. No change in which
+  blocks become calls.
+
 ### Dependencies
+- New dependency `ToolCallParser` 0.7.0.
 - .NET runtime packages 10.0.12 -> 10.0.13 (the 10.0 servicing band; `Microsoft.Extensions.*` and their siblings move together).
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.24.0 -> 0.25.0.
 
