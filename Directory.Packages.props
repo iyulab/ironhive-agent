@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
@@ -21,12 +21,12 @@
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
     <PackageVersion Include="OpenAI" Version="2.14.0" />
     <!-- DI -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.13" />
     <!-- Diff -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <!-- Glob -->
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.13" />
     <!-- YAML Config -->
     <PackageVersion Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
@@ -35,19 +35,19 @@
     <!-- Security pin: override transitive Microsoft.Bcl.Memory 9.0.4 (NU1903 / GHSA-73j8-2gch-69rq,
          CVE-2026-26127 Base64Url OOB-read DoS). Patched in 10.0.4+; pin 10.0.8 so consumers with
          TreatWarningsAsErrors do not inherit the advisory transitively. -->
-    <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.13" />
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.40.0" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
     <PackageVersion Include="FluxGuard.Remote" Version="0.24.0" />
     <!-- DeepResearch dependencies -->
     <PackageVersion Include="WebFlux" Version="0.26.1" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
     <PackageVersion Include="Polly.Extensions" Version="8.6.6" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
     <!-- Testing (xUnit v3 / Microsoft.Testing.Platform) -->
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
