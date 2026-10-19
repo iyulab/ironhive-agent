@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [0.70.1] - 2026-10-19
+
+### Dependencies
+- Re-pinned sibling package(s) `IndexThinking` 0.31.0 -> 0.33.0. No source changes. **Take it with IndexThinking 0.33.0:** 0.70.0 was
+  compiled against a `ThinkingChatClient` constructor that 0.33.0 removed, so 0.70.0 with IndexThinking 0.33.0 fails at run time (`MissingMethodException`).
+
 ## [0.70.0] - 2026-10-18
 
 ### Added

@@ -28,7 +28,7 @@
 
   <!-- Version: Update this to trigger a new release -->
   <PropertyGroup>
-    <Version>0.70.0</Version>
+    <Version>0.70.1</Version>
     <!-- nuget.org «Release Notes»: the GitHub release of this version (its notes are the CHANGELOG section). -->
     <PackageReleaseNotes>https://github.com/iyulab/ironhive-agent/releases/tag/v$(Version)</PackageReleaseNotes>
   </PropertyGroup>
