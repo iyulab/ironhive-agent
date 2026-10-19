@@ -11,6 +11,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - .NET runtime packages 10.0.12 -> 10.0.13 (the 10.0 servicing band; `Microsoft.Extensions.*` and their siblings move together).
+- Re-pinned sibling package(s) `FluxGuard.Remote` 0.24.0 -> 0.25.0.
 
 ## [0.70.1] - 2026-10-19
 
