@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <Description>IronHive Agent - Reusable agent layer for AI-powered CLI tools</Description>
+    <PackageTags>IronHive;Agent;AgentLoop;ToolCalling;LLM</PackageTags>
     <!-- Disable CA1716: "Loop" namespace conflicts with reserved keyword in some languages -->
     <NoWarn>$(NoWarn);CA1716</NoWarn>
   </PropertyGroup>

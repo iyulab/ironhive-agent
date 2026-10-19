@@ -22,6 +22,7 @@
     <Product>IronHive Agent</Product>
     <Copyright>Copyright (c) iyulab</Copyright>
     <RepositoryUrl>https://github.com/iyulab/ironhive-agent</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/iyulab/ironhive-agent</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
