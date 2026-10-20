@@ -12,7 +12,7 @@
     <PackageVersion Include="Ironbees.Core" Version="0.29.1" />
     <PackageVersion Include="Ironbees.Autonomous" Version="0.29.1" />
     <!-- TokenMeter (token counting, multi-provider pricing) -->
-    <PackageVersion Include="TokenMeter" Version="0.14.0" />
+    <PackageVersion Include="TokenMeter" Version="0.15.0" />
     <!-- ToolCallParser (tool calls written as text by open models) -->
     <PackageVersion Include="ToolCallParser" Version="0.7.0" />
     <!-- Microsoft.Extensions.AI -->
@@ -41,7 +41,7 @@
     <!-- MemoryIndexer (conversation memory, session management) -->
     <PackageVersion Include="MemoryIndexer" Version="0.40.0" />
     <!-- FluxGuard (IronHive.Agent.FluxGuard satellite: FluxGuard-backed IMcpToolCallGuard / IToolResultGuard) -->
-    <PackageVersion Include="FluxGuard.Remote" Version="0.25.0" />
+    <PackageVersion Include="FluxGuard.Remote" Version="0.25.1" />
     <!-- DeepResearch dependencies -->
     <PackageVersion Include="WebFlux" Version="0.26.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
