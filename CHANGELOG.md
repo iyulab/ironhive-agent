@@ -22,6 +22,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - .NET runtime packages 10.0.12 -> 10.0.13 (the 10.0 servicing band; `Microsoft.Extensions.*` and their siblings move together).
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.24.0 -> 0.25.0.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.67.0 -> 0.68.0, `IronHive.Extensions.AI` 0.67.0 -> 0.68.0.
+- Re-pinned sibling package(s) `TokenMeter` 0.13.1 -> 0.14.0.
 
 ## [0.70.1] - 2026-10-19
 
