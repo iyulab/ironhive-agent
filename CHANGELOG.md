@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.71.0] - 2026-10-20
 
 ### Fixed
 - **MCP tools are judged by the `mcp_tools` permission rules under the names their servers give them.** The rules reached a tool only by an `mcp__` name prefix, which the plugin manager's tools never carry, so an `mcp_tools` allow rule never matched and every MCP tool fell to `tools` / the default action. `IMcpPluginManager.IsMcpTool(name)` says which names a connected plugin listed, and `ToolCallPolicy` takes it (`new ToolCallPolicy(config, manager.IsMcpTool)`; `AddIronHiveAgentApprovalGate` wires the registered manager). **Breaking**: a rule for an MCP tool written under `tools` (the workaround) no longer applies once the manager is wired — move it to `mcp_tools`; an `IMcpPluginManager` implementation adds `IsMcpTool`.
