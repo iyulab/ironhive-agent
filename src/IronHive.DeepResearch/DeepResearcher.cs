@@ -124,7 +124,7 @@ public partial class DeepResearcher : IDeepResearcher
 /// <summary>
 /// 대화형 리서치 세션 구현
 /// </summary>
-public partial class ResearchSession : IResearchSession
+public partial class ResearchSession : IResearchSession, IDisposable
 {
     private readonly ResearchState _state;
     private readonly ResearchOrchestrator _orchestrator;
@@ -228,6 +228,13 @@ public partial class ResearchSession : IResearchSession
 
         _isComplete = true;
         return result;
+    }
+
+    /// <summary>Disposes synchronously, for a container disposed with <c>Dispose()</c> (it throws on a service that is only <see cref="IAsyncDisposable"/>).</summary>
+    public void Dispose()
+    {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+        GC.SuppressFinalize(this);
     }
 
     /// <inheritdoc />

@@ -646,7 +646,11 @@ sealed class TracingRetriever(IToolRetriever inner, ILogger log) : IToolRetrieve
 
 Before any `Bash` rule, a few commands are refused outright and no rule can allow them: `rm -rf /` (or `/*`), a pipe into `sh`/`bash`, `dd` or `>` onto a disk device, `mkfs`, `fdisk`, `format X:`, `chmod 777 /` and the fork bomb. They match the command itself — `rm -rf /tmp/build` or `| sha256sum` are judged by the rules.
 
-**McpTools** — Allow tools matching `*_help`, `*_get`, `*_list`
+**McpTools** — Allow tools matching `*_help`, `*_get`, `*_list`. MCP tools keep the names their servers give them, so
+these rules reach a tool the policy knows to be an MCP tool: one a connected plugin listed
+(`IMcpPluginManager.IsMcpTool` — `AddIronHiveAgentApprovalGate()` wires the registered manager; without DI,
+`new ToolCallPolicy(permissionConfig, manager.IsMcpTool)`), or any `mcp__*` name. Patterns match the tool's own name
+(`summarize`, `*`).
 
 **Tools** — every other tool, matched by function name: Allow the read-only built-ins
 (`ListDirectory`, `GlobFiles`, `GrepFiles` and their snake_case spellings)

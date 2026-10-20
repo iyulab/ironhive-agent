@@ -157,6 +157,23 @@ public class PermissionConfigLoaderTests : IDisposable
     }
 
     [Fact]
+    public void LoadFromYaml_RulesAtTheTopLevel_SayTheyGoUnderPermissions()
+    {
+        // The flat shape a reader writes from a list of keys; the deserializer's own message names a .NET type.
+        var filePath = Path.Combine(_tempDir, "permissions.yaml");
+        File.WriteAllText(filePath, """
+            default_action: deny
+            mcp_tools:
+              - pattern: "*"
+                action: allow
+            """);
+
+        var ex = Assert.Throws<PermissionConfigException>(() => PermissionConfigLoader.LoadFromYaml(filePath));
+        Assert.Contains("'default_action' is at the top level", ex.Message);
+        Assert.Contains("'permissions:' section", ex.Message);
+    }
+
+    [Fact]
     public void LoadFromYaml_UnknownAction_Throws_InsteadOfBecomingAsk()
     {
         var filePath = Path.Combine(_tempDir, "permissions.yaml");

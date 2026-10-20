@@ -7,6 +7,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [Unreleased]
 
 ### Fixed
+- **MCP tools are judged by the `mcp_tools` permission rules under the names their servers give them.** The rules reached a tool only by an `mcp__` name prefix, which the plugin manager's tools never carry, so an `mcp_tools` allow rule never matched and every MCP tool fell to `tools` / the default action. `IMcpPluginManager.IsMcpTool(name)` says which names a connected plugin listed, and `ToolCallPolicy` takes it (`new ToolCallPolicy(config, manager.IsMcpTool)`; `AddIronHiveAgentApprovalGate` wires the registered manager). **Breaking**: a rule for an MCP tool written under `tools` (the workaround) no longer applies once the manager is wired — move it to `mcp_tools`; an `IMcpPluginManager` implementation adds `IsMcpTool`.
+- **A permissions file with its rules at the top level says where they go.** `LoadFromYaml` named a .NET type («Property 'default_action' not found on type …»); it now says the rules belong under a top-level `permissions:` section.
+- **`McpPluginManager` and `ResearchSession` implement `IDisposable` as well** — a container disposed with `Dispose()` (a `using` provider or scope) no longer throws «only implements IAsyncDisposable» when it created one.
 - **The packages link to the repository as their project site** (`PackageProjectUrl`), and `IronHive.Agent` has search tags.
 
 ### Changed

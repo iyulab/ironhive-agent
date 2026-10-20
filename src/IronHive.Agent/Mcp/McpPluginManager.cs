@@ -13,7 +13,7 @@ namespace IronHive.Agent.Mcp;
 /// <summary>
 /// Default implementation of MCP plugin manager.
 /// </summary>
-public class McpPluginManager : IMcpPluginManager
+public class McpPluginManager : IMcpPluginManager, IDisposable
 {
     private readonly ConcurrentDictionary<string, McpClientWrapper> _clients = new();
     private readonly ILogger<McpPluginManager>? _logger;
@@ -117,6 +117,7 @@ public class McpPluginManager : IMcpPluginManager
             {
                 // McpClientTool inherits from AIFunction which inherits from AITool
                 var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
+                wrapper.ToolNames = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
                 allTools.AddRange(tools.Select(WithDeclaredHints));
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -142,7 +143,15 @@ public class McpPluginManager : IMcpPluginManager
         }
 
         var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
+        wrapper.ToolNames = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
         return tools.Select(WithDeclaredHints).ToList().AsReadOnly();
+    }
+
+    /// <inheritdoc />
+    public bool IsMcpTool(string toolName)
+    {
+        ArgumentNullException.ThrowIfNull(toolName);
+        return _clients.Values.Any(wrapper => wrapper.ToolNames.Contains(toolName));
     }
 
     /// <summary>
@@ -385,6 +394,16 @@ public class McpPluginManager : IMcpPluginManager
         }
     }
 
+    /// <summary>
+    /// Disposes the connected clients synchronously — for a container disposed with <c>Dispose()</c>, which throws on a
+    /// service that implements only <see cref="IAsyncDisposable"/> (<c>AddIronHiveAgent</c> registers this type).
+    /// </summary>
+    public void Dispose()
+    {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+        GC.SuppressFinalize(this);
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
@@ -471,5 +490,9 @@ public class McpPluginManager : IMcpPluginManager
         return new HttpClientTransport(options);
     }
 
-    private sealed record McpClientWrapper(string Name, McpClient Client, McpPluginConfig Config);
+    private sealed record McpClientWrapper(string Name, McpClient Client, McpPluginConfig Config)
+    {
+        // The names this plugin's last listing returned; replaced whole on each listing, read by IsMcpTool.
+        public volatile HashSet<string> ToolNames = new(StringComparer.Ordinal);
+    }
 }

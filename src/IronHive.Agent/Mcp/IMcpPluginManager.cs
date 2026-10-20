@@ -49,6 +49,13 @@ public interface IMcpPluginManager : IAsyncDisposable
     Task<IReadOnlyList<AITool>> GetToolsAsync(string pluginName, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Whether <paramref name="toolName"/> is a tool a connected plugin listed (through <see cref="GetToolsAsync(CancellationToken)"/>
+    /// or <see cref="GetToolsAsync(string, CancellationToken)"/>). MCP tools keep the names their servers give them, so this — not a
+    /// name prefix — is how a permission policy tells an MCP tool from a built-in one (<c>ToolCallPolicy</c>'s <c>isMcpTool</c>).
+    /// </summary>
+    bool IsMcpTool(string toolName);
+
+    /// <summary>
     /// Calls a tool on a specific plugin.
     /// </summary>
     /// <param name="pluginName">Plugin name</param>

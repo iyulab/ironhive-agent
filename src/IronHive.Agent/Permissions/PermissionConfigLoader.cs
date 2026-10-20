@@ -67,6 +67,18 @@ public static class PermissionConfigLoader
             ?? throw new PermissionConfigException(filePath, "no 'permissions' object");
     }
 
+    // The rule keys written at the top of the file instead of under `permissions:` — the shape a reader of a flat example
+    // writes first. The deserializer's own message names a .NET type; this one says where the keys go.
+    private static readonly System.Text.RegularExpressions.Regex TopLevelRuleKey = new(
+        @"^(read|edit|bash|external_directory|mcp_tools|tools|read_only_tools|ask_before_delete|default_action)\s*:",
+        System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static string? MisplacedSectionHint(string text) =>
+        TopLevelRuleKey.Match(text) is { Success: true } match
+            ? $"'{match.Groups[1].Value}' is at the top level; the rules go under a top-level 'permissions:' section " +
+              "(indented beneath it, as in 'permissions: { default_action: deny }')"
+            : null;
+
     /// <summary>
     /// Loads permission configuration from a YAML file: a <c>permissions:</c> section with <c>read</c>, <c>edit</c>,
     /// <c>bash</c>, <c>external_directory</c>, <c>mcp_tools</c> and <c>tools</c> (lists of rules — <c>pattern</c>,
@@ -86,19 +98,20 @@ public static class PermissionConfigLoader
             return PermissionConfig.CreateDefault();
         }
 
+        var text = File.ReadAllText(filePath);
         YamlPermissionFile? file;
         try
         {
-            file = YamlReader.Deserialize<YamlPermissionFile?>(File.ReadAllText(filePath));
+            file = YamlReader.Deserialize<YamlPermissionFile?>(text);
         }
         catch (YamlException ex)
         {
-            throw new PermissionConfigException(filePath, ex.InnerException?.Message ?? ex.Message, ex);
+            throw new PermissionConfigException(filePath, MisplacedSectionHint(text) ?? ex.InnerException?.Message ?? ex.Message, ex);
         }
 
         if (file?.Permissions is not { } section)
         {
-            throw new PermissionConfigException(filePath, "no 'permissions' section");
+            throw new PermissionConfigException(filePath, MisplacedSectionHint(text) ?? "no 'permissions' section");
         }
 
         return new PermissionConfig

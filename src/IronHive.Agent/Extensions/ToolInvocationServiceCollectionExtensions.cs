@@ -104,8 +104,11 @@ public static class ToolInvocationServiceCollectionExtensions
         // different one. TryAdd keeps a consumer's own registration.
         services.TryAddSingleton<IModeToolFilter>(sp =>
             new ModeToolFilter(sp.GetRequiredService<IPermissionEvaluator>()));
+        // MCP tools keep their servers' names, so the McpTools rules reach them through the plugin manager, when there is one.
         services.TryAddSingleton<IToolCallPolicy>(sp =>
-            new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>()));
+            sp.GetService<Mcp.IMcpPluginManager>() is { } mcp
+                ? new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>(), mcp.IsMcpTool)
+                : new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>()));
         return services;
     }
 }

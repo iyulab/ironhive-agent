@@ -103,12 +103,15 @@ public enum RiskLevel
 /// <remarks>
 /// File reads and edits answer to the <c>Read</c>/<c>Edit</c> path rules, deletes to <see cref="IPermissionEvaluator.EvaluateDelete"/>
 /// (the <c>Edit</c> rules, asked about when <see cref="PermissionConfig.AskBeforeDelete"/>), shell commands to
-/// <see cref="IPermissionEvaluator.EvaluateBash"/>, <c>mcp__*</c> tools to <c>McpTools</c>, and any other tool to <c>Tools</c>,
+/// <see cref="IPermissionEvaluator.EvaluateBash"/>, MCP tools to <c>McpTools</c> (a name the <c>isMcpTool</c> predicate claims — wire
+/// it to <see cref="Mcp.IMcpPluginManager.IsMcpTool"/>, since MCP tools keep their servers' names — or an <c>mcp__*</c> name), and any
+/// other tool to <c>Tools</c>,
 /// falling to <see cref="PermissionConfig.DefaultAction"/>.
 /// </remarks>
 public sealed class ToolCallPolicy : IToolCallPolicy
 {
     private readonly IPermissionEvaluator _evaluator;
+    private readonly Func<string, bool>? _isMcpTool;
 
     /// <summary>Creates the policy over <see cref="PermissionConfig.CreateDefault"/>.</summary>
     public ToolCallPolicy() : this(new PermissionEvaluator())
@@ -126,6 +129,23 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         _evaluator = evaluator ?? throw new ArgumentNullException(nameof(evaluator));
     }
 
+    /// <summary>
+    /// Creates the policy over <paramref name="permissionConfig"/>; <paramref name="isMcpTool"/> says which tool names are MCP
+    /// tools, judged by the <c>McpTools</c> rules (usually <see cref="Mcp.IMcpPluginManager.IsMcpTool"/>).
+    /// </summary>
+    public ToolCallPolicy(PermissionConfig permissionConfig, Func<string, bool> isMcpTool) : this(new PermissionEvaluator(permissionConfig), isMcpTool)
+    {
+    }
+
+    /// <summary>
+    /// Creates the policy over <paramref name="evaluator"/>; <paramref name="isMcpTool"/> says which tool names are MCP tools,
+    /// judged by the <c>McpTools</c> rules (usually <see cref="Mcp.IMcpPluginManager.IsMcpTool"/>).
+    /// </summary>
+    public ToolCallPolicy(IPermissionEvaluator evaluator, Func<string, bool> isMcpTool) : this(evaluator)
+    {
+        _isMcpTool = isMcpTool ?? throw new ArgumentNullException(nameof(isMcpTool));
+    }
+
     /// <inheritdoc />
     public RiskAssessment Evaluate(string toolName, IDictionary<string, object?>? arguments)
     {
@@ -138,7 +158,8 @@ public sealed class ToolCallPolicy : IToolCallPolicy
             "move_file" => AssessMove(arguments),
             "glob_files" or "grep_files" or "list_directory" => AssessDirectoryRead(toolName, arguments),
             "shell" or "execute_command" => AssessShell(arguments),
-            _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) => ToRiskAssessment(_evaluator.EvaluateMcpTool(toolName), $"MCP tool: {toolName}"),
+            _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) || _isMcpTool?.Invoke(toolName) == true
+                => ToRiskAssessment(_evaluator.EvaluateMcpTool(toolName), $"MCP tool: {toolName}"),
             _ => AssessTool(toolName)
         };
     }
