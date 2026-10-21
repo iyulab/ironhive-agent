@@ -6,6 +6,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **A host can keep its own secrets out of the shell tool's commands** — `ShellToolOptions.RemoveEnvironmentVariables`, passed to
+  `BuiltInTools.GetAll(workingDirectory, fileOptions, shellOptions)` or `new ToolProvider(workingDirectory, fileOptions, shellOptions)`,
+  takes the named variables out of every `ExecuteCommand` child's environment (a model running `env` no longer prints a provider API
+  key the host holds there into the tool result). Everything else is still inherited; the default removes nothing.
+
 ### Dependencies
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.25.0 -> 0.25.1, `TokenMeter` 0.14.0 -> 0.15.0.
 

@@ -36,9 +36,19 @@ public static class BuiltInTools
     /// <param name="options">Where the file tools may reach and what runs around a write; <see langword="null"/> for the defaults.</param>
     /// <returns>List of AI tools. The list is mutable so a host can append its own tools.</returns>
     public static IList<AITool> GetAll(string? workingDirectory, FileToolOptions? options)
+        => GetAll(workingDirectory, options, shellOptions: null);
+
+    /// <summary>
+    /// Gets all built-in tools, with the host's decisions about the file tools and the shell tool.
+    /// </summary>
+    /// <param name="workingDirectory">Working directory for tools.</param>
+    /// <param name="options">Where the file tools may reach and what runs around a write; <see langword="null"/> for the defaults.</param>
+    /// <param name="shellOptions">What the shell tool's commands may not see; <see langword="null"/> for the defaults.</param>
+    /// <returns>List of AI tools. The list is mutable so a host can append its own tools.</returns>
+    public static IList<AITool> GetAll(string? workingDirectory, FileToolOptions? options, ShellToolOptions? shellOptions)
     {
         var wd = workingDirectory ?? Directory.GetCurrentDirectory();
-        var tools = new ToolProvider(wd, options);
+        var tools = new ToolProvider(wd, options, shellOptions);
         var todoTool = new TodoTool(wd);
 
         // Each tool says whether it can change anything (ToolInvocationHints.ReadOnlyKey): the repeated-result guard counts
@@ -72,6 +82,7 @@ public class ToolProvider
     private readonly string _workingDirectory;
     private readonly IFileWriteInterceptor? _writeInterceptor;
     private readonly string[] _allowedRoots;
+    private readonly string[] _removedEnvironmentVariables;
     private const int MaxFileSize = 1024 * 1024; // 1MB
     private const int MaxOutputLength = 50000; // Characters
 
@@ -85,7 +96,20 @@ public class ToolProvider
     private static readonly TimeSpan KillWaitTimeout = TimeSpan.FromSeconds(5);
 
     public ToolProvider(string workingDirectory, FileToolOptions? options = null)
+        : this(workingDirectory, options, shellOptions: null)
     {
+    }
+
+    /// <summary>
+    /// Creates the tools for a working directory, with the host's decisions about the file tools and the shell tool.
+    /// </summary>
+    /// <param name="workingDirectory">Where relative paths and commands start.</param>
+    /// <param name="options">Where the file tools may reach and what runs around a write; <see langword="null"/> for the defaults.</param>
+    /// <param name="shellOptions">What the shell tool's commands may not see; <see langword="null"/> for the defaults.</param>
+    public ToolProvider(string workingDirectory, FileToolOptions? options, ShellToolOptions? shellOptions)
+    {
+        _removedEnvironmentVariables = [.. (shellOptions?.RemoveEnvironmentVariables ?? [])
+            .Where(name => !string.IsNullOrWhiteSpace(name))];
         _writeInterceptor = options?.WriteInterceptor;
         _allowedRoots = [.. (options?.AllowedRoots ?? [])
             .Where(root => !string.IsNullOrWhiteSpace(root))
@@ -628,6 +652,12 @@ public class ToolProvider
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        // The child starts from a copy of this process's environment; what the host keeps for itself is taken out of it.
+        foreach (var name in _removedEnvironmentVariables)
+        {
+            processInfo.Environment.Remove(name);
+        }
 
         using var process = new Process { StartInfo = processInfo };
         var outputCapture = new HeadTailCapture(OutputHeadChars, OutputTailChars);
