@@ -6,6 +6,10 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Removed
+- **Breaking: the unused DeepResearch interfaces `ISufficiencyEvaluator`, `IResearchOrchestrator` and `IReportGenerator` are gone.**
+  No type in the package implemented or accepted them. Migration: use `DeepResearcher`.
+
 ### Added
 - **A host can keep its own secrets out of the shell tool's commands** — `ShellToolOptions.RemoveEnvironmentVariables`, passed to
   `BuiltInTools.GetAll(workingDirectory, fileOptions, shellOptions)` or `new ToolProvider(workingDirectory, fileOptions, shellOptions)`,
