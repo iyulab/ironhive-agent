@@ -6,7 +6,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Search.Caching;
+namespace IronHive.DeepResearch.Tests.Search.Caching;
 
 public class MemorySearchResultCacheTests : IDisposable
 {

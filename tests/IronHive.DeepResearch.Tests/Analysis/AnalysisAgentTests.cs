@@ -9,7 +9,7 @@ using IronHive.DeepResearch.Orchestration.State;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Analysis;
+namespace IronHive.DeepResearch.Tests.Analysis;
 
 public class AnalysisAgentTests
 {

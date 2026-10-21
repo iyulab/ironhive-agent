@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Search.Providers;
+namespace IronHive.DeepResearch.Tests.Search.Providers;
 
 public class TavilySearchProviderTests
 {

@@ -8,7 +8,7 @@ using WebFlux.Core.Interfaces;
 using WebFlux.Core.Options;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Content;
+namespace IronHive.DeepResearch.Tests.Content;
 
 public class WebFluxIntegratedContentExtractorTests
 {

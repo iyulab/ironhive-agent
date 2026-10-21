@@ -16,7 +16,7 @@ using IronHive.DeepResearch.Search.QueryExpansion;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Orchestration;
+namespace IronHive.DeepResearch.Tests.Orchestration;
 
 public class ResearchOrchestratorTests
 {

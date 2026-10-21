@@ -11,7 +11,7 @@ using IronHive.DeepResearch.Search;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Search;
+namespace IronHive.DeepResearch.Tests.Search;
 
 public class SearchCoordinatorAgentTests
 {

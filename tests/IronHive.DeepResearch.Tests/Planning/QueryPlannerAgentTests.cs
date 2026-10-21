@@ -9,7 +9,7 @@ using IronHive.DeepResearch.Search.QueryExpansion;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Planning;
+namespace IronHive.DeepResearch.Tests.Planning;
 
 public class QueryPlannerAgentTests
 {

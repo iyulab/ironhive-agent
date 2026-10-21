@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Search;
+namespace IronHive.DeepResearch.Tests.Search;
 
 public class SearchProviderFactoryTests
 {

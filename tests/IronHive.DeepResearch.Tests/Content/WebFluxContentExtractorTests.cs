@@ -6,7 +6,7 @@ using IronHive.DeepResearch.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Content;
+namespace IronHive.DeepResearch.Tests.Content;
 
 public class WebFluxContentExtractorTests
 {

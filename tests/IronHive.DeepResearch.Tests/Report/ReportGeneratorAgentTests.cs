@@ -11,7 +11,7 @@ using IronHive.DeepResearch.Orchestration.State;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace IronHive.Flux.Tests.DeepResearch.Report;
+namespace IronHive.DeepResearch.Tests.Report;
 
 public class ReportGeneratorAgentTests
 {
