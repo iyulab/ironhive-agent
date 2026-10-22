@@ -18,6 +18,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     private readonly ConcurrentDictionary<string, McpClientWrapper> _clients = new();
     private readonly ILogger<McpPluginManager>? _logger;
     private readonly IMcpToolCallGuard? _guard;
+    private readonly IMcpElicitationHandler? _elicitation;
     private bool _disposed;
 
     /// <param name="logger">Optional logger.</param>
@@ -31,6 +32,23 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     {
         _logger = logger;
         _guard = guard;
+    }
+
+    /// <summary>
+    /// A manager whose servers can ask a person for input — chosen by dependency injection when an
+    /// <see cref="IMcpElicitationHandler"/> is registered.
+    /// </summary>
+    /// <param name="elicitation">
+    /// Answers a server's request for a person (URL-mode elicitation, including a <c>tools/call</c> answered with
+    /// <c>input_required</c>) — see <see cref="IMcpElicitationHandler"/>. Without one (the other constructor) no elicitation
+    /// capability is advertised, and such a call fails.
+    /// </param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="guard">Optional MCP tool-call guard — see the other constructor.</param>
+    public McpPluginManager(IMcpElicitationHandler elicitation, ILogger<McpPluginManager>? logger = null, IMcpToolCallGuard? guard = null)
+        : this(logger, guard)
+    {
+        _elicitation = elicitation ?? throw new ArgumentNullException(nameof(elicitation));
     }
 
     /// <inheritdoc />
@@ -65,8 +83,13 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             throw new InvalidOperationException($"Plugin '{name}' is already connected.");
         }
 
-        var transport = CreateTransport(name, config);
-        var client = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken);
+        await ConnectCoreAsync(name, CreateTransport(name, config), config, cancellationToken);
+    }
+
+    /// <summary>Connects over a given transport — the seam an in-process server test uses.</summary>
+    internal async Task ConnectCoreAsync(string name, IClientTransport transport, McpPluginConfig config, CancellationToken cancellationToken)
+    {
+        var client = await McpClient.CreateAsync(transport, ClientOptions(name), cancellationToken: cancellationToken);
 
         var wrapper = new McpClientWrapper(name, client, config);
         if (!_clients.TryAdd(name, wrapper))
@@ -429,6 +452,23 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         _clients.Clear();
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// With an <see cref="IMcpElicitationHandler"/>: URL-mode elicitation advertised and routed to it. Without: the SDK's
+    /// defaults (no elicitation capability).
+    /// </summary>
+    private McpClientOptions? ClientOptions(string name) => _elicitation is not { } elicitation
+        ? null
+        : new McpClientOptions
+        {
+            Capabilities = new ClientCapabilities { Elicitation = new ElicitationCapability { Url = new UrlElicitationCapability() } },
+            Handlers = new McpClientHandlers
+            {
+                ElicitationHandler = (request, ct) => request is null
+                    ? ValueTask.FromResult(new ElicitResult { Action = "cancel" })
+                    : elicitation.ElicitAsync(name, request, ct)
+            }
+        };
 
     private static IClientTransport CreateTransport(string name, McpPluginConfig config)
     {

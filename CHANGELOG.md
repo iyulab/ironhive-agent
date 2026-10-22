@@ -7,6 +7,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [Unreleased]
 
 ### Added
+- **An MCP server that needs a person before a tool call can finish can ask one** — `IMcpElicitationHandler`. A server
+  that answers `tools/call` with `input_required` (a URL-mode elicitation and a `requestState` — MCP multi round-trip
+  requests) or sends `elicitation/create` was reported as a failed tool call: the client advertised no elicitation
+  capability and had nobody to ask. With a handler (`new McpPluginManager(handler, logger, guard)`, or an
+  `IMcpElicitationHandler` service registered before `AddIronHiveAgent`), `McpPluginManager` advertises URL-mode
+  elicitation, passes the server's message, URL and id to the handler, and the MCP client re-sends the call with the
+  server's state when the handler returns `accept` (`decline` / `cancel` go back to the server). Without a handler nothing
+  changes.
 - **A turn that reaches the iteration cap can be closed instead of ending with its work lost** —
   `AgentOptions.WrapUpAtStepLimit` (`StepLimitWrapUp`, opt-in). At the cap `FunctionInvokingChatClient` asks the model once
   more without tools, so an agent whose work only counts once a final tool runs (a write, a submit) could not finish, and a
