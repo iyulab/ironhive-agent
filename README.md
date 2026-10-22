@@ -349,7 +349,8 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
   from where a block may start.
 - **A transient provider failure on one model call** (a 502/504 from a gateway, a refused or reset connection, a stream that
   ended before its first update) ends a long turn unless the call is tried again. Wrap the provider client in
-  `new TransientRetryChatClient(providerClient)` (opt-in) before building the pipeline on it: inside function invocation each
+  `new TransientRetryChatClient(providerClient)` (opt-in) before building the pipeline on it, or add `.UseTransientRetry()` as
+  the builder's last step (after `.UseTextToolCallRecovery()`): inside function invocation each
   model call is retried once (`MaxRetries`) after the delay `ErrorRecoveryService` gives, up to `MaxDelay` (30 s). A streamed
   call that already passed an update on, and a refusal (401/403/402, an invalid request), are not retried.
 - Without DI, build it yourself: `.UseToolInvocationPipeline(new ToolInvocationPipeline([gate, mine], [resultStep]))`.

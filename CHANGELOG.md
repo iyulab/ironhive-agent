@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **`UseTransientRetry()` installs `TransientRetryChatClient` on a `ChatClientBuilder`**, like `UseTextToolCallRecovery()`.
+  Call it last, so the retry sits around the provider client inside function invocation; `maxRetries`, `maxDelay` and the
+  failure classifier are parameters.
+
+### Fixed
+- **A call refused for a missing required argument no longer tells the model its arguments «could not be parsed».** The
+  `InvalidArguments` refusal now reads `Tool call not run: <tool> needs 'path', which the call did not include. …`; a call
+  whose arguments did not parse still reads `Tool call not run: its arguments could not be parsed (…)`. The
+  `ToolCallRefusalKind.InvalidArguments` documentation names both causes.
+
 ## [0.72.0] - 2026-10-23
 
 ### Removed

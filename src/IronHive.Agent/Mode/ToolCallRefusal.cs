@@ -17,7 +17,10 @@ public enum ToolCallRefusalKind
     /// <summary>The tool ran, and an <see cref="IToolResultGuard"/> withheld its result from the model.</summary>
     ResultWithheld,
 
-    /// <summary>The call's arguments could not be parsed from the model's response, so the tool was not run.</summary>
+    /// <summary>
+    /// The call's arguments cannot run the tool, so it was not run: they could not be parsed from the model's response, or they
+    /// leave out a parameter the tool's schema marks required. <see cref="ToolCallRefusal.Reason"/> says which.
+    /// </summary>
     InvalidArguments,
 
     /// <summary>The same call already succeeded several times in a row, so it was not run again.</summary>
@@ -64,7 +67,7 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.ApprovalUnavailable => $"Approval required but no approval service is configured: {Reason}",
         ToolCallRefusalKind.Rejected => $"Approval rejected: {Reason}",
         ToolCallRefusalKind.ResultWithheld => $"Tool result withheld by guard: {Reason}",
-        ToolCallRefusalKind.InvalidArguments => $"Tool call not run: its arguments could not be parsed ({Reason})",
+        ToolCallRefusalKind.InvalidArguments => $"Tool call not run: {Reason}",
         ToolCallRefusalKind.RepeatedCall => $"Tool call not run: {Reason}",
         ToolCallRefusalKind.RepeatedError => $"Tool call stopped: {Reason}",
         ToolCallRefusalKind.RepeatedResult => $"Tool call stopped: {Reason}",

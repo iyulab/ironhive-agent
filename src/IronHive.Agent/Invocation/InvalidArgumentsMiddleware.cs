@@ -48,7 +48,7 @@ public sealed partial class InvalidArgumentsMiddleware : IToolInvocationMiddlewa
             LogUnparseable(_logger, context.Function.Name, parseError.GetType().Name);
             return new ValueTask<object?>(new ToolCallRefusal(
                 ToolCallRefusalKind.InvalidArguments,
-                $"{parseError.GetType().Name}: {parseError.Message}. Re-issue the call with complete arguments that are valid JSON matching the tool's schema."));
+                $"its arguments could not be parsed ({parseError.GetType().Name}: {parseError.Message}). Re-issue the call with complete arguments that are valid JSON matching the tool's schema."));
         }
 
         var missing = MissingRequired(context.Function.JsonSchema, context.Arguments);

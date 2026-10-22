@@ -99,6 +99,34 @@ public class TransientRetryChatClientTests
         model.Calls.Should().Be(3);
     }
 
+    // The builder extension puts the retry where the doc says — innermost, inside function invocation — when called last.
+    [Fact]
+    public async Task UseTransientRetry_CalledLast_RetriesEachModelCallInsideFunctionInvocation()
+    {
+        var tool = AIFunctionFactory.Create(() => "42", "Answer");
+        var model = new Scripted([null, BadGateway], reply: "the answer is 42", firstCallTool: "Answer");
+        var client = model.AsBuilder().UseFunctionInvocation().UseTransientRetry(maxDelay: TimeSpan.FromSeconds(5)).Build();
+
+        var response = await client.GetResponseAsync(
+            [new ChatMessage(ChatRole.User, "what is it?")], new ChatOptions { Tools = [tool] }, Ct);
+
+        response.Text.Should().Be("the answer is 42");
+        model.Calls.Should().Be(3);
+        client.GetService<TransientRetryChatClient>()!.MaxDelay.Should().Be(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task UseTransientRetry_WithZeroRetries_LetsTheFailureThrough()
+    {
+        var model = new Scripted([BadGateway], reply: "done");
+        var client = model.AsBuilder().UseTransientRetry(maxRetries: 0).Build();
+
+        var act = () => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], cancellationToken: Ct);
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+        model.Calls.Should().Be(1);
+    }
+
     private static async Task<string> Collect(IAsyncEnumerable<ChatResponseUpdate> updates)
     {
         var text = new System.Text.StringBuilder();

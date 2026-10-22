@@ -179,7 +179,8 @@ public class ToolInvocationPipelineTests
         log.Should().BeEmpty("the gate never sees a call that cannot run");
         var refusal = ResultsTheModelRead(mock).Single().Result.Should().BeOfType<ToolCallRefusal>().Subject;
         refusal.Kind.Should().Be(ToolCallRefusalKind.InvalidArguments);
-        refusal.Message.Should().Contain("'path'").And.Contain("'content'");
+        refusal.Message.Should().Contain("'path'").And.Contain("'content'")
+            .And.NotContain("could not be parsed", "the arguments parsed; the model must read that one is missing, not that it sent bad JSON");
         response.ToolCalls[0].Success.Should().BeFalse();
     }
 
