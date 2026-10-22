@@ -33,6 +33,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   whose arguments did not parse still reads `Tool call not run: its arguments could not be parsed (…)`. The
   `ToolCallRefusalKind.InvalidArguments` documentation names both causes.
 
+### Dependencies
+- `ModelContextProtocol` 2.2.0 -> 2.3.0, `Microsoft.Extensions.AI.OpenAI` 10.10.1 -> 10.11.0, `Microsoft.Extensions.Http.Resilience` 10.6.0 -> 10.11.0, `Polly` / `Polly.Extensions` 8.6.6 -> 8.8.0. Test tooling: xunit.v3 4.0.2, MTP HangDump / TrxReport 2.5.1.
+
 ## [0.72.0] - 2026-10-23
 
 ### Removed
