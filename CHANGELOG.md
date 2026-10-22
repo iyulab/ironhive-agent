@@ -10,6 +10,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - **Breaking: the unused DeepResearch interfaces `ISufficiencyEvaluator`, `IResearchOrchestrator` and `IReportGenerator` are gone.**
   No type in the package implemented or accepted them. Migration: use `DeepResearcher`.
 
+### Changed
+- **Breaking: a tool call that leaves out a required argument is refused before the permission gate, naming the argument.**
+  Before, a call such as `WriteFile` with `{}` reached the gate, which cannot judge a write that names no path. The gate then
+  asked, and with no approver (a headless run) the model read «requires approval but there is no interactive console» rather
+  than what was missing. The first pipeline step now answers it: a `ToolCallRefusal` of kind `InvalidArguments` that names the
+  missing parameters from the tool's schema. The step is renamed to match. Migration: `ArgumentParseFailureMiddleware` →
+  `InvalidArgumentsMiddleware`, `ToolInvocationOptions.RefuseUnparseableArguments` → `RefuseInvalidArguments` (same default, true).
+
 ### Added
 - **A model call that fails for a transient reason can be retried without ending the turn** — `TransientRetryChatClient`
   (`IronHive.Agent.Invocation`), placed around the provider client inside function invocation, tries a call again once

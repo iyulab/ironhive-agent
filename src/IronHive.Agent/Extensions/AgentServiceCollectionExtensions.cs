@@ -98,7 +98,7 @@ public static class AgentServiceCollectionExtensions
         {
             services.AddSingleton(options.ToolInvocation);
         }
-        services.AddToolInvocationMiddleware<ArgumentParseFailureMiddleware>();
+        services.AddToolInvocationMiddleware<InvalidArgumentsMiddleware>();
         services.AddToolInvocationMiddleware<RepeatedCallGuardMiddleware>();
         services.AddToolInvocationMiddleware<RepeatedResultGuardMiddleware>();
         services.AddToolInvocationMiddleware<RepeatedErrorGuardMiddleware>();

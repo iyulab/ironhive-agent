@@ -162,6 +162,56 @@ public class ToolInvocationPipelineTests
         response.ToolCalls[0].Success.Should().BeFalse();
     }
 
+    // A benchmark run saw `WriteFile` with `{}` come back as «requires approval but there is no interactive console»: the
+    // permission gate cannot judge a write that names no path, so it asked, and with nobody to ask the model read an approval
+    // refusal instead of «path is required». The missing argument is answered before the gate.
+    [Fact]
+    public async Task A_call_without_its_required_arguments_is_refused_by_name_before_the_permission_gate()
+    {
+        var log = new List<string>();
+        var (loop, mock, probe) = Build(
+            new ToolInvocationPipeline([new InvalidArgumentsMiddleware(), new Recording("gate", log, _ => "gate answered")]),
+            m => m.EnqueueToolCallResponse("WriteFile", "{}").EnqueueResponse("retrying"));
+
+        var response = await loop.RunAsync("write", Ct);
+
+        probe.Invocations.Should().Be(0);
+        log.Should().BeEmpty("the gate never sees a call that cannot run");
+        var refusal = ResultsTheModelRead(mock).Single().Result.Should().BeOfType<ToolCallRefusal>().Subject;
+        refusal.Kind.Should().Be(ToolCallRefusalKind.InvalidArguments);
+        refusal.Message.Should().Contain("'path'").And.Contain("'content'");
+        response.ToolCalls[0].Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_call_missing_one_required_argument_is_refused_naming_only_that_one()
+    {
+        var (loop, mock, probe) = Build(
+            ToolInvocationPipeline.CreateDefault(),
+            m => m.EnqueueToolCallResponse("WriteFile", """{"path":"notes.txt"}""").EnqueueResponse("retrying"));
+
+        await loop.RunAsync("write", Ct);
+
+        probe.Invocations.Should().Be(0);
+        var refusal = ResultsTheModelRead(mock).Single().Result.Should().BeOfType<ToolCallRefusal>().Subject;
+        refusal.Message.Should().Contain("'content'").And.NotContain("'path'");
+    }
+
+    [Fact]
+    public async Task With_the_option_off_a_call_without_its_required_arguments_passes_on_to_the_next_step()
+    {
+        var log = new List<string>();
+        var (loop, _, probe) = Build(
+            new ToolInvocationPipeline(
+                [new InvalidArgumentsMiddleware(new ToolInvocationOptions { RefuseInvalidArguments = false }), new Recording("gate", log, _ => "gate answered")]),
+            m => m.EnqueueToolCallResponse("WriteFile", "{}").EnqueueResponse("done"));
+
+        await loop.RunAsync("write", Ct);
+
+        probe.Invocations.Should().Be(0);
+        log.Should().Equal("gate:before", "gate:short-circuit");
+    }
+
     // A model that keeps re-issuing a refused call is stuck. Measured: 33 refusals in a row until the step budget ran out,
     // and the turn read as "needed more steps". The second refusal in a row ends the request instead.
     [Fact]
@@ -541,7 +591,7 @@ public class ToolInvocationPipelineTests
         using var sp = services.BuildServiceProvider();
 
         sp.GetRequiredService<ToolInvocationPipeline>().InvocationMiddleware.Select(m => m.GetType()).Should().Equal(
-            typeof(ArgumentParseFailureMiddleware), typeof(RepeatedCallGuardMiddleware), typeof(RepeatedResultGuardMiddleware), typeof(RepeatedErrorGuardMiddleware),
+            typeof(InvalidArgumentsMiddleware), typeof(RepeatedCallGuardMiddleware), typeof(RepeatedResultGuardMiddleware), typeof(RepeatedErrorGuardMiddleware),
             typeof(ApprovalGateMiddleware));
         sp.GetRequiredService<ToolInvocationOptions>().MaxRepeatedCalls.Should().Be(7);
     }

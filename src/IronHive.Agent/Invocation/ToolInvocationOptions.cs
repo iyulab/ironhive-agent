@@ -8,11 +8,12 @@ namespace IronHive.Agent.Invocation;
 public sealed class ToolInvocationOptions
 {
     /// <summary>
-    /// Refuse a call whose arguments the model's response could not be parsed into (the call content carries the parse
-    /// error), instead of running the tool on partial arguments. The model reads the parse error and can re-issue the
-    /// call. Default: true.
+    /// Refuse a call whose arguments cannot run the tool — the model's response could not be parsed into arguments, or the
+    /// arguments leave out a parameter the tool's schema requires — instead of running the tool on partial arguments or
+    /// letting the permission gate judge a call that does not say what it targets. The model reads what is wrong and can
+    /// re-issue the call. Default: true.
     /// </summary>
-    public bool RefuseUnparseableArguments { get; set; } = true;
+    public bool RefuseInvalidArguments { get; set; } = true;
 
     /// <summary>
     /// How many times in a row the same tool may run successfully with identical arguments — or with the same target, for
