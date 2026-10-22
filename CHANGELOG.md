@@ -11,6 +11,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   No type in the package implemented or accepted them. Migration: use `DeepResearcher`.
 
 ### Added
+- **A model call that fails for a transient reason can be retried without ending the turn** — `TransientRetryChatClient`
+  (`IronHive.Agent.Invocation`), placed around the provider client inside function invocation, tries a call again once
+  (`MaxRetries`) when it fails with what `ErrorRecoveryService` classifies as a network failure, a timeout or a rate limit whose
+  wait fits `MaxDelay` (30 s): a 502/504 from a gateway, a refused or reset connection, a response stream that ended before its
+  first update. A streamed call that has already passed an update on is not retried; a refusal (401/403/402, an invalid request)
+  never is.
 - **A host can keep its own secrets out of the shell tool's commands** — `ShellToolOptions.RemoveEnvironmentVariables`, passed to
   `BuiltInTools.GetAll(workingDirectory, fileOptions, shellOptions)` or `new ToolProvider(workingDirectory, fileOptions, shellOptions)`,
   takes the named variables out of every `ExecuteCommand` child's environment (a model running `env` no longer prints a provider API

@@ -347,6 +347,11 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
   last «answer now» round — or `Unterminated` — the response ends inside a block. A complete block naming an unknown tool
   passes through unchanged. A parameter is a string unless the tool's schema types it otherwise. Streaming holds text only
   from where a block may start.
+- **A transient provider failure on one model call** (a 502/504 from a gateway, a refused or reset connection, a stream that
+  ended before its first update) ends a long turn unless the call is tried again. Wrap the provider client in
+  `new TransientRetryChatClient(providerClient)` (opt-in) before building the pipeline on it: inside function invocation each
+  model call is retried once (`MaxRetries`) after the delay `ErrorRecoveryService` gives, up to `MaxDelay` (30 s). A streamed
+  call that already passed an update on, and a refusal (401/403/402, an invalid request), are not retried.
 - Without DI, build it yourself: `.UseToolInvocationPipeline(new ToolInvocationPipeline([gate, mine], [resultStep]))`.
   `ToolInvocationPipeline.CreateDefault()` is the default loop guards alone. `UseToolInvocationPipeline()` built without
   services that hold a pipeline throws instead of running tools unguarded.
