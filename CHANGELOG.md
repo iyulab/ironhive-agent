@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.72.0] - 2026-10-23
 
 ### Removed
 - **Breaking: the unused DeepResearch interfaces `ISufficiencyEvaluator`, `IResearchOrchestrator` and `IReportGenerator` are gone.**
@@ -32,6 +32,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.25.0 -> 0.25.1, `TokenMeter` 0.14.0 -> 0.15.0.
+- Re-pinned sibling package(s) `Ironbees.Autonomous` 0.29.1 -> 0.30.0, `Ironbees.Core` 0.29.1 -> 0.30.0, `IronHive.Abstractions` 0.68.0 -> 0.69.0, `IronHive.Extensions.AI` 0.68.0 -> 0.69.0, `IronProw.Core` 0.16.2 -> 0.17.0, `WebFlux` 0.26.1 -> 0.27.0.
 
 ## [0.71.0] - 2026-10-20
 
