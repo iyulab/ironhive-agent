@@ -34,6 +34,12 @@ public enum TurnStopReason
     /// the last round were not run.
     /// </summary>
     StepLimit = 5,
+
+    /// <summary>
+    /// The turn reached the iteration cap and <see cref="AgentOptions.WrapUpAtStepLimit"/>'s closing request finished it
+    /// (<see cref="StepLimitWrapUp"/>): the answer or the final tool call came from that request.
+    /// </summary>
+    WrappedUp = 6,
 }
 
 internal static class TurnStopReasons

@@ -56,6 +56,12 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(turnManager);
+        if (options?.WrapUpAtStepLimit is not null)
+        {
+            // Refused rather than ignored: a host that set it would read a capped turn as wrapped up when it was not.
+            throw new NotSupportedException(
+                "AgentOptions.WrapUpAtStepLimit is applied by AgentLoop only; ThinkingAgentLoop does not close a capped turn.");
+        }
 
         _thinkingClient = new ThinkingChatClient(
             chatClient,

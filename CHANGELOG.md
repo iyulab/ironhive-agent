@@ -7,6 +7,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [Unreleased]
 
 ### Added
+- **A turn that reaches the iteration cap can be closed instead of ending with its work lost** —
+  `AgentOptions.WrapUpAtStepLimit` (`StepLimitWrapUp`, opt-in). At the cap `FunctionInvokingChatClient` asks the model once
+  more without tools, so an agent whose work only counts once a final tool runs (a write, a submit) could not finish, and a
+  «try again» re-read everything. With a wrap-up, `AgentLoop` answers any call the model still made at the cap with
+  `UnrunCallNotice` (it is not run), adds `Instruction` as a user message, and makes one closing request offering only
+  `ToolNames` (none = text only). The turn's record covers both requests and reports the new
+  `TurnStopReason.WrappedUp` when the closing request finished (otherwise its own stop reason). `WrappedUp` appears only
+  when the option is set. `ThinkingAgentLoop` refuses the option (`NotSupportedException`) rather than ignoring it.
 - **`UseTransientRetry()` installs `TransientRetryChatClient` on a `ChatClientBuilder`**, like `UseTextToolCallRecovery()`.
   Call it last, so the retry sits around the provider client inside function invocation; `maxRetries`, `maxDelay` and the
   failure classifier are parameters.

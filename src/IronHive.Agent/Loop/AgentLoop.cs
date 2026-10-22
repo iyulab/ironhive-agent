@@ -191,11 +191,46 @@ public class AgentLoop : IAgentLoop
         // Add assistant response to history
         _history.AddRange(response.Messages);
         _hostResults.MarkProduced(response.Messages);
-        var added = TurnMessages.Of(started, response.Messages);
+        var produced = new List<ChatMessage>(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response);
         var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
-        var usage = MapUsage(response.Usage);
+        var usageDetails = response.Usage;
+        var text = response.Text ?? string.Empty;
+        var reasoning = LiveReasoning.Extract(response);
+
+        // At the iteration cap, one closing request instead of ending the turn there (AgentOptions.WrapUpAtStepLimit)
+        if (stopReason == TurnStopReason.StepLimit && _options.WrapUpAtStepLimit is { } wrapUp)
+        {
+            var closing = StepLimitWrapUps.ClosingMessages(response.Messages, wrapUp);
+            _history.AddRange(closing);
+            produced.AddRange(closing);
+
+            var closingHistory = await PrepareHistoryForSendingAsync(cancellationToken);
+            _guards.ThrowIfUsageLimitExceeded();
+            var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
+            var closed = await _guards.CallWithRecoveryAsync(
+                ct => _chatClient.GetResponseAsync(closingHistory, closingOptions, ct), cancellationToken);
+            suggestions = new TurnSuggestions(_options.Suggestions).Strip(closed.Messages) ?? suggestions;
+
+            _history.AddRange(closed.Messages);
+            _hostResults.MarkProduced(closed.Messages);
+            produced.AddRange(closed.Messages);
+            toolCalls.AddRange(ToolCallResultFactory.Extract(closed));
+            stopReason = StepLimitWrapUps.StopReason(
+                TurnStopReasons.Classify(closed.Messages, closed.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+            if (closed.Usage is { } closedUsage)
+            {
+                usageDetails ??= new UsageDetails();
+                usageDetails.Add(closedUsage);
+            }
+
+            text = JoinParts(text, closed.Text);
+            reasoning = JoinParts(reasoning ?? string.Empty, LiveReasoning.Extract(closed));
+        }
+
+        var added = TurnMessages.Of(started, produced);
+        var usage = MapUsage(usageDetails);
 
         // Record usage for session tracking
         if (usage is not null)
@@ -204,8 +239,8 @@ public class AgentLoop : IAgentLoop
             _guards.RecordUsage(usage);
         }
 
-        var content = response.Text ?? string.Empty;
-        var thinking = LiveReasoning.ToThinkingContent(LiveReasoning.Extract(response));
+        var content = text;
+        var thinking = LiveReasoning.ToThinkingContent(reasoning);
         var addendum = await TurnObserverNotifier.NotifyAsync(
             _turnObservers,
             new TurnRecord { Content = content, ToolCalls = toolCalls, Usage = usage, ThinkingContent = thinking, StopReason = stopReason, Suggestions = suggestions, Messages = added },
@@ -216,7 +251,7 @@ public class AgentLoop : IAgentLoop
             // The addendum rides at the end of Content so a consumer that only renders Content still
             // shows it, and stays separately readable so it can be told apart from the model's words.
             Content = addendum is null ? content : content + TurnObserverNotifier.AddendumSeparator + addendum,
-            HasTextOutput = !string.IsNullOrEmpty(response.Text),
+            HasTextOutput = content.Length > 0,
             ToolCalls = toolCalls,
             Usage = usage,
             ThinkingContent = thinking,
@@ -299,18 +334,118 @@ public class AgentLoop : IAgentLoop
         _guards.ThrowIfUsageLimitExceeded();
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
-        var responseBuilder = new StringBuilder();
-        var reasoningBuilder = new StringBuilder();
-        var toolCalls = new List<FunctionCallContent>();
+        var streamedSuggestions = new TurnSuggestions(_options.Suggestions);
+        var round = new StreamedRound();
+        await foreach (var chunk in StreamRoundAsync(historyToSend, chatOptions, round, streamedSuggestions, textPrefix: null, cancellationToken))
+        {
+            yield return chunk;
+        }
+
+        // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
+        // non-streaming path leaves behind -- tool results included, and in the order they arrived.
+        var turnMessages = round.History.Build();
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, round.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
+        _history.AddRange(turnMessages);
+        _hostResults.MarkProduced(turnMessages);
+        var produced = new List<ChatMessage>(turnMessages);
+        var rounds = new List<StreamedRound> { round };
+
+        // At the iteration cap, one closing request instead of ending the turn there (AgentOptions.WrapUpAtStepLimit)
+        if (streamedStopReason == TurnStopReason.StepLimit && _options.WrapUpAtStepLimit is { } wrapUp)
+        {
+            var closing = StepLimitWrapUps.ClosingMessages(turnMessages, wrapUp);
+            _history.AddRange(closing);
+            produced.AddRange(closing);
+
+            var closingHistory = await PrepareHistoryForSendingAsync(cancellationToken);
+            _guards.ThrowIfUsageLimitExceeded();
+            var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
+            var closingRound = new StreamedRound();
+            var separator = round.Text.Length > 0 ? TurnObserverNotifier.AddendumSeparator : null;
+            await foreach (var chunk in StreamRoundAsync(closingHistory, closingOptions, closingRound, streamedSuggestions, separator, cancellationToken))
+            {
+                yield return chunk;
+            }
+
+            var closingMessages = closingRound.History.Build();
+            _history.AddRange(closingMessages);
+            _hostResults.MarkProduced(closingMessages);
+            produced.AddRange(closingMessages);
+            rounds.Add(closingRound);
+            streamedStopReason = StepLimitWrapUps.StopReason(
+                TurnStopReasons.Classify(closingMessages, closingRound.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+        }
+
+        var streamedAdded = TurnMessages.Of(started, produced);
+
+        UsageDetails? usageDetails = null;
+        foreach (var r in rounds.Where(r => r.Usage is not null))
+        {
+            usageDetails ??= new UsageDetails();
+            usageDetails.Add(r.Usage!);
+        }
+
+        var streamedUsage = MapUsage(usageDetails);
+        if (streamedUsage is not null)
+        {
+            _usageTracker?.Record(streamedUsage);
+            _guards.RecordUsage(streamedUsage);
+        }
+
+        // One final chunk always closes the stream, carrying the turn's consolidated record. Before
+        // it existed this path yielded tool calls one delta at a time and nothing that said what the
+        // turn as a whole did -- so every consumer rebuilt that correlation outside the loop.
+        var turn = new TurnRecord
+        {
+            Content = string.Concat(rounds.Select(r => r.Text.ToString())),
+            ToolCalls = ToolCallResultFactory.Extract([.. rounds.SelectMany(r => r.ToolCalls)], [.. rounds.SelectMany(r => r.ToolResults)]),
+            Usage = streamedUsage,
+            ThinkingContent = LiveReasoning.ToThinkingContent(string.Concat(rounds.Select(r => r.Reasoning.ToString()))),
+            StopReason = streamedStopReason,
+            Suggestions = streamedSuggestions.Drain(),
+            Messages = streamedAdded
+        };
+
+        yield return new AgentResponseChunk
+        {
+            Turn = turn,
+            Usage = streamedUsage,
+            // Appended, never edited in: the deltas above are already rendered by the time a turn is
+            // complete, so amending what the model said is not a capability this seam can honestly offer.
+            // Carried as its own field, not as a text delta, so consumers can tell it from the model's words.
+            Addendum = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
+        };
+    }
+
+    /// <summary>What one streamed model request of a turn produced.</summary>
+    private sealed class StreamedRound
+    {
+        public StringBuilder Text { get; } = new();
+        public StringBuilder Reasoning { get; } = new();
+        public List<FunctionCallContent> ToolCalls { get; } = [];
+
         // Function-invocation middleware, when present, streams the outcome of each call back as a
         // FunctionResultContent update. Collecting them is what lets the turn record report an
         // honest Success instead of an unknown one.
-        var toolResults = new List<FunctionResultContent>();
-        var historyBuilder = new StreamingTurnHistoryBuilder();
-        var streamedSuggestions = new TurnSuggestions(_options.Suggestions);
-        UsageDetails? usageDetails = null;
-        ChatFinishReason? finishReason = null;
+        public List<FunctionResultContent> ToolResults { get; } = [];
+        public StreamingTurnHistoryBuilder History { get; } = new();
+        public UsageDetails? Usage { get; set; }
+        public ChatFinishReason? FinishReason { get; set; }
+    }
 
+    /// <summary>
+    /// Streams one model request, yielding its chunks and collecting into <paramref name="round"/>.
+    /// <paramref name="textPrefix"/>, when given, is yielded before the request's first text (it separates a closing
+    /// request's answer from the capped round's).
+    /// </summary>
+    private async IAsyncEnumerable<AgentResponseChunk> StreamRoundAsync(
+        IReadOnlyList<ChatMessage> historyToSend,
+        ChatOptions chatOptions,
+        StreamedRound round,
+        TurnSuggestions streamedSuggestions,
+        string? textPrefix,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         IAsyncEnumerable<ChatResponseUpdate> stream;
         try
         {
@@ -326,13 +461,25 @@ public class AgentLoop : IAgentLoop
             throw;
         }
 
+        string Prefixed(string text)
+        {
+            if (textPrefix is null)
+            {
+                return text;
+            }
+
+            var prefixed = textPrefix + text;
+            textPrefix = null;
+            return prefixed;
+        }
+
         await foreach (var update in stream)
         {
             // Live reasoning from a thinking model, as it is written. It is not part of the response text; the turn
             // record carries it whole as ThinkingContent, as the non-streaming path does.
             if (LiveReasoning.Extract(update) is { } reasoning)
             {
-                reasoningBuilder.Append(reasoning);
+                round.Reasoning.Append(reasoning);
                 yield return new AgentResponseChunk { ThinkingDelta = reasoning };
             }
 
@@ -340,8 +487,9 @@ public class AgentLoop : IAgentLoop
             var visible = string.IsNullOrEmpty(update.Text) ? update.Text : streamedSuggestions.Feed(update.Text);
             if (!string.IsNullOrEmpty(visible))
             {
-                responseBuilder.Append(visible);
-                historyBuilder.AppendText(visible);
+                visible = Prefixed(visible);
+                round.Text.Append(visible);
+                round.History.AppendText(visible);
                 yield return new AgentResponseChunk
                 {
                     TextDelta = visible
@@ -359,17 +507,18 @@ public class AgentLoop : IAgentLoop
             // Text before a tool call is complete: what the suggestion parser held back is text after all.
             if (update.Contents.OfType<FunctionCallContent>().Any() && streamedSuggestions.Flush() is { Length: > 0 } heldBeforeCall)
             {
-                responseBuilder.Append(heldBeforeCall);
-                historyBuilder.AppendText(heldBeforeCall);
-                yield return new AgentResponseChunk { TextDelta = heldBeforeCall };
+                var held = Prefixed(heldBeforeCall);
+                round.Text.Append(held);
+                round.History.AppendText(held);
+                yield return new AgentResponseChunk { TextDelta = held };
             }
 
             if (update.Contents.OfType<FunctionCallContent>().Any())
             {
                 foreach (var functionCall in update.Contents.OfType<FunctionCallContent>())
                 {
-                    toolCalls.Add(functionCall);
-                    historyBuilder.AppendCall(functionCall);
+                    round.ToolCalls.Add(functionCall);
+                    round.History.AppendCall(functionCall);
                     yield return new AgentResponseChunk
                     {
                         ToolCallDelta = ToolCallChunkFactory.FromFunctionCall(functionCall)
@@ -378,64 +527,26 @@ public class AgentLoop : IAgentLoop
             }
 
             var updateResults = update.Contents.OfType<FunctionResultContent>().ToArray();
-            toolResults.AddRange(updateResults);
-            historyBuilder.AppendResults(updateResults);
+            round.ToolResults.AddRange(updateResults);
+            round.History.AppendResults(updateResults);
 
             // Each call's outcome as it arrives, not only in the final Turn record.
-            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(toolCalls, updateResults))
+            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(round.ToolCalls, updateResults))
             {
                 yield return new AgentResponseChunk { ToolResult = arrived };
             }
 
-            usageDetails = TurnGuards.AccumulateUsage(usageDetails, update);
-            finishReason = update.FinishReason ?? finishReason;
+            round.Usage = TurnGuards.AccumulateUsage(round.Usage, update);
+            round.FinishReason = update.FinishReason ?? round.FinishReason;
         }
 
-        // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
-        // non-streaming path leaves behind -- tool results included, and in the order they arrived.
         if (streamedSuggestions.Flush() is { Length: > 0 } heldAtEnd)
         {
-            responseBuilder.Append(heldAtEnd);
-            historyBuilder.AppendText(heldAtEnd);
-            yield return new AgentResponseChunk { TextDelta = heldAtEnd };
+            var held = Prefixed(heldAtEnd);
+            round.Text.Append(held);
+            round.History.AppendText(held);
+            yield return new AgentResponseChunk { TextDelta = held };
         }
-
-        var turnMessages = historyBuilder.Build();
-        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
-        _history.AddRange(turnMessages);
-        _hostResults.MarkProduced(turnMessages);
-        var streamedAdded = TurnMessages.Of(started, turnMessages);
-
-        var streamedUsage = MapUsage(usageDetails);
-        if (streamedUsage is not null)
-        {
-            _usageTracker?.Record(streamedUsage);
-            _guards.RecordUsage(streamedUsage);
-        }
-
-        // One final chunk always closes the stream, carrying the turn's consolidated record. Before
-        // it existed this path yielded tool calls one delta at a time and nothing that said what the
-        // turn as a whole did -- so every consumer rebuilt that correlation outside the loop.
-        var turn = new TurnRecord
-        {
-            Content = responseBuilder.ToString(),
-            ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
-            Usage = streamedUsage,
-            ThinkingContent = LiveReasoning.ToThinkingContent(reasoningBuilder.ToString()),
-            StopReason = streamedStopReason,
-            Suggestions = streamedSuggestions.Drain(),
-            Messages = streamedAdded
-        };
-
-        yield return new AgentResponseChunk
-        {
-            Turn = turn,
-            Usage = streamedUsage,
-            // Appended, never edited in: the deltas above are already rendered by the time a turn is
-            // complete, so amending what the model said is not a capability this seam can honestly offer.
-            // Carried as its own field, not as a text delta, so consumers can tell it from the model's words.
-            Addendum = await TurnObserverNotifier.NotifyAsync(_turnObservers, turn, cancellationToken)
-        };
     }
 
     /// <summary>
@@ -499,6 +610,10 @@ public class AgentLoop : IAgentLoop
     }
 
     private static TokenUsage? MapUsage(UsageDetails? usage) => TokenUsage.From(usage);
+
+    /// <summary>The text of a capped round and of its closing request, as one answer.</summary>
+    private static string JoinParts(string first, string? second) =>
+        string.IsNullOrEmpty(second) ? first : first.Length == 0 ? second : first + TurnObserverNotifier.AddendumSeparator + second;
 
     /// <summary>
     /// Clears the conversation history.
@@ -661,4 +776,12 @@ public class AgentOptions
     /// tool chunk would otherwise see each call several times.
     /// </summary>
     public bool StreamToolArguments { get; set; }
+
+    /// <summary>
+    /// Closes a turn that reached the function-invocation middleware's iteration cap with one more request instead of
+    /// ending it there — see <see cref="StepLimitWrapUp"/>. Null (the default): the turn ends with
+    /// <see cref="TurnStopReason.StepLimit"/>. Applied by <see cref="AgentLoop"/>; <see cref="ThinkingAgentLoop"/> refuses it
+    /// (<see cref="NotSupportedException"/> from its constructor).
+    /// </summary>
+    public StepLimitWrapUp? WrapUpAtStepLimit { get; set; }
 }

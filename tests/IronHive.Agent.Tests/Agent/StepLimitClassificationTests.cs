@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Loop;
 using Microsoft.Extensions.AI;
 
@@ -70,6 +71,47 @@ public sealed class StepLimitClassificationTests
         model.ToolCountsSeen.Should().EndWith(0, "the middleware's final request at the cap offers no tools - the premise of this fact");
         response.ToolCalls.Should().HaveCount(2);
         response.StopReason.Should().Be(TurnStopReason.StepLimit);
+    }
+
+    // A host reported the last round's calls left unrun at the cap under the tool-invocation pipeline (streamed). The pipeline
+    // client is a FunctionInvokingChatClient like the plain middleware, so the cap ends the same way: every round's calls
+    // run, and the last request offers no tools.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnderTheToolInvocationPipeline_TheCapRunsEveryRoundsCalls_AndAsksOnceMoreWithoutTools(bool streaming)
+    {
+        var model = new ToolHappyModel(10);
+        var runs = 0;
+        var options = new ChatOptions { Tools = [AIFunctionFactory.Create((string text) => { runs++; return "noted " + text; }, "write_note")] };
+        var client = new ChatClientBuilder(model)
+            .UseToolInvocationPipeline(ToolInvocationPipeline.CreateDefault(), c => c.MaximumIterationsPerRequest = 2)
+            .Build();
+        var loop = new AgentLoop(client);
+
+        TurnRecord? turn;
+        if (streaming)
+        {
+            AgentResponseChunk? last = null;
+            await foreach (var chunk in loop.RunStreamingAsync("take notes", options, Ct))
+            {
+                last = chunk;
+            }
+
+            turn = last!.Turn;
+        }
+        else
+        {
+            var response = await loop.RunAsync("take notes", options, Ct);
+            turn = new TurnRecord { Content = response.Content, ToolCalls = response.ToolCalls, StopReason = response.StopReason };
+        }
+
+        runs.Should().Be(2);
+        model.ToolCountsSeen.Should().EndWith(0);
+        turn!.StopReason.Should().Be(TurnStopReason.StepLimit);
+        loop.History.SelectMany(m => m.Contents.OfType<FunctionCallContent>()).Select(c => c.CallId)
+            .Should().BeSubsetOf(loop.History.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Select(r => r.CallId),
+                "no call is left unanswered in the history");
     }
 
     [Fact]
