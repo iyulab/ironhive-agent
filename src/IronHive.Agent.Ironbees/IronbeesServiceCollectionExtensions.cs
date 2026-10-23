@@ -76,7 +76,7 @@ public static class IronbeesServiceCollectionExtensions
                 var workingDirectory = options.WorkingDirectory;
                 toolsFactory = () =>
                 {
-                    var builtIn = BuiltInTools.GetAll(workingDirectory);
+                    var builtIn = BuiltInTools.GetAll(workingDirectory, options.FileTools, options.ShellTools);
                     var mcpManager = sp.GetService<IMcpPluginManager>();
                     if (mcpManager is not null)
                     {
@@ -203,6 +203,19 @@ public class IronbeesOptions
     /// Working directory for built-in tools.
     /// </summary>
     public string? WorkingDirectory { get; set; }
+
+    /// <summary>
+    /// The host's decisions about the built-in file tools (allowed roots, a write interceptor) when
+    /// <see cref="EnableToolExecution"/> is on. Null leaves them at their defaults.
+    /// </summary>
+    public FileToolOptions? FileTools { get; set; }
+
+    /// <summary>
+    /// The host's decisions about the built-in shell tool when <see cref="EnableToolExecution"/> is on — which of the
+    /// host's environment variables (its own API keys) the commands the model runs do not see. Null leaves them the whole
+    /// environment.
+    /// </summary>
+    public ShellToolOptions? ShellTools { get; set; }
 
     /// <summary>
     /// Maximum tool execution turns to prevent infinite loops.

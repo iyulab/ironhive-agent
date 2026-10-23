@@ -6,6 +6,12 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **Ironbees agents with tool execution take the host's tool decisions.** `IronbeesOptions.FileTools` (`FileToolOptions` — allowed
+  roots, a write interceptor) and `IronbeesOptions.ShellTools` (`ShellToolOptions` — the environment variables the commands do not
+  see) reach the built-in tools `AddIronbees` offers when `EnableToolExecution` is on. Before, those tools always ran with the
+  defaults, so a host could not keep its API keys out of an Ironbees agent's `env`.
+
 ### Dependencies
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.25.1 -> 0.26.0.
 
