@@ -1,5 +1,6 @@
 using IronHive.Agent.ErrorRecovery;
 using IronHive.Agent.Exceptions;
+using IronHive.Agent.Invocation;
 using IronHive.Agent.Tracking;
 using Microsoft.Extensions.AI;
 using TokenMeter;
@@ -22,6 +23,7 @@ internal sealed class TurnGuards
     private readonly IErrorRecoveryService? _errorRecovery;
     private readonly string? _modelId;
     private readonly bool _recordedPerCall;
+    private readonly ToolInvocationPipeline? _toolPipeline;
 
     /// <param name="usageLimiter">The session limit, or <c>null</c>.</param>
     /// <param name="errorRecovery">Transient-failure retry, or <c>null</c>.</param>
@@ -36,6 +38,7 @@ internal sealed class TurnGuards
         _usageLimiter = usageLimiter;
         _errorRecovery = errorRecovery;
         _modelId = modelId;
+        _toolPipeline = chatClient?.GetService<ToolInvocationPipeline>();
         if (usageLimiter is not null && chatClient?.GetService<UsageLimitChatClient>() is { } perCall)
         {
             perCall.Bind(usageLimiter, modelId);
@@ -82,11 +85,21 @@ internal sealed class TurnGuards
     }
 
     /// <summary>
-    /// Runs a buffered model call, retrying it once after the recommended delay when error recovery
-    /// classifies the failure as transient. Without an error-recovery service the call runs once.
+    /// Makes the turn's model request, and sends it once more after a failure the error recovery service says to retry —
+    /// but only when no tool ran during the failed attempt. A function-invoking request runs tool rounds inside it, and
+    /// sending it again replays them: a tool that writes, deletes or hands out the next item does it twice, and the model
+    /// starts over against the changed state. A failure after a tool ran surfaces instead (a failure of one model call
+    /// inside the request is retried by <c>UseTransientRetry()</c>, which sits inside function invocation).
     /// </summary>
-    public async Task<T> CallWithRecoveryAsync<T>(Func<CancellationToken, Task<T>> call, CancellationToken cancellationToken)
+    /// <param name="call">The request.</param>
+    /// <param name="cancellationToken">Cancels it.</param>
+    /// <param name="offersTools">
+    /// The request offers tools. Whether one ran is read from the chat client's <see cref="ToolInvocationPipeline"/>; without
+    /// one it cannot be told, and a request that offers tools is not retried.
+    /// </param>
+    public async Task<T> CallWithRecoveryAsync<T>(Func<CancellationToken, Task<T>> call, CancellationToken cancellationToken, bool offersTools = false)
     {
+        var toolRunsBefore = _toolPipeline?.InvocationCount;
         try
         {
             return await call(cancellationToken);
@@ -100,7 +113,9 @@ internal sealed class TurnGuards
             _errorRecovery.RecordError(ex);
             var analysis = _errorRecovery.AnalyzeException(ex);
 
-            if (analysis.RecommendedAction is RecoveryAction.WaitAndRetry or RecoveryAction.Retry
+            var replaySafe = !offersTools || (_toolPipeline is { } pipeline && pipeline.InvocationCount == toolRunsBefore);
+            if (replaySafe
+                && analysis.RecommendedAction is RecoveryAction.WaitAndRetry or RecoveryAction.Retry
                 && analysis.RetryDelay is not null)
             {
                 await Task.Delay(analysis.RetryDelay.Value, cancellationToken);

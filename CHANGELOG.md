@@ -6,6 +6,16 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Fixed
+- **Breaking: a turn's model request is no longer sent again after a failure once a tool ran during it.** The loop's error-recovery
+  retry (`errorRecovery:` on `AgentLoop` / `ThinkingAgentLoop`) wrapped the whole function-invoking request, so a transient failure in a
+  later tool round replayed every earlier round: a tool that writes, deletes or hands out the next item ran twice, and the model started
+  over against the changed state. Now the request is retried only when no tool ran in the failed attempt (read from the chat client's
+  `ToolInvocationPipeline`, new `InvocationCount`); otherwise the failure surfaces. A failing model call inside the request is retried by
+  `UseTransientRetry()`, which sits inside function invocation. Without a `ToolInvocationPipeline` a request that offers tools is not
+  retried at all (whether a tool ran cannot be told). Migration: add `UseTransientRetry()` (last, around the provider client) if you
+  relied on the turn-level retry for failures between tool rounds.
+
 ### Changed
 - **Breaking: at the iteration cap, a call the model already made to one of `StepLimitWrapUp.ToolNames` runs instead of receiving
   `UnrunCallNotice`.** A model whose last tool-less request still came back with the finished write (e.g. recovered from text by

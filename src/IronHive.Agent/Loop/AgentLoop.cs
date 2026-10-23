@@ -186,7 +186,7 @@ public class AgentLoop : IAgentLoop
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var response = await _guards.CallWithRecoveryAsync(
-            ct => _chatClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken);
+            ct => _chatClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken, chatOptions?.Tools is { Count: > 0 });
 
         // Suggestion blocks leave the answer before the caller or the history sees it
         var suggestions = new TurnSuggestions(_options.Suggestions).Strip(response.Messages);
@@ -225,7 +225,7 @@ public class AgentLoop : IAgentLoop
                 _guards.ThrowIfUsageLimitExceeded();
                 var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
                 var closed = await _guards.CallWithRecoveryAsync(
-                    ct => _chatClient.GetResponseAsync(closingHistory, closingOptions, ct), cancellationToken);
+                    ct => _chatClient.GetResponseAsync(closingHistory, closingOptions, ct), cancellationToken, closingOptions.Tools is { Count: > 0 });
                 suggestions = new TurnSuggestions(_options.Suggestions).Strip(closed.Messages) ?? suggestions;
 
                 _history.AddRange(closed.Messages);

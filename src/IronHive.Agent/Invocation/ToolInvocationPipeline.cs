@@ -57,7 +57,11 @@ public sealed class ToolInvocationPipeline
         }
 
         var composed = next;
-        Invoker = (context, cancellationToken) => composed(context, cancellationToken);
+        Invoker = (context, cancellationToken) =>
+        {
+            Interlocked.Increment(ref _invocations);
+            return composed(context, cancellationToken);
+        };
     }
 
     /// <summary>
@@ -82,6 +86,15 @@ public sealed class ToolInvocationPipeline
 
     /// <summary>The steps over each result, in the order they run.</summary>
     public IReadOnlyList<IToolResultMiddleware> ResultMiddleware { get; }
+
+    /// <summary>
+    /// How many calls the pipeline has started. A caller that wraps a whole function-invoking request compares it before
+    /// and after to tell whether any tool ran — a request that failed after a tool ran is not safe to send again, since
+    /// sending it again runs the tools again.
+    /// </summary>
+    public long InvocationCount => Interlocked.Read(ref _invocations);
+
+    private long _invocations;
 
     /// <summary>
     /// The whole pipeline as one delegate — what a <see cref="FunctionInvokingChatClient.FunctionInvoker"/> is set to.

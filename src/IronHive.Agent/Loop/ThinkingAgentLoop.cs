@@ -212,7 +212,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
 
         var chatOptions = await CreateChatOptionsAsync(overrideOptions, cancellationToken);
         var response = await _guards.CallWithRecoveryAsync(
-            ct => _thinkingClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken);
+            ct => _thinkingClient.GetResponseAsync(historyToSend, chatOptions, ct), cancellationToken, chatOptions?.Tools is { Count: > 0 });
 
         // Suggestion blocks leave the answer before the caller or the history sees it
         var suggestions = new TurnSuggestions(_options.Suggestions).Strip(response.Messages);
