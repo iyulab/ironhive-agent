@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.74.0] - 2026-10-23
 
 ### Fixed
 - **Breaking: a turn's model request is no longer sent again after a failure once a tool ran during it.** The loop's error-recovery
