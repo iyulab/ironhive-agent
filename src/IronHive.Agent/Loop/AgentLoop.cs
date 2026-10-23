@@ -27,6 +27,8 @@ public class AgentLoop : IAgentLoop
     // What context management made of the history for the model; the history itself keeps every message
     private readonly ModelView _view = new();
     private readonly HostToolResultStage _hostResults;
+    // The pipeline the chat client runs its calls through — a wrap-up runs the finishing calls left at the cap through it too.
+    private readonly Invocation.ToolInvocationPipeline? _toolPipeline;
 
     public AgentLoop(
         IChatClient chatClient,
@@ -51,6 +53,7 @@ public class AgentLoop : IAgentLoop
         _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId, chatClient);
         _toolRetriever = toolRetriever;
         _hostResults = new HostToolResultStage(chatClient);
+        _toolPipeline = chatClient.GetService<Invocation.ToolInvocationPipeline>();
         _turnObservers = turnObservers?.ToArray() ?? [];
 
         // Configure usage tracker with model ID for accurate pricing
@@ -202,31 +205,44 @@ public class AgentLoop : IAgentLoop
         // At the iteration cap, one closing request instead of ending the turn there (AgentOptions.WrapUpAtStepLimit)
         if (stopReason == TurnStopReason.StepLimit && _options.WrapUpAtStepLimit is { } wrapUp)
         {
-            var closing = StepLimitWrapUps.ClosingMessages(response.Messages, wrapUp);
-            _history.AddRange(closing);
-            produced.AddRange(closing);
-
-            var closingHistory = await PrepareHistoryForSendingAsync(cancellationToken);
-            _guards.ThrowIfUsageLimitExceeded();
-            var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
-            var closed = await _guards.CallWithRecoveryAsync(
-                ct => _chatClient.GetResponseAsync(closingHistory, closingOptions, ct), cancellationToken);
-            suggestions = new TurnSuggestions(_options.Suggestions).Strip(closed.Messages) ?? suggestions;
-
-            _history.AddRange(closed.Messages);
-            _hostResults.MarkProduced(closed.Messages);
-            produced.AddRange(closed.Messages);
-            toolCalls.AddRange(ToolCallResultFactory.Extract(closed));
-            stopReason = StepLimitWrapUps.StopReason(
-                TurnStopReasons.Classify(closed.Messages, closed.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
-            if (closed.Usage is { } closedUsage)
+            // The calls left at the cap: the finishing ones run, the others are answered as not run.
+            var prelude = await StepLimitWrapUps.ClosingMessagesAsync(
+                response.Messages, wrapUp, chatOptions?.Tools, _toolPipeline, _history, cancellationToken);
+            _history.AddRange(prelude.Messages);
+            _hostResults.MarkProduced(prelude.Messages);
+            produced.AddRange(prelude.Messages);
+            toolCalls = ToolCallResultFactory.Extract(
+                response.Messages.SelectMany(m => m.Contents.OfType<FunctionCallContent>()),
+                [.. response.Messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), .. prelude.Results]);
+            if (prelude.Terminated)
             {
-                usageDetails ??= new UsageDetails();
-                usageDetails.Add(closedUsage);
+                // A finishing call ended the turn: no closing request.
+                stopReason = TurnStopReason.ToolTerminated;
             }
+            else
+            {
+                var closingHistory = await PrepareHistoryForSendingAsync(cancellationToken);
+                _guards.ThrowIfUsageLimitExceeded();
+                var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
+                var closed = await _guards.CallWithRecoveryAsync(
+                    ct => _chatClient.GetResponseAsync(closingHistory, closingOptions, ct), cancellationToken);
+                suggestions = new TurnSuggestions(_options.Suggestions).Strip(closed.Messages) ?? suggestions;
 
-            text = JoinParts(text, closed.Text);
-            reasoning = JoinParts(reasoning ?? string.Empty, LiveReasoning.Extract(closed));
+                _history.AddRange(closed.Messages);
+                _hostResults.MarkProduced(closed.Messages);
+                produced.AddRange(closed.Messages);
+                toolCalls.AddRange(ToolCallResultFactory.Extract(closed));
+                if (closed.Usage is { } closedUsage)
+                {
+                    usageDetails ??= new UsageDetails();
+                    usageDetails.Add(closedUsage);
+                }
+
+                text = JoinParts(text, closed.Text);
+                reasoning = JoinParts(reasoning ?? string.Empty, LiveReasoning.Extract(closed));
+                stopReason = StepLimitWrapUps.StopReason(
+                    TurnStopReasons.Classify(closed.Messages, closed.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+            }
         }
 
         var added = TurnMessages.Of(started, produced);
@@ -353,27 +369,43 @@ public class AgentLoop : IAgentLoop
         // At the iteration cap, one closing request instead of ending the turn there (AgentOptions.WrapUpAtStepLimit)
         if (streamedStopReason == TurnStopReason.StepLimit && _options.WrapUpAtStepLimit is { } wrapUp)
         {
-            var closing = StepLimitWrapUps.ClosingMessages(turnMessages, wrapUp);
-            _history.AddRange(closing);
-            produced.AddRange(closing);
-
-            var closingHistory = await PrepareHistoryForSendingAsync(cancellationToken);
-            _guards.ThrowIfUsageLimitExceeded();
-            var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
-            var closingRound = new StreamedRound();
-            var separator = round.Text.Length > 0 ? TurnObserverNotifier.AddendumSeparator : null;
-            await foreach (var chunk in StreamRoundAsync(closingHistory, closingOptions, closingRound, streamedSuggestions, separator, cancellationToken))
+            // The calls left at the cap: the finishing ones run, the others are answered as not run.
+            var prelude = await StepLimitWrapUps.ClosingMessagesAsync(
+                turnMessages, wrapUp, chatOptions?.Tools, _toolPipeline, _history, cancellationToken);
+            _history.AddRange(prelude.Messages);
+            _hostResults.MarkProduced(prelude.Messages);
+            produced.AddRange(prelude.Messages);
+            round.ToolResults.AddRange(prelude.Results);
+            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(round.ToolCalls, [.. prelude.Ran]))
             {
-                yield return chunk;
+                yield return new AgentResponseChunk { ToolResult = arrived };
             }
 
-            var closingMessages = closingRound.History.Build();
-            _history.AddRange(closingMessages);
-            _hostResults.MarkProduced(closingMessages);
-            produced.AddRange(closingMessages);
-            rounds.Add(closingRound);
-            streamedStopReason = StepLimitWrapUps.StopReason(
-                TurnStopReasons.Classify(closingMessages, closingRound.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+            if (prelude.Terminated)
+            {
+                // A finishing call ended the turn: no closing request.
+                streamedStopReason = TurnStopReason.ToolTerminated;
+            }
+            else
+            {
+                var closingHistory = await PrepareHistoryForSendingAsync(cancellationToken);
+                _guards.ThrowIfUsageLimitExceeded();
+                var closingOptions = StepLimitWrapUps.Options(chatOptions!, wrapUp);
+                var closingRound = new StreamedRound();
+                var separator = round.Text.Length > 0 ? TurnObserverNotifier.AddendumSeparator : null;
+                await foreach (var chunk in StreamRoundAsync(closingHistory, closingOptions, closingRound, streamedSuggestions, separator, cancellationToken))
+                {
+                    yield return chunk;
+                }
+
+                var closingMessages = closingRound.History.Build();
+                _history.AddRange(closingMessages);
+                _hostResults.MarkProduced(closingMessages);
+                produced.AddRange(closingMessages);
+                rounds.Add(closingRound);
+                streamedStopReason = StepLimitWrapUps.StopReason(
+                    TurnStopReasons.Classify(closingMessages, closingRound.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+            }
         }
 
         var streamedAdded = TurnMessages.Of(started, produced);

@@ -6,6 +6,15 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Changed
+- **Breaking: at the iteration cap, a call the model already made to one of `StepLimitWrapUp.ToolNames` runs instead of receiving
+  `UnrunCallNotice`.** A model whose last tool-less request still came back with the finished write (e.g. recovered from text by
+  `UseTextToolCallRecovery()`) no longer has to write it a second time in the closing request. The call goes through the chat client's
+  `ToolInvocationPipeline` (permission rules, guards and result checks apply as to any call); calls to other tools still get the notice;
+  the closing request follows unless the call ended the turn (`FunctionInvocationContext.Terminate` → `TurnStopReason.ToolTerminated`).
+  A streamed turn reports the call's result as a `ToolResult` chunk. Migration: none, unless you relied on finishing calls at the cap
+  being refused.
+
 ### Added
 - **Ironbees agents with tool execution take the host's tool decisions.** `IronbeesOptions.FileTools` (`FileToolOptions` — allowed
   roots, a write interceptor) and `IronbeesOptions.ShellTools` (`ShellToolOptions` — the environment variables the commands do not
