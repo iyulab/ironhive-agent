@@ -7,7 +7,7 @@
     <PackageVersion Include="IronHive.Abstractions" Version="0.70.0" />
     <PackageVersion Include="IronHive.Extensions.AI" Version="0.70.0" />
     <!-- IronProw.Core (provider failure reading + transient-status boundary for ErrorRecoveryService) -->
-    <PackageVersion Include="IronProw.Core" Version="0.17.0" />
+    <PackageVersion Include="IronProw.Core" Version="0.18.0" />
     <!-- Ironbees (IronHive.Agent.Ironbees satellite; Ironbees.Autonomous for DeepResearch) -->
     <PackageVersion Include="Ironbees.Core" Version="0.30.0" />
     <PackageVersion Include="Ironbees.Autonomous" Version="0.30.0" />
