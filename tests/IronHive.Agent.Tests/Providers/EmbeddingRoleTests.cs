@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using IronHive.Agent.Context;
-using IronHive.Agent.Memory;
 using IronHive.Agent.Providers;
 using Microsoft.Extensions.AI;
 
@@ -47,24 +46,6 @@ public class EmbeddingRoleTests
         Assert.Equal(["read the config file"], provider.Queries);
         Assert.Equal(2, provider.Documents.Count);
         Assert.DoesNotContain("read the config file", provider.Documents);
-    }
-
-    [Fact]
-    public async Task MemoryAdapter_SendsQueriesToTheQueryRole_AndStoredTextToTheDocumentRole()
-    {
-        var provider = new RecordingProvider();
-        var adapter = new EmbeddingServiceAdapter(provider);
-        var ct = TestContext.Current.CancellationToken;
-
-        var query = await adapter.GenerateQueryEmbeddingAsync("what did I say about tests", ct);
-        var stored = await adapter.GenerateEmbeddingAsync("the user prefers xunit", ct);
-        var batch = await adapter.GenerateBatchEmbeddingsAsync(["a", "b"], ct);
-
-        Assert.Equal(RecordingProvider.QueryVector, query.ToArray());
-        Assert.Equal(RecordingProvider.DocumentVector, stored.ToArray());
-        Assert.Equal(2, batch.Count);
-        Assert.Equal(["what did I say about tests"], provider.Queries);
-        Assert.Equal(["the user prefers xunit", "a", "b"], provider.Documents);
     }
 
     [Fact]

@@ -7,8 +7,7 @@ namespace IronHive.Agent.Tests;
 
 /// <summary>
 /// <c>IronHive.Agent</c> stays free of the optional integrations its satellite packages carry (0.19.0): Ironbees
-/// (<c>IronHive.Agent.Ironbees</c>), FluxGuard (<c>IronHive.Agent.FluxGuard</c>) and MemoryIndexer
-/// (<c>IronHive.Agent.Memory</c>) — and, through them, ONNX Runtime natives, Azure.AI.ContentSafety, SQLite and
+/// (<c>IronHive.Agent.Ironbees</c>) and FluxGuard (<c>IronHive.Agent.FluxGuard</c>) — and, through them, ONNX Runtime natives, Azure.AI.ContentSafety, SQLite and
 /// OpenTelemetry. Before the split a host using only the loop shipped all of them. Two facts, because each alone misses
 /// a way back in: a package reference nothing uses still ships as a nuspec dependency, and an assembly can arrive through
 /// another reference without a package reference of its own.
@@ -32,7 +31,7 @@ public class CoreDependencyWeightTests
 
         references.Should().NotBeEmpty("the scan must read the real project file");
         references.Where(IsSatelliteOnly).Should().BeEmpty(
-            "these ship with IronHive.Agent.Ironbees / .FluxGuard / .Memory, not with every host of the loop");
+            "these ship with IronHive.Agent.Ironbees / .FluxGuard, not with every host of the loop");
     }
 
     [Fact]

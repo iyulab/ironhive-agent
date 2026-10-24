@@ -35,7 +35,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\IronHive.Agent\IronHive.Agent.csproj" />
-    <ProjectReference Include="..\..\src\IronHive.Agent.Memory\IronHive.Agent.Memory.csproj" />
     <ProjectReference Include="..\..\src\IronHive.Agent.FluxGuard\IronHive.Agent.FluxGuard.csproj" />
     <ProjectReference Include="..\..\src\IronHive.Agent.Ironbees\IronHive.Agent.Ironbees.csproj" />
   </ItemGroup>

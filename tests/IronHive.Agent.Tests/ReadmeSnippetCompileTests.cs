@@ -82,7 +82,7 @@ public class ReadmeSnippetCompileTests
 
     private static readonly string[] AssembliesToLoad =
     [
-        "IronHive.Agent", "IronHive.Agent.Memory", "IronHive.Agent.FluxGuard", "IronHive.Agent.Ironbees",
+        "IronHive.Agent", "IronHive.Agent.FluxGuard", "IronHive.Agent.Ironbees",
         "Microsoft.Extensions.AI", "Microsoft.Extensions.AI.Abstractions",
     ];
 

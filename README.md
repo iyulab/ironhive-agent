@@ -22,7 +22,6 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
   `Tools` (a manager without it keeps nothing and its placeholders are unchanged). It counts as read-only (like `advisor`),
   so planning mode and approval rules allow it.
 - **Advisor (consult a stronger model)**: `AdvisorTool.Create(strongerClient, new AdvisorOptions { ModelId = ..., MaxCalls = 5 })` gives the working model a no-argument tool that sends the conversation so far — its requests, tool calls and results — to a stronger model and returns that model's review. The working model decides when to consult (the default description says: before committing to an approach, when stuck, before declaring done), so the strong model is paid for only where judgment matters. Works under `FunctionInvokingChatClient` and inside Ironbees agents (`ChatClientFrameworkAdapter`); elsewhere pass `AdvisorOptions.Conversation`. The advisor is never given tools; `MaxCalls`, `UsageLimiter` and `UsageTracker` bound and account for it. Not registered by `AddIronHiveAgent`: add the tool to the loop's `Tools`
-- **Long-term session memory (`IronHive.Agent.Memory` package)**: `new SessionMemoryService(memoryService, userId)` implements `ISessionMemoryService` over a MemoryIndexer `IMemoryService`; `EmbeddingServiceAdapter` (over the same `IEmbeddingProvider` the tool retriever uses — memories are embedded on the document side, memory searches through `EmbedQueryAsync`) and `TextCompletionServiceAdapter` (over an `IChatClient`) supply the MemoryIndexer services it needs. `ISessionMemoryService` lives in `IronHive.Agent`, so a host that does not use memory ships no MemoryIndexer.
 - **Deep research (`IronHive.DeepResearch` package)**: `AddDeepResearch(...)` registers an iterative research pipeline — query planning, web search, content extraction, sufficiency analysis, then a cited report — over one text-generation service (`ChatClientTextGenerationAdapter` for an `IChatClient`). Results report the run's token usage; the cost is left null because the run does not know which model priced its calls. Tune it through the options callback: `services.AddDeepResearch(chatClient, o => { o.SufficiencyThreshold = 0.7m; o.MinSourcesBeforeReport = 5; o.MaxSearchRetriesPerIteration = 2; })`. `SufficiencyThreshold` is the score at which research stops. `MinSourcesBeforeReport` keeps it iterating while fewer sources were collected and a gap remains. The per-query iteration limit is `ResearchRequest.MaxIterations`, capped by `Depth`. Run it through the registered `IDeepResearcher`: `await sp.GetRequiredService<IDeepResearcher>().ResearchAsync(new ResearchRequest { Query = "..." })` (`ResearchStreamAsync` yields progress as it goes). Tavily web search needs its API key in `DeepResearchOptions.SearchApiKeys["tavily"]` (e.g. `o.SearchApiKeys["tavily"] = tavilyKey` in the options callback)
 - **Checkpoint contract**: `ICheckpointService` / `CheckpointInfo` — the shape of a host's pre-destructive-operation snapshot store. There is no built-in implementation and the loop does not call it; a host that wants checkpoints implements and invokes it
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults. One `IToolCallPolicy` gives each call its verdict (`ToolCallPolicy` over the rules by default — register your own to replace it); `AddIronHiveAgentApprovalGate()` acts on it, enforces Planning mode, and asks the `IHumanApprovalService` on `Ask`. See [Human Approval Gate](#human-approval-gate)
@@ -40,14 +39,12 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 | `IronHive.DeepResearch` | Iterative web research pipeline with cited reports (`AddDeepResearch`) |
 | `IronHive.Agent.Ironbees` | Ironbees integration: `ChatClientFrameworkAdapter` (and `ChatClientLLMAdapter`, the same bridge over an `IChatClientFactory`, with provider-name normalization), `AddIronbees`, `OrchestratedAgentLoop`, `DelegationTools` (a named agent as a tool), `IronbeesEmbeddingProviderAdapter`. `services.AddIronbees(o => ...)` takes an `Action<IronbeesOptions>` and needs a model client: set `IronbeesOptions.ChatClientFactory` (`Func<ModelConfig, IChatClient>`) or register an `IChatClient`. Options: `AgentsDirectory` (default `./agents`), `DefaultAgentName`, `SelectorType`, `EmbeddingProvider`, `HybridKeywordWeight`, `EnableToolExecution`, `WorkingDirectory`, `FileTools` / `ShellTools` (the built-in tools' `FileToolOptions` / `ShellToolOptions` when tool execution is on), `MaxToolTurns`, `ConversationsDirectory` |
 | `IronHive.Agent.FluxGuard` | FluxGuard-backed tool guards: `FluxGuardMcpToolCallGuard` (`IMcpToolCallGuard`), `McpGuardrailToolResultGuard` (`IToolResultGuard`), `AddIronHiveAgentFluxGuard()` |
-| `IronHive.Agent.Memory` | Long-term session memory over [MemoryIndexer](https://github.com/iyulab/memory-indexer): `SessionMemoryService` (`ISessionMemoryService`), `EmbeddingServiceAdapter` and `TextCompletionServiceAdapter` |
 
 ## Installation
 
 ```bash
 dotnet add package IronHive.Agent
 dotnet add package IronHive.DeepResearch   # only for deep research
-dotnet add package IronHive.Agent.Memory   # only for long-term memory (MemoryIndexer)
 dotnet add package IronHive.Agent.FluxGuard   # only for FluxGuard tool-call / tool-result guards
 dotnet add package IronHive.Agent.Ironbees    # only for Ironbees agents, AddIronbees and delegation tools
 ```
@@ -153,7 +150,6 @@ IronHive.Agent/
 ├── Permissions/    # Permission evaluation and configuration
 ├── Tracking/       # Usage tracking and limits
 ├── Providers/      # Chat client, embedding, rerank provider abstractions
-├── Memory/         # Session memory contract (ISessionMemoryService)
 ├── Webhook/        # Webhook event notifications
 ├── ErrorRecovery/  # Error categorization and recovery
 └── Extensions/     # DI registration extensions
@@ -161,12 +157,11 @@ IronHive.Agent/
 IronHive.Agent.Ironbees/   # Ironbees integration: ChatClientFrameworkAdapter, AddIronbees, OrchestratedAgentLoop,
                            # DelegationTools, IronbeesEmbeddingProviderAdapter
 IronHive.Agent.FluxGuard/  # FluxGuard-backed IMcpToolCallGuard / IToolResultGuard
-IronHive.Agent.Memory/     # MemoryIndexer-backed SessionMemoryService and adapters
 ```
 
-`IronHive.Agent` itself references none of Ironbees, FluxGuard or MemoryIndexer (0.19.0), so a host that uses the
+`IronHive.Agent` itself references neither Ironbees nor FluxGuard (0.19.0), so a host that uses the
 loop, modes, approvals and tools ships none of their natives or SDKs. The seams they plug into — `IToolResultGuard`,
-`IMcpToolCallGuard`, `ApprovalGate`, `ToolInvocationScope`, `ISessionMemoryService` — are in the core package, so a
+`IMcpToolCallGuard`, `ApprovalGate`, `ToolInvocationScope` — are in the core package, so a
 host's own adapter judges tool calls and results by the same rules.
 
 ## Native (In-Process) Tools

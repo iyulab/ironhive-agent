@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Removed
+- **Breaking: `IronHive.Agent.Memory` is no longer published, and `ISessionMemoryService` (with `MemoryRecallResult` / `MemoryItem`) is
+  removed from `IronHive.Agent`.** Nothing in the agent loop or the context manager read the seam, so a registered memory service was never
+  consulted. The last `IronHive.Agent.Memory` version stays on nuget.org, marked deprecated. Migration: call MemoryIndexer's
+  `IMemoryService` directly where you used `SessionMemoryService`, and give the agent what it recalls through an
+  `ISystemInstructionContributor` or the turn's instructions. `IronHive.Agent` no longer depends on MemoryIndexer.
+
 ## [0.74.0] - 2026-10-23
 
 ### Fixed

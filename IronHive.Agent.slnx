@@ -3,7 +3,6 @@
     <Project Path="src/IronHive.Agent/IronHive.Agent.csproj" />
     <Project Path="src/IronHive.Agent.FluxGuard/IronHive.Agent.FluxGuard.csproj" />
     <Project Path="src/IronHive.Agent.Ironbees/IronHive.Agent.Ironbees.csproj" />
-    <Project Path="src/IronHive.Agent.Memory/IronHive.Agent.Memory.csproj" />
     <Project Path="src/IronHive.DeepResearch/IronHive.DeepResearch.csproj" />
   </Folder>
   <Folder Name="/tests/">
