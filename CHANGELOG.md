@@ -21,6 +21,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
   limits compared with these counts are reached sooner on Korean text.
 
 ### Dependencies
+- `WebFlux` 0.27.0 -> 0.28.0; `FluxCurator.Core` 0.19.0 referenced directly by `IronHive.DeepResearch`.
 - Re-pinned sibling package(s) `IronProw.Core` 0.17.0 -> 0.18.0.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.70.0 -> 0.71.0, `IronHive.Extensions.AI` 0.70.0 -> 0.71.0.
 - Re-pinned sibling package(s) `Ironbees.Autonomous` 0.30.0 -> 0.30.1, `Ironbees.Core` 0.30.0 -> 0.30.1, `TokenMeter` 0.15.0 -> 0.16.0.
