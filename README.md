@@ -376,6 +376,16 @@ the box (keyed by its first text content), and `ToolInvocationOptions.FailureOf`
 null) adds your own tools' convention — e.g. `FailureOf = r => r is string s && s.StartsWith("Error") ? s : null`. Both
 guards use it: such a result counts toward `MaxRepeatedErrors` and never as a successful run for `MaxRepeatedCalls`.
 
+### Calls to a tool the request did not offer
+
+A function-invoking client answers a call to a name that is not in the request's tools itself («Requested function "x"
+not found.»), so on its own no guard would see it. Under `UseToolInvocationPipeline` such a call goes through the
+pipeline too: an `UnknownToolFunction` stands in for the name (offered to the client through `AdditionalTools`, never
+advertised to the model) and answers a `ToolCallRefusal` of kind `UnknownTool` with the same text. It counts as a failure
+for `MaxRepeatedErrors`, so a model that keeps calling an invented or withdrawn tool is stopped at the third identical
+call; one mistyped name that the model then corrects costs nothing. A middleware that acts on what a tool is (a permission
+gate, an argument check) lets `UnknownToolFunction` pass — the built-in approval gate and argument check do.
+
 ### Time limit per tool call
 
 `ToolInvocationOptions.MaxInvocationDuration` (null by default — no limit) bounds one tool call. Past it the call's

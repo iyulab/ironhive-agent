@@ -45,7 +45,14 @@ public enum ToolCallRefusalKind
     /// The rules said <c>Ask</c> and the approver deferred the call (<see cref="ApprovalResult.Deferred"/>): it has not
     /// run, it is still waiting for an answer, and its outcome arrives in a later message. Not a refusal of the call.
     /// </summary>
-    AwaitingApproval
+    AwaitingApproval,
+
+    /// <summary>
+    /// The call named a tool the request did not offer (<see cref="Invocation.UnknownToolFunction"/>). The model reads the
+    /// same «not found» text a function-invoking client gives; the repeated-error guard counts it as a failure, so a model
+    /// that keeps calling the missing tool is stopped like one that keeps failing an offered tool.
+    /// </summary>
+    UnknownTool
 }
 
 /// <summary>
@@ -72,6 +79,7 @@ public sealed record ToolCallRefusal(ToolCallRefusalKind Kind, string Reason)
         ToolCallRefusalKind.RepeatedError => $"Tool call stopped: {Reason}",
         ToolCallRefusalKind.RepeatedResult => $"Tool call stopped: {Reason}",
         ToolCallRefusalKind.TimedOut => $"Tool call stopped: {Reason}",
+        ToolCallRefusalKind.UnknownTool => $"Error: {Reason}",
         ToolCallRefusalKind.AwaitingApproval =>
             $"Tool call not run yet: it is waiting for approval ({Reason}). Its outcome will arrive in a later message; "
             + "do not assume it ran, and do not repeat the call.",

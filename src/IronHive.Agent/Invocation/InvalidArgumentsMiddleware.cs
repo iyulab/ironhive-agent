@@ -38,7 +38,8 @@ public sealed partial class InvalidArgumentsMiddleware : IToolInvocationMiddlewa
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(next);
 
-        if (!_options.RefuseInvalidArguments)
+        // A tool the request did not offer has no parameters to check: it answers «not found» whatever the arguments.
+        if (!_options.RefuseInvalidArguments || context.Function is UnknownToolFunction)
         {
             return next(context, cancellationToken);
         }

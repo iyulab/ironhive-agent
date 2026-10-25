@@ -7,7 +7,8 @@ namespace IronHive.Agent.Invocation;
 
 /// <summary>
 /// Ends the request when a tool keeps failing the same way. A failure is a call that throws, a call stopped at its time
-/// limit (<see cref="ToolCallRefusalKind.TimedOut"/>), or a result that reports one — an MCP result with
+/// limit (<see cref="ToolCallRefusalKind.TimedOut"/>), a call to a tool the request did not offer
+/// (<see cref="ToolCallRefusalKind.UnknownTool"/>), or a result that reports one — an MCP result with
 /// <c>isError: true</c>, or whatever <see cref="ToolInvocationOptions.FailureOf"/> recognises.
 /// When the conversation shows the same tool failing with the same error (exception type and message, or the reported
 /// error text) immediately before it, so that the streak reaches <see cref="ToolInvocationOptions.MaxRepeatedErrors"/>,
@@ -103,6 +104,7 @@ public sealed partial class RepeatedErrorGuardMiddleware : IToolInvocationMiddle
 
     private Failure? FailureOf(object? result) =>
         result is ToolCallRefusal { Kind: ToolCallRefusalKind.TimedOut } timedOut ? Failure.TimedOut(timedOut.Reason)
+        : result is ToolCallRefusal { Kind: ToolCallRefusalKind.UnknownTool } unknown ? Failure.Unknown(unknown.Reason)
         : ToolResultFailure.Of(result, _options) is { } reported ? Failure.Reported(reported)
         : null;
 
@@ -116,6 +118,8 @@ public sealed partial class RepeatedErrorGuardMiddleware : IToolInvocationMiddle
         public static Failure Reported(string text) => new(ReportedKind, text);
 
         public static Failure TimedOut(string reason) => new("timeout", reason);
+
+        public static Failure Unknown(string reason) => new("unknown-tool", reason);
 
         public string ShortKind => Kind[(Kind.LastIndexOf('.') + 1)..];
 

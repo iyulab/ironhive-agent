@@ -6,6 +6,15 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **A model that keeps calling a tool the request did not offer is stopped by the loop guards.** Under
+  `UseToolInvocationPipeline` a call to an unknown name goes through the tool-invocation pipeline: `UnknownToolFunction`
+  stands in for it and answers a `ToolCallRefusal` of the new kind `ToolCallRefusalKind.UnknownTool` whose text is the
+  «Requested function "x" not found.» the model read before, and `RepeatedErrorGuardMiddleware` counts it — the third
+  identical unknown call ends the request with a `RepeatedError` refusal (before: the model repeated it until the step limit).
+  The approval gate and the argument check let it pass. **Breaking** for a switch over `ToolCallRefusalKind` without a
+  default arm: add `UnknownTool`.
+
 ### Changed
 - **Breaking** (behaviour): `IronHive.DeepResearch` chunk `TokenCount` values come from FluxCurator's per-character-kind estimate (o200k_base ratios) instead of a local
   rule — Korean text counts about 2.5× more tokens than before (it was read near English), English about the same. No code change;

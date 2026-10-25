@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -69,7 +70,11 @@ public static class ToolInvocationPipelineChatClientBuilderExtensions
         IServiceProvider services,
         Action<FunctionInvokingChatClient>? configure)
     {
-        var client = new PipelineFunctionInvokingChatClient(inner, pipeline, services.GetService<ILoggerFactory>(), services)
+        // A call to a tool the request did not offer goes through the pipeline too (UnknownToolCalls): the recorder beneath
+        // the client notes its name, and the client's additional tools offer a stand-in for it.
+        UnknownToolCalls.ToolView? view = null;
+        var recorder = new UnknownToolCalls.Recorder(inner, () => view?.Host);
+        var client = new PipelineFunctionInvokingChatClient(recorder, pipeline, services.GetService<ILoggerFactory>(), services)
         {
             // The library's tools report failure by throwing; without the message the model reads only "Function failed"
             // and cannot correct the call (a wrong path, a non-unique edit). Set before configure, so a host can turn it off.
@@ -83,6 +88,8 @@ public static class ToolInvocationPipelineChatClientBuilderExtensions
         }
 
         client.FunctionInvoker = pipeline.Invoker;
+        view = new UnknownToolCalls.ToolView(client.AdditionalTools);
+        client.AdditionalTools = view;
         return client;
     }
 
@@ -103,6 +110,32 @@ public static class ToolInvocationPipelineChatClientBuilderExtensions
             return serviceKey is null && serviceType == typeof(ToolInvocationPipeline)
                 ? pipeline
                 : base.GetService(serviceType, serviceKey);
+        }
+
+        public override async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            UnknownToolCalls.Current = new UnknownToolCalls.Scope();
+            return await base.GetResponseAsync(messages, options, cancellationToken);
+        }
+
+        public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            // An iterator's ambient values last one step, so the scope is set again before each step of the base stream.
+            var scope = new UnknownToolCalls.Scope();
+            UnknownToolCalls.Current = scope;
+            await using var updates = base.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+            while (true)
+            {
+                UnknownToolCalls.Current = scope;
+                if (!await updates.MoveNextAsync())
+                {
+                    break;
+                }
+
+                yield return updates.Current;
+            }
         }
     }
 }

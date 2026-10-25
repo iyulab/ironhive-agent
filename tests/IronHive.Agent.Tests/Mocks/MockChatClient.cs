@@ -38,6 +38,17 @@ public class MockChatClient : IChatClient
         return this;
     }
 
+    /// <summary>Enqueues a response with several tool calls in one assistant message (parallel calls).</summary>
+    public MockChatClient EnqueueToolCallsResponse(params (string ToolName, string Arguments)[] calls)
+    {
+        var contents = calls.Select(c => (AIContent)new FunctionCallContent(
+            callId: Guid.NewGuid().ToString(),
+            name: c.ToolName,
+            arguments: JsonSerializer.Deserialize<Dictionary<string, object?>>(c.Arguments) ?? new Dictionary<string, object?>())).ToList();
+        _responses.Enqueue(new ChatResponse([new ChatMessage(ChatRole.Assistant, contents)]));
+        return this;
+    }
+
     /// <summary>
     /// Enqueues a response with a tool call.
     /// </summary>

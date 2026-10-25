@@ -46,6 +46,12 @@ public sealed class ApprovalGateMiddleware : IToolInvocationMiddleware
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(next);
 
+        // Nothing to approve for a tool the request did not offer: asking would read to the model as «forbidden», not «missing».
+        if (context.Function is UnknownToolFunction)
+        {
+            return await next(context, cancellationToken);
+        }
+
         var decision = await _gate.DecideAsync(context.Function.Name, context.Arguments, context.CallContent?.CallId, cancellationToken);
         if (!decision.ShouldProceed)
         {
