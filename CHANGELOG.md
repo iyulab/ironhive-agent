@@ -6,6 +6,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Changed
+- **Breaking** (behaviour): `IronHive.DeepResearch` chunk `TokenCount` values come from FluxCurator's per-character-kind estimate (o200k_base ratios) instead of a local
+  rule — Korean text counts about 2.5× more tokens than before (it was read near English), English about the same. No code change;
+  limits compared with these counts are reached sooner on Korean text.
+
 ### Dependencies
 - Re-pinned sibling package(s) `IronProw.Core` 0.17.0 -> 0.18.0.
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.70.0 -> 0.71.0, `IronHive.Extensions.AI` 0.70.0 -> 0.71.0.

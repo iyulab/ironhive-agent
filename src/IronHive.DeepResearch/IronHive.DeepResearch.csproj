@@ -23,6 +23,9 @@
     <!-- WebFlux (콘텐츠 추출) -->
     <PackageReference Include="WebFlux" />
 
+    <!-- FluxCurator: the token estimate chunk sizes are measured with (also reached through WebFlux) -->
+    <PackageReference Include="FluxCurator.Core" />
+
     <!-- HTTP & Resilience -->
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />

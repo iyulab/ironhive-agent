@@ -253,7 +253,9 @@ public class ContentChunkerTests
 
         // Assert
         chunks[0].TokenCount.Should().BeGreaterThan(0);
-        // 한국어는 약 2자당 1토큰으로 추정
+        // FluxCurator's estimate, not a local copy of a ratio
+        chunks[0].TokenCount.Should().Be(
+            FluxCurator.Core.Infrastructure.Languages.LanguageProfileRegistry.Instance.GetProfile(null).EstimateTokenCount(chunks[0].Content));
     }
 
     [Fact]

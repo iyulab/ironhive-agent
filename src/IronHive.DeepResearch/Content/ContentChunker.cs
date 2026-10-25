@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FluxCurator.Core.Infrastructure.Languages;
 using IronHive.DeepResearch.Models.Content;
 using Microsoft.Extensions.Logging;
 
@@ -170,13 +171,15 @@ public partial class ContentChunker
         int chunkIndex,
         int startPosition)
     {
+        var text = content.Trim();
         return new ContentChunk
         {
             SourceId = sourceId,
             SourceUrl = sourceUrl,
-            Content = content.Trim(),
+            Content = text,
             ChunkIndex = chunkIndex,
-            TokenCount = EstimateTokenCount(content),
+            // The count of the text the chunk holds (the estimate charges whitespace runs, so the untrimmed text read higher).
+            TokenCount = EstimateTokenCount(text),
             StartPosition = startPosition,
             EndPosition = startPosition + content.Length
         };
@@ -250,20 +253,8 @@ public partial class ContentChunker
 
     private static int EstimateTokenCount(string text)
     {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
-
-        // 간단한 추정: 영어 4자 = 1토큰, 한국어 2자 = 1토큰
-        // 혼합 텍스트의 경우 평균값 사용
-        var koreanChars = text.Count(c => c >= 0xAC00 && c <= 0xD7A3);
-        var totalChars = text.Length;
-
-        var koreanTokens = koreanChars / 2.0;
-        var otherTokens = (totalChars - koreanChars) / 4.0;
-
-        return (int)Math.Ceiling(koreanTokens + otherTokens);
+        // FluxCurator's per-character-kind estimate (o200k_base ratios) — the count WebFlux and FileFlux use too.
+        return LanguageProfileRegistry.Instance.GetProfile(null).EstimateTokenCount(text);
     }
 
     private static string GenerateSourceId(string url)
