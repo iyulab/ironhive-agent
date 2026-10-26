@@ -163,7 +163,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                 {
                     await removed.Client.DisposeAsync();
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
                     // Ignore disposal errors: the connection is being replaced because it is already bad.
                 }
