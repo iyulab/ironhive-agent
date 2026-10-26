@@ -6,6 +6,19 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **An MCP plugin that could not be connected, or was lost, is connected again** (`McpPluginConfig.AutoReconnect`, on by default, was parsed
+  from `autoReconnect` but never read; it is now honoured). `IMcpPluginManager` gains `PendingPlugins` (why it failed, attempts, next
+  attempt), `ReconnectPendingAsync()` (tries what is due; the wait doubles from 5 s to 5 min), `ReconnectAsync(name)` and the
+  `PluginConnectionFailed` event. A plugin that `ConnectAsync` could not reach stays pending instead of being forgotten; the caller still sees
+  the exception. `McpPluginManager` takes an optional `TimeProvider`.
+- **`LiveToolList`**: an `IList<AITool>` whose reads see one snapshot and whose changes replace it (`Replace` swaps a plugin's tools as one
+  change), so tools can be added to the list a running loop reads every turn without disturbing a turn in flight.
+
+### Changed
+- **Breaking** (implementers): `IMcpPluginManager` has four new members (`PendingPlugins`, `ReconnectPendingAsync`, `ReconnectAsync`,
+  `PluginConnectionFailed`). A class that implements the interface itself adds them; `McpPluginManager` has them.
+
 ### Dependencies
 
 - Re-pinned third-party packages: 7 .NET servicing pins (Microsoft.Bcl, Microsoft.Extensions) 10.0.13 -> 10.0.14 (the 10.0.14 security servicing release).

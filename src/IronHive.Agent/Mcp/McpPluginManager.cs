@@ -16,6 +16,8 @@ namespace IronHive.Agent.Mcp;
 public class McpPluginManager : IMcpPluginManager, IDisposable
 {
     private readonly ConcurrentDictionary<string, McpClientWrapper> _clients = new();
+    private readonly ConcurrentDictionary<string, PendingPlugin> _pending = new();
+    private readonly TimeProvider _time;
     private readonly ILogger<McpPluginManager>? _logger;
     private readonly IMcpToolCallGuard? _guard;
     private readonly IMcpElicitationHandler? _elicitation;
@@ -28,10 +30,12 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     /// When provided, every <see cref="CallToolAsync"/> checks the request before dispatch and the result before
     /// returning it — see that method's remarks for the fail-closed policy on a guard-side exception.
     /// </param>
-    public McpPluginManager(ILogger<McpPluginManager>? logger = null, IMcpToolCallGuard? guard = null)
+    /// <param name="timeProvider">Clock for the reconnect schedule (<see cref="PendingPlugins"/>); the system clock by default.</param>
+    public McpPluginManager(ILogger<McpPluginManager>? logger = null, IMcpToolCallGuard? guard = null, TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _guard = guard;
+        _time = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -45,8 +49,11 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     /// </param>
     /// <param name="logger">Optional logger.</param>
     /// <param name="guard">Optional MCP tool-call guard — see the other constructor.</param>
-    public McpPluginManager(IMcpElicitationHandler elicitation, ILogger<McpPluginManager>? logger = null, IMcpToolCallGuard? guard = null)
-        : this(logger, guard)
+    /// <param name="timeProvider">Clock for the reconnect schedule — see the other constructor.</param>
+    public McpPluginManager(
+        IMcpElicitationHandler elicitation, ILogger<McpPluginManager>? logger = null, IMcpToolCallGuard? guard = null,
+        TimeProvider? timeProvider = null)
+        : this(logger, guard, timeProvider)
     {
         _elicitation = elicitation ?? throw new ArgumentNullException(nameof(elicitation));
     }
@@ -55,10 +62,20 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     public IReadOnlyCollection<string> ConnectedPlugins => [.. _clients.Keys];
 
     /// <inheritdoc />
+    public IReadOnlyDictionary<string, McpPluginPending> PendingPlugins =>
+        _pending.ToDictionary(entry => entry.Key, entry => entry.Value.State, StringComparer.Ordinal);
+
+    /// <summary>The transport a configuration connects over; a test replaces it with an in-process one.</summary>
+    internal Func<string, McpPluginConfig, IClientTransport> TransportFactory { get; set; } = CreateTransport;
+
+    /// <inheritdoc />
     public event EventHandler<McpPluginEventArgs>? PluginConnected;
 
     /// <inheritdoc />
     public event EventHandler<McpPluginEventArgs>? PluginDisconnected;
+
+    /// <inheritdoc />
+    public event EventHandler<McpPluginEventArgs>? PluginConnectionFailed;
 
     /// <inheritdoc />
     public event EventHandler<McpPluginEventArgs>? ToolsChanged;
@@ -83,8 +100,132 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             throw new InvalidOperationException($"Plugin '{name}' is already connected.");
         }
 
-        await ConnectCoreAsync(name, CreateTransport(name, config), config, cancellationToken);
+        // A configuration the transport cannot be built from is the caller's mistake, not a server that is not ready:
+        // it throws here and is not retried.
+        var transport = TransportFactory(name, config);
+        try
+        {
+            await ConnectCoreAsync(name, transport, config, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            NoteConnectionFailed(name, config, ex);
+            throw;
+        }
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> ReconnectPendingAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_pending.IsEmpty)
+        {
+            return [];
+        }
+
+        var now = _time.GetUtcNow();
+        var connected = new List<string>();
+        foreach (var (name, entry) in _pending.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            if (entry.NextAttempt > now)
+            {
+                continue;
+            }
+
+            if (await TryConnectAsync(name, entry.Config, cancellationToken))
+            {
+                connected.Add(name);
+            }
+        }
+
+        return connected;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ReconnectAsync(string name, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
+
+        McpPluginConfig config;
+        if (_clients.TryGetValue(name, out var current))
+        {
+            config = current.Config;
+            if (!config.AutoReconnect)
+            {
+                return false;
+            }
+
+            if (_clients.TryRemove(name, out var removed))
+            {
+                try
+                {
+                    await removed.Client.DisposeAsync();
+                }
+                catch
+                {
+                    // Ignore disposal errors: the connection is being replaced because it is already bad.
+                }
+
+                PluginDisconnected?.Invoke(this, new McpPluginEventArgs { PluginName = name });
+            }
+        }
+        else if (_pending.TryGetValue(name, out var pending))
+        {
+            config = pending.Config;
+        }
+        else
+        {
+            return false;
+        }
+
+        return await TryConnectAsync(name, config, cancellationToken);
+    }
+
+    /// <summary>
+    /// One attempt for a plugin that is not connected, bounded by the configuration's connect timeout. A failure is recorded
+    /// (<see cref="PendingPlugins"/>, <see cref="PluginConnectionFailed"/>) and answered with false; only the caller's own
+    /// cancellation propagates.
+    /// </summary>
+    private async Task<bool> TryConnectAsync(string name, McpPluginConfig config, CancellationToken cancellationToken)
+    {
+        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        attempt.CancelAfter(TimeSpan.FromMilliseconds(config.TimeoutMs > 0 ? config.TimeoutMs : 30000));
+        try
+        {
+            await ConnectCoreAsync(name, TransportFactory(name, config), config, attempt.Token);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            NoteConnectionFailed(name, config, ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Records a failed attempt: the plugin is pending again, to be tried after a wait that doubles from 5 seconds to
+    /// 5 minutes, unless its configuration turned <see cref="McpPluginConfig.AutoReconnect"/> off.
+    /// </summary>
+    private void NoteConnectionFailed(string name, McpPluginConfig config, Exception error)
+    {
+        if (config.AutoReconnect)
+        {
+            _pending.AddOrUpdate(
+                name,
+                _ => new PendingPlugin(config, error.Message, 1, _time.GetUtcNow() + Backoff(1)),
+                (_, previous) => new PendingPlugin(config, error.Message, previous.Attempts + 1, _time.GetUtcNow() + Backoff(previous.Attempts + 1)));
+        }
+
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+        _logger?.LogWarning(error, "MCP plugin '{PluginName}' could not be connected (will retry: {WillRetry})", name, config.AutoReconnect);
+#pragma warning restore CA1848
+        PluginConnectionFailed?.Invoke(this, new McpPluginEventArgs { PluginName = name, ErrorMessage = error.Message });
+    }
+
+    private static TimeSpan Backoff(int attempts) =>
+        TimeSpan.FromSeconds(Math.Min(300, 5 * Math.Pow(2, Math.Min(attempts - 1, 6))));
 
     /// <summary>Connects over a given transport — the seam an in-process server test uses.</summary>
     internal async Task ConnectCoreAsync(string name, IClientTransport transport, McpPluginConfig config, CancellationToken cancellationToken)
@@ -98,6 +239,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             throw new InvalidOperationException($"Plugin '{name}' connection failed.");
         }
 
+        _pending.TryRemove(name, out _);
         PluginConnected?.Invoke(this, new McpPluginEventArgs { PluginName = name });
     }
 
@@ -106,6 +248,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        _pending.TryRemove(name, out _);
         if (_clients.TryRemove(name, out var wrapper))
         {
             await wrapper.Client.DisposeAsync();
@@ -450,6 +593,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         }
 
         _clients.Clear();
+        _pending.Clear();
         GC.SuppressFinalize(this);
     }
 
@@ -528,6 +672,11 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         }
 
         return new HttpClientTransport(options);
+    }
+
+    private sealed record PendingPlugin(McpPluginConfig Config, string LastError, int Attempts, DateTimeOffset NextAttempt)
+    {
+        public McpPluginPending State => new(LastError, Attempts, NextAttempt);
     }
 
     private sealed record McpClientWrapper(string Name, McpClient Client, McpPluginConfig Config)

@@ -13,6 +13,13 @@ public interface IMcpPluginManager : IAsyncDisposable
     IReadOnlyCollection<string> ConnectedPlugins { get; }
 
     /// <summary>
+    /// The plugins that are wanted but not connected, with why and when the next attempt is due: a plugin whose
+    /// <see cref="ConnectAsync"/> failed, or that was found lost and could not be reconnected, and whose
+    /// <see cref="McpPluginConfig.AutoReconnect"/> is on. <see cref="ReconnectPendingAsync"/> works through it.
+    /// </summary>
+    IReadOnlyDictionary<string, McpPluginPending> PendingPlugins { get; }
+
+    /// <summary>
     /// Connects to an MCP server.
     /// </summary>
     /// <param name="name">Unique name for this plugin</param>
@@ -21,7 +28,26 @@ public interface IMcpPluginManager : IAsyncDisposable
     Task ConnectAsync(string name, McpPluginConfig config, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Disconnects a specific plugin.
+    /// Tries every plugin in <see cref="PendingPlugins"/> whose next attempt is due. A plugin that connects leaves
+    /// <see cref="PendingPlugins"/> and raises <see cref="PluginConnected"/>; one that fails again is tried later (the wait
+    /// doubles from 5 seconds to 5 minutes) and raises <see cref="PluginConnectionFailed"/>. Cheap when nothing is pending.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The names that connected in this call</returns>
+    Task<IReadOnlyList<string>> ReconnectPendingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Drops a plugin's connection and connects it again with the configuration it was connected with, now. A plugin whose
+    /// <see cref="McpPluginConfig.AutoReconnect"/> is off is left alone. If the new connection fails the plugin becomes
+    /// pending (<see cref="PendingPlugins"/>).
+    /// </summary>
+    /// <param name="name">Plugin name, connected or pending</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True when the plugin is connected afterwards</returns>
+    Task<bool> ReconnectAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Disconnects a specific plugin. A pending plugin is forgotten.
     /// </summary>
     /// <param name="name">Plugin name to disconnect</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -88,6 +114,12 @@ public interface IMcpPluginManager : IAsyncDisposable
     event EventHandler<McpPluginEventArgs>? PluginDisconnected;
 
     /// <summary>
+    /// Event raised when an attempt to connect a plugin fails (<see cref="McpPluginEventArgs.ErrorMessage"/> says why) -
+    /// the first attempt and each retry.
+    /// </summary>
+    event EventHandler<McpPluginEventArgs>? PluginConnectionFailed;
+
+    /// <summary>
     /// Event raised when tools list changes on a plugin.
     /// </summary>
     event EventHandler<McpPluginEventArgs>? ToolsChanged;
@@ -134,7 +166,8 @@ public record McpPluginConfig
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
 
     /// <summary>
-    /// Whether to auto-reconnect on disconnect.
+    /// Whether the manager connects this plugin again when it could not be connected or was lost
+    /// (<see cref="IMcpPluginManager.PendingPlugins"/>, <see cref="IMcpPluginManager.ReconnectPendingAsync"/>). On by default.
     /// </summary>
     public bool AutoReconnect { get; init; } = true;
 
@@ -143,6 +176,14 @@ public record McpPluginConfig
     /// </summary>
     public int TimeoutMs { get; init; } = 30000;
 }
+
+/// <summary>
+/// A plugin that is wanted but not connected.
+/// </summary>
+/// <param name="LastError">Why the last attempt failed</param>
+/// <param name="Attempts">How many attempts have failed</param>
+/// <param name="NextAttempt">When <see cref="IMcpPluginManager.ReconnectPendingAsync"/> tries it next</param>
+public sealed record McpPluginPending(string LastError, int Attempts, DateTimeOffset NextAttempt);
 
 /// <summary>
 /// MCP transport types.

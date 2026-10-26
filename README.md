@@ -234,6 +234,15 @@ await manager.ConnectAsync("my-server", new McpPluginConfig
 });
 ```
 
+A server that is not ready when `ConnectAsync` runs (an HTTP server answering 401 until its credentials are set, a stdio process that
+exits) is not forgotten: with `McpPluginConfig.AutoReconnect` on (the default) the failure is recorded in
+`manager.PendingPlugins` (why, how many attempts, when the next is due) and `manager.PluginConnectionFailed` fires. Call
+`await manager.ReconnectPendingAsync()` on a timer: it tries what is due (the wait doubles from 5 seconds to 5 minutes), raises
+`PluginConnected` for each plugin that connects and costs nothing when nothing is pending. `await manager.ReconnectAsync(name)`
+drops a connection that went bad and connects it again. A tool list the loop reads every turn must be able to change while
+a turn runs - hand `AgentOptions.Tools` a `LiveToolList` and add or `Replace` a reconnected plugin's tools on it (`ironhive run
+--server` does this; see the host README). `AutoReconnect: false` leaves a plugin alone.
+
 In YAML plugin config (`transport` — or `type` — accepts `stdio`, `http`, `sse` or `streamable-http` case-insensitively;
 without it, `command` means stdio and `url` means HTTP):
 
