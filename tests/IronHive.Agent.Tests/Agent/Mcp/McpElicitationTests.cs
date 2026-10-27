@@ -39,11 +39,27 @@ public sealed class McpElicitationTests : IAsyncDisposable
         }
     }
 
+    /// <summary>Waits for a person who never answers (until its token ends), the way a host with nobody attached does.</summary>
+    private sealed class Absent : IMcpElicitationHandler
+    {
+        public TaskCompletionSource Asked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<ElicitResult> ElicitAsync(string pluginName, ElicitRequestParams request, CancellationToken cancellationToken)
+        {
+            Asked.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return new ElicitResult { Action = "cancel" };
+        }
+    }
+
+    private McpServer? _mcpServer;
+
     private void StartServer()
     {
         var tool = McpServerTool.Create(
             (RequestContext<CallToolRequestParams> context) =>
             {
+                _mcpServer = context.Server;
                 if (context.Params?.RequestState == State)
                 {
                     return "sent";
@@ -95,6 +111,26 @@ public sealed class McpElicitationTests : IAsyncDisposable
         person.Asked[0].Plugin.Should().Be("approvals");
         person.Asked[0].Request.Url.Should().Be(ApprovalUrl);
         person.Asked[0].Request.Mode.Should().Be("url");
+    }
+
+    [Fact]
+    public async Task TheServersCompletionNotification_ReleasesTheWait_AndResendsTheCall()
+    {
+        var absent = new Absent();
+        await using var manager = await Connect(new McpPluginManager(absent));
+
+        var call = manager.CallToolAsync("approvals", "send_payment", new Dictionary<string, object?>(), Ct);
+        await absent.Asked.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+        call.IsCompleted.Should().BeFalse("nobody answered and the server has not reported the step done");
+
+        await _mcpServer!.SendNotificationAsync(
+            NotificationMethods.ElicitationCompleteNotification,
+            new ElicitationCompleteNotificationParams { ElicitationId = "apr_1" },
+            cancellationToken: Ct);
+
+        var result = await call.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+        result.IsError.Should().BeFalse(result.Content);
+        result.Content.Should().Contain("sent", "the call was sent again with the server's requestState once the step was reported done");
     }
 
     [Fact]

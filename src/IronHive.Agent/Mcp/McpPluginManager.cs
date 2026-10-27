@@ -601,18 +601,36 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     /// With an <see cref="IMcpElicitationHandler"/>: URL-mode elicitation advertised and routed to it. Without: the SDK's
     /// defaults (no elicitation capability).
     /// </summary>
-    private McpClientOptions? ClientOptions(string name) => _elicitation is not { } elicitation
-        ? null
-        : new McpClientOptions
+    private McpClientOptions? ClientOptions(string name)
+    {
+        if (_elicitation is not { } elicitation)
+        {
+            return null;
+        }
+
+        // Per client: a server's completion notification names an elicitation only that server issued.
+        var waits = new ElicitationWaits();
+        return new McpClientOptions
         {
             Capabilities = new ClientCapabilities { Elicitation = new ElicitationCapability { Url = new UrlElicitationCapability() } },
             Handlers = new McpClientHandlers
             {
                 ElicitationHandler = (request, ct) => request is null
                     ? ValueTask.FromResult(new ElicitResult { Action = "cancel" })
-                    : elicitation.ElicitAsync(name, request, ct)
+                    : waits.RunAsync(request, token => elicitation.ElicitAsync(name, request, token), ct),
+                NotificationHandlers =
+                [
+                    new KeyValuePair<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>(
+                        NotificationMethods.ElicitationCompleteNotification,
+                        (notification, _) =>
+                        {
+                            waits.Complete(notification);
+                            return ValueTask.CompletedTask;
+                        })
+                ]
             }
         };
+    }
 
     private static IClientTransport CreateTransport(string name, McpPluginConfig config)
     {

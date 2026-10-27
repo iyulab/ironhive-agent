@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Changed
+- **A URL-mode elicitation wait ends when the MCP server reports the step done.** A server that sends `notifications/elicitation/complete` for an
+  elicitation (an approval finished on another device, a closed screen, no host attached) no longer leaves the tool call stopped until the host answers
+  or the host's timeout: the wait ends, and the call is sent again with the server's `requestState` (the server decides the outcome). The token passed to
+  `IMcpElicitationHandler.ElicitAsync` is now also cancelled by this, and the handler's return value is then ignored — a handler that waits on a person
+  must honour its token (the host's own does). A server that never sends the notification behaves as before.
+
 ## [0.77.0] - 2026-10-26
 
 ### Added
