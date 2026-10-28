@@ -24,8 +24,6 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Options" />
 
-    <!-- Diff -->
-    <PackageReference Include="DiffPlex" />
 
     <!-- Glob -->
     <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />

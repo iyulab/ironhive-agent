@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Removed
+- **`DiffPlex` is no longer a dependency of `IronHive.Agent`**: no code in the package used it. Consumers that took it transitively and use DiffPlex types must reference it themselves.
+
 ### Dependencies
 - Re-pinned third-party packages: `Polly` 8.8.0 -> 8.8.1, `Polly.Extensions` 8.8.0 -> 8.8.1.
 
