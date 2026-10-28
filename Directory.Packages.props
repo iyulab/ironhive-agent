@@ -45,16 +45,16 @@
     <PackageVersion Include="FluxCurator.Core" Version="0.19.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
-    <PackageVersion Include="Polly" Version="8.8.0" />
-    <PackageVersion Include="Polly.Extensions" Version="8.8.0" />
+    <PackageVersion Include="Polly" Version="8.8.1" />
+    <PackageVersion Include="Polly.Extensions" Version="8.8.1" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
     <!-- Testing (xUnit v3 / Microsoft.Testing.Platform) -->
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.HangDump" Version="2.5.1" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.HangDump" Version="2.5.2" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
       <!-- Convention checks (options reachability) — iyulab conventions kit -->
     <PackageVersion Include="Iyu.Conventions.Testing" Version="0.13.0" />
