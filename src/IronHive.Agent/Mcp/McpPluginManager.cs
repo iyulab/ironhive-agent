@@ -400,6 +400,10 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             return McpToolResult.Error($"Plugin '{pluginName}' is not connected.");
         }
 
+        // The plugin may ask a person about this call while it runs (elicitation); the request arrives on the client's own
+        // loop, not in this call's flow, so the call is registered here for the handler to find.
+        using var inFlight = TrackCall(pluginName, new McpCallInfo(toolName, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId));
+
         // Convert IDictionary to IReadOnlyDictionary
         IReadOnlyDictionary<string, object?>? args = arguments != null
             ? new Dictionary<string, object?>(arguments)
@@ -597,6 +601,48 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         GC.SuppressFinalize(this);
     }
 
+    private readonly Lock _inFlightLock = new();
+    private readonly Dictionary<string, List<McpCallInfo>> _inFlight = new(StringComparer.Ordinal);
+
+    private CallScope TrackCall(string pluginName, McpCallInfo call)
+    {
+        lock (_inFlightLock)
+        {
+            if (!_inFlight.TryGetValue(pluginName, out var calls))
+            {
+                _inFlight[pluginName] = calls = [];
+            }
+
+            calls.Add(call);
+        }
+
+        return new CallScope(this, pluginName, call);
+    }
+
+    // The one call the plugin is running, or null when it is running none or several: with several, an elicitation cannot be
+    // told from the others, and naming one would put a person's answer on the wrong call.
+    private McpCallInfo? SoleCallInFlight(string pluginName)
+    {
+        lock (_inFlightLock)
+        {
+            return _inFlight.TryGetValue(pluginName, out var calls) && calls.Count == 1 ? calls[0] : null;
+        }
+    }
+
+    private sealed class CallScope(McpPluginManager owner, string pluginName, McpCallInfo call) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (owner._inFlightLock)
+            {
+                if (owner._inFlight.TryGetValue(pluginName, out var calls))
+                {
+                    calls.Remove(call);
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// With an <see cref="IMcpElicitationHandler"/>: URL-mode elicitation advertised and routed to it. Without: the SDK's
     /// defaults (no elicitation capability).
@@ -617,7 +663,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             {
                 ElicitationHandler = (request, ct) => request is null
                     ? ValueTask.FromResult(new ElicitResult { Action = "cancel" })
-                    : waits.RunAsync(request, token => elicitation.ElicitAsync(name, request, token), ct),
+                    : waits.RunAsync(request, token => elicitation.ElicitAsync(name, SoleCallInFlight(name), request, token), ct),
                 NotificationHandlers =
                 [
                     new KeyValuePair<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>(

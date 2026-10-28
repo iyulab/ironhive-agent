@@ -1,6 +1,7 @@
 using System.IO.Pipelines;
 using AwesomeAssertions;
 using IronHive.Agent.Mcp;
+using Microsoft.Extensions.AI;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -36,6 +37,41 @@ public sealed class McpElicitationTests : IAsyncDisposable
         {
             Asked.Add((pluginName, request));
             return ValueTask.FromResult(new ElicitResult { Action = action });
+        }
+    }
+
+    /// <summary>Accepts, and keeps the call the request was tied to.</summary>
+    private sealed class CallAware : IMcpElicitationHandler
+    {
+        public List<McpCallInfo?> Calls { get; } = [];
+
+        public ValueTask<ElicitResult> ElicitAsync(string pluginName, ElicitRequestParams request, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("the call-aware overload is the one the plugin manager uses");
+
+        public ValueTask<ElicitResult> ElicitAsync(string pluginName, McpCallInfo? call, ElicitRequestParams request, CancellationToken cancellationToken)
+        {
+            Calls.Add(call);
+            return ValueTask.FromResult(new ElicitResult { Action = "accept" });
+        }
+    }
+
+    /// <summary>Answers a first request with one function call and a second with text, as a model would.</summary>
+    private sealed class ScriptedModel(string callId, string toolName) : IChatClient
+    {
+        private int _turn;
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_turn++ == 0
+                ? new ChatResponse(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, toolName, new Dictionary<string, object?>())]))
+                : new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
         }
     }
 
@@ -111,6 +147,47 @@ public sealed class McpElicitationTests : IAsyncDisposable
         person.Asked[0].Plugin.Should().Be("approvals");
         person.Asked[0].Request.Url.Should().Be(ApprovalUrl);
         person.Asked[0].Request.Mode.Should().Be("url");
+    }
+
+    [Fact]
+    public async Task TheHandlerIsToldWhichToolTheRequestBelongsTo()
+    {
+        var person = new CallAware();
+        await using var manager = await Connect(new McpPluginManager(person));
+
+        await manager.CallToolAsync("approvals", "send_payment", new Dictionary<string, object?>(), Ct);
+
+        var call = person.Calls.Should().ContainSingle().Subject;
+        call!.ToolName.Should().Be("send_payment");
+        call.CallId.Should().BeNull("this call was not made from a function-invocation turn");
+    }
+
+    [Fact]
+    public async Task InsideAFunctionInvocationTurn_TheRequestCarriesTheModelsCallId()
+    {
+        var person = new CallAware();
+        await using var manager = await Connect(new McpPluginManager(person));
+        var pay = AIFunctionFactory.Create(
+            async () => (await manager.CallToolAsync("approvals", "send_payment", new Dictionary<string, object?>(), Ct)).Content,
+            "send_payment");
+        using var chat = new FunctionInvokingChatClient(new ScriptedModel("call_42", "send_payment"));
+
+        await chat.GetResponseAsync("pay it", new ChatOptions { Tools = [pay] }, Ct);
+
+        var call = person.Calls.Should().ContainSingle().Subject;
+        call!.ToolName.Should().Be("send_payment");
+        call.CallId.Should().Be("call_42");
+    }
+
+    [Fact]
+    public async Task AHandlerWithoutTheCallOverload_StillGetsTheRequest()
+    {
+        var person = new Person("accept");
+        await using var manager = await Connect(new McpPluginManager(person));
+
+        await manager.CallToolAsync("approvals", "send_payment", new Dictionary<string, object?>(), Ct);
+
+        person.Asked.Should().ContainSingle("the default overload forwards to the one every handler implements");
     }
 
     [Fact]

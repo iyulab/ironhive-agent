@@ -4,7 +4,14 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.79.0] - 2026-10-28
+
+### Added
+- **`IMcpElicitationHandler` can be told which tool call a server's request belongs to.** A new overload
+  `ElicitAsync(pluginName, McpCallInfo? call, request, ct)` (a default interface member that forwards to the existing one, so no
+  handler has to change) receives the call the plugin was running when it asked - its tool name and the model's call id (the
+  function-invocation turn's `CallId`) - when the plugin had exactly one call in flight; with none or several it receives `null`
+  rather than a guess. A host that shows a person what they are asked to approve can now tie the question to the call.
 
 ### Dependencies
 - Re-pinned sibling package(s) `IronHive.Abstractions` 0.72.0 -> 0.73.0, `IronHive.Extensions.AI` 0.72.0 -> 0.73.0.
