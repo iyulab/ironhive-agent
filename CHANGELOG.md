@@ -11,6 +11,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned third-party packages: `Polly` 8.8.0 -> 8.8.1, `Polly.Extensions` 8.8.0 -> 8.8.1.
+- Re-pinned third-party packages: `Polly` 8.8.1 -> 8.9.0, `Polly.Extensions` 8.8.1 -> 8.9.0.
 
 ## [0.79.0] - 2026-10-28
 
