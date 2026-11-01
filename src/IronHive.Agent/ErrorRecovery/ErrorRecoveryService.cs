@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using IronProw.Core;
 using IronHive.Abstractions.Exceptions;
@@ -321,6 +322,23 @@ public class ErrorRecoveryService : IErrorRecoveryService
         return null;
     }
 
+    /// <summary>
+    /// A socket or HTTP-transport exception anywhere in the inner-exception chain. An <see cref="IOException"/> that wraps one
+    /// is the transport failing, not the file system - the shape the runtime hands over differs by operating system.
+    /// </summary>
+    private static bool HasTransportFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException or HttpRequestException)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static ErrorCategory CategorizeException(Exception exception)
     {
         return exception switch
@@ -328,6 +346,9 @@ public class ErrorRecoveryService : IErrorRecoveryService
             HttpRequestException => ErrorCategory.Network,
             UnauthorizedAccessException => ErrorCategory.Authentication,
             TimeoutException or TaskCanceledException { InnerException: TimeoutException } => ErrorCategory.Timeout,
+            // Decided by the exception type chain, never by errno or message text: the same reset reaches the caller as an
+            // HttpIOException on one OS and as a plain IOException over a SocketException on another.
+            _ when HasTransportFailure(exception) => ErrorCategory.Network,
             IOException or FileNotFoundException or DirectoryNotFoundException => ErrorCategory.FileSystem,
             ArgumentException or FormatException => ErrorCategory.InvalidInput,
             _ when exception.Message.Contains("insufficient_quota", StringComparison.OrdinalIgnoreCase) => ErrorCategory.Billing,

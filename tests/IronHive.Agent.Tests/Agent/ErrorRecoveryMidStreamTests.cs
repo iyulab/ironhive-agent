@@ -1,5 +1,6 @@
 using IronHive.Abstractions.Exceptions;
 using IronHive.Agent.ErrorRecovery;
+using System.Net.Sockets;
 
 namespace IronHive.Agent.Tests.Agent;
 
@@ -28,6 +29,43 @@ public class ErrorRecoveryMidStreamTests
 
         Assert.Equal(ErrorCategory.Network, analysis.Error.Category);
     }
+
+    // The shape the runtime hands over for a reset differs by operating system: an HttpIOException on one, a plain
+    // IOException over a SocketException on another (errno 54 macOS, 104 Linux, 10054 Windows). The category follows the
+    // exception type chain, so every shape - bare, wrapped once, wrapped twice - reads the same on every machine.
+    public static TheoryData<Exception> TransportResetShapes()
+    {
+        var data = new TheoryData<Exception>();
+        foreach (var errno in new[] { 54, 104, 10054 })
+        {
+            data.Add(new IOException("Unable to read data from the transport connection: Connection reset by peer.", new SocketException(errno)));
+            data.Add(new InvalidOperationException("turn failed",
+                new IOException("Unable to read data from the transport connection.", new SocketException(errno))));
+            data.Add(new InvalidOperationException("turn failed",
+                new InvalidOperationException("stream failed",
+                    new IOException("Unable to read data from the transport connection.", new SocketException(errno)))));
+        }
+
+        data.Add(new IOException("Unable to read data from the transport connection.", new HttpRequestException("The SSL connection could not be established.")));
+        data.Add(new SocketException(54));
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(TransportResetShapes))]
+    public void ATransportFailure_IsNetwork_WhateverShapeTheOperatingSystemHandsOver(Exception exception)
+        => Assert.Equal(ErrorCategory.Network, new ErrorRecoveryService().AnalyzeException(exception).Error.Category);
+
+    // Positive controls: an IOException with no transport exception in its chain is still a file-system failure.
+    [Fact]
+    public void AnIOExceptionOverAnotherIOException_StaysFileSystem()
+        => Assert.Equal(ErrorCategory.FileSystem,
+            new ErrorRecoveryService().AnalyzeException(new IOException("copy failed", new IOException("disk full"))).Error.Category);
+
+    [Fact]
+    public void AFileNotFound_StaysFileSystem()
+        => Assert.Equal(ErrorCategory.FileSystem,
+            new ErrorRecoveryService().AnalyzeException(new FileNotFoundException("missing")).Error.Category);
 
     // Positive control: an IOException that is not an HTTP response stream is still a file-system failure.
     [Fact]
