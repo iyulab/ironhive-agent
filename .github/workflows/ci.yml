@@ -21,11 +21,16 @@ concurrency:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
     strategy:
+      # A red macOS job must not hide the Linux result (or the other way round).
+      fail-fast: false
       matrix:
+        # macOS is a lane of its own: the runtime hands over different exception shapes (a connection reset is
+        # an IOException over a SocketException there) and a different filesystem (case-insensitive by default).
+        os: [ubuntu-latest, macos-latest]
         dotnet-version: ['10.0.x']
 
     steps:
@@ -57,7 +62,8 @@ jobs:
 
     - name: Publish test results
       uses: EnricoMi/publish-unit-test-result-action@v2
-      if: always()
+      # The action runs as a container: Linux runners only. The macOS lane's result is its job conclusion.
+      if: always() && runner.os == 'Linux'
       with:
         files: '**/*-test-results.trx'
         check_name: 'Test Results'
