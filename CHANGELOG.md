@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.80.0] - 2026-11-01
 
 ### Fixed
 - **Breaking** (observable): **`ErrorRecoveryService` now classifies a transport failure as `ErrorCategory.Network` whatever shape the operating system hands over.** A connection reset reaches the caller as an `HttpIOException` on one OS and as a plain `IOException` over a `SocketException` on another (errno 54 on macOS); the second used to read as `FileSystem` ("File system error. Retrying operation.") and, wrapped in another exception, as `Unknown`. A `SocketException` or `HttpRequestException` anywhere in the inner-exception chain is now `Network`; an `IOException` with none stays `FileSystem`. Migration: a host that filtered or reported `ErrorCategory.FileSystem` to catch dropped connections should use `Network`.
