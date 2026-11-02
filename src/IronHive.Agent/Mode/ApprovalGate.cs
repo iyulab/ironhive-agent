@@ -63,10 +63,24 @@ public sealed partial class ApprovalGate
     /// passed to the approver (<see cref="ApprovalRequest.CallId"/>) so a request can be paired with the call it is about.
     /// Never throws for a refusal: the refusal is a result the model reads, so it can change course.
     /// </summary>
+    public ValueTask<GateDecision> DecideAsync(
+        string toolName,
+        IDictionary<string, object?>? arguments,
+        string? callId,
+        CancellationToken cancellationToken) =>
+        DecideAsync(toolName, arguments, callId, proposal: null, cancellationToken);
+
+    /// <summary>
+    /// As the overload with a call id, and <paramref name="proposal"/> - asked only when the verdict is <c>Ask</c>, after the
+    /// policy has decided - supplies the <see cref="ModelAuthoredProposal"/> the approver receives
+    /// (<see cref="ApprovalRequest.ModelProposal"/>). A proposal changes nothing about the verdict or the outcome; one that
+    /// throws (other than by cancellation) is logged and the approver is asked without it.
+    /// </summary>
     public async ValueTask<GateDecision> DecideAsync(
         string toolName,
         IDictionary<string, object?>? arguments,
         string? callId,
+        Func<CancellationToken, ValueTask<ModelAuthoredProposal?>>? proposal,
         CancellationToken cancellationToken)
     {
         if (_modes is { CurrentMode: AgentMode.Planning } && !_modeFilter!.IsToolPermitted(toolName, AgentMode.Planning))
@@ -103,7 +117,8 @@ public sealed partial class ApprovalGate
                     RiskAssessment = risk,
                     Description = risk.ApprovalPrompt ?? risk.Reason,
                     CallId = callId,
-                    DelegatedBy = Delegation.DelegationScope.AgentName
+                    DelegatedBy = Delegation.DelegationScope.AgentName,
+                    ModelProposal = await ReadProposalAsync(proposal, toolName, cancellationToken)
                 }, cancellationToken);
 
                 if (result.Deferred)
@@ -126,6 +141,31 @@ public sealed partial class ApprovalGate
                 return GateDecision.Refuse(new ToolCallRefusal(ToolCallRefusalKind.Denied, $"unknown verdict {risk.Verdict} for tool {toolName}"));
         }
     }
+
+    private async ValueTask<ModelAuthoredProposal?> ReadProposalAsync(
+        Func<CancellationToken, ValueTask<ModelAuthoredProposal?>>? proposal,
+        string toolName,
+        CancellationToken cancellationToken)
+    {
+        if (proposal is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await proposal(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // The proposal is information for the person; failing to read it must not decide the approval either way.
+            LogProposalFailed(_logger, toolName, ex);
+            return null;
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Model proposal source failed for tool {ToolName}; asking without a proposal")]
+    private static partial void LogProposalFailed(ILogger logger, string toolName, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {ToolName} denied by permission rules")]
     private static partial void LogDenied(ILogger logger, string toolName);

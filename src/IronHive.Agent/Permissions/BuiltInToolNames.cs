@@ -19,6 +19,7 @@ internal static class BuiltInToolNames
         "GrepFiles", "grep*",
         "advisor",
         "retrieve_tool_result",
+        "propose_for_approval",
     ];
 
     /// <summary>Maps the PascalCase built-in names to the snake_case ones the rules are written for.</summary>

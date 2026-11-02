@@ -61,6 +61,15 @@ public record ApprovalRequest
     /// path; this is how the person approving it can tell who asked.
     /// </summary>
     public string? DelegatedBy { get; init; }
+
+    /// <summary>
+    /// What the <b>model</b> proposed for this call - the alternatives it weighed, its recommendation, or the question it would
+    /// ask - when a <see cref="IApprovalProposalSource"/> supplied one; null otherwise (the request is then exactly what it was
+    /// before this property existed). Unlike <see cref="ToolName"/>, <see cref="Arguments"/> and <see cref="RiskAssessment"/>,
+    /// nothing verified it: show it apart from them, as plain text, and never let it stand in for the approval
+    /// (<see cref="ModelAuthoredProposal"/>).
+    /// </summary>
+    public ModelAuthoredProposal? ModelProposal { get; init; }
 }
 
 /// <summary>

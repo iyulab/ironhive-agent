@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Added
+- **An approval request can carry what the model weighed, typed as the model's own.** `ApprovalRequest.ModelProposal` (a
+  `ModelAuthoredProposal`: up to 5 options with id, label and rationale, a recommended option id, or one criterion question) is
+  filled when the model calls the new opt-in `ApprovalProposalTool` (`propose_for_approval`) in the same step as the call that
+  needs approval. It is bounded, plain text with control and formatting characters removed, never part of `Description`,
+  `Arguments` or `RiskAssessment`, and information only: it never changes a verdict or stands in for the approval. A loop
+  that does not add the tool sees no change. `IApprovalProposalSource` is the seam for another source (the built-in
+  `ToolCallProposalSource` is the default); `ApprovalGate.DecideAsync` gained an overload taking the proposal as a factory
+  that is read only for an `Ask` verdict. The tool name `propose_for_approval` is on the read-only list, so the default
+  policy and planning mode allow it. A model uses the tool when its instructions name the tools whose calls need approval - it
+  cannot know which they are, and proposed for none when told only that approval may be needed.
+
 ## [0.80.0] - 2026-11-01
 
 ### Fixed

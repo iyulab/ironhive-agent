@@ -25,6 +25,7 @@ Reusable agent engine for AI-powered CLI tools. Provides the core agent loop, co
 - **Deep research (`IronHive.DeepResearch` package)**: `AddDeepResearch(...)` registers an iterative research pipeline — query planning, web search, content extraction, sufficiency analysis, then a cited report — over one text-generation service (`ChatClientTextGenerationAdapter` for an `IChatClient`). Results report the run's token usage; the cost is left null because the run does not know which model priced its calls. Tune it through the options callback: `services.AddDeepResearch(chatClient, o => { o.SufficiencyThreshold = 0.7m; o.MinSourcesBeforeReport = 5; o.MaxSearchRetriesPerIteration = 2; })`. `SufficiencyThreshold` is the score at which research stops. `MinSourcesBeforeReport` keeps it iterating while fewer sources were collected and a gap remains. The per-query iteration limit is `ResearchRequest.MaxIterations`, capped by `Depth`. Run it through the registered `IDeepResearcher`: `await sp.GetRequiredService<IDeepResearcher>().ResearchAsync(new ResearchRequest { Query = "..." })` (`ResearchStreamAsync` yields progress as it goes). Tavily web search needs its API key in `DeepResearchOptions.SearchApiKeys["tavily"]` (e.g. `o.SearchApiKeys["tavily"] = tavilyKey` in the options callback)
 - **Checkpoint contract**: `ICheckpointService` / `CheckpointInfo` — the shape of a host's pre-destructive-operation snapshot store. There is no built-in implementation and the loop does not call it; a host that wants checkpoints implements and invokes it
 - **Permission System**: Rule-based access control for files, commands, and tools; ships with sensible defaults. One `IToolCallPolicy` gives each call its verdict (`ToolCallPolicy` over the rules by default — register your own to replace it); `AddIronHiveAgentApprovalGate()` acts on it, enforces Planning mode, and asks the `IHumanApprovalService` on `Ask`. See [Human Approval Gate](#human-approval-gate)
+- **Model-authored approval proposal (opt-in)**: add `ApprovalProposalTool.Create()` to the loop's `Tools` and the model can tell the person approving a call what it weighed - up to 5 options (id, label, rationale), a recommended option or one question - in the same step as the call. The approver receives it as `ApprovalRequest.ModelProposal`, a `ModelAuthoredProposal`: bounded, plain text, typed as the model's own and kept apart from the verified tool, arguments and `Description`. Information only - it never changes a verdict or stands in for the approval. A loop without the tool is unchanged ([details](#showing-the-approver-what-the-model-weighed-opt-in)).
 - **Planning System**: `DefaultTaskPlanner`, `DefaultPlanExecutor`, `HeuristicPlanEvaluator`, `PlannerTriggerDetector`, `PlanAndExecuteOrchestrator`. `DefaultPlanExecutor` streams each step: a `StepProgressEvent` per text delta, a `StepToolCallEvent` per finished tool call (name, success), then `StepCompletedEvent` with the whole text. Not registered by `AddIronHiveAgent` — construct them where an `IChatClient` and the tools are available (or register them yourself)
 - **Usage Tracking**: Token/cost tracking (`IUsageTracker`) and session limits (`IUsageLimiter`, registered by `AddIronHiveAgent` when `UsageLimits` is set). Pass the limiter to `AgentLoop` or `ThinkingAgentLoop` (`usageLimiter:`) and a turn past the limit is refused with `UsageLimitExceededException`. The loop checks once per turn; to check every model call — each tool round of a turn too — put `UseUsageLimit()` inside function invocation (`.UseToolInvocationPipeline().UseUsageLimit()`): the loop binds its limiter to it, and the round after the one that reached the limit throws instead of calling the model
 - **Tracing (OpenTelemetry, GenAI semantic conventions)**: every turn of `AgentLoop` / `ThinkingAgentLoop` is an `invoke_agent` span on the `AgentTelemetry.SourceName` (`"IronHive.Agent"`) source — `gen_ai.agent.name` (`AgentOptions.Name`), `gen_ai.request.model`, `gen_ai.usage.*`, tool-call count, `error.type` when the turn throws. Add `.UseOpenTelemetry()` to the chat client and its `chat` and `execute_tool` spans nest under the turn. See [Tracing](#tracing)
@@ -766,6 +767,39 @@ wants to run them. A host with its own delegation tool enters `DelegationScope` 
 Steps registered after the gate run only for calls it let through. The Ironbees adapter (`ChatClientFrameworkAdapter`,
 `IronHive.Agent.Ironbees`) runs its own tool loop through the same pipeline, so a verdict means the same thing on both
 paths; `AddIronbees` turns the gate on for the container's pipeline.
+
+### Showing the approver what the model weighed (opt-in)
+
+A person asked to approve a call sees what the pipeline verified - the tool, its arguments, the risk assessment - and the
+policy's description. To let them also see what the *model* weighed, add the tool to the loop:
+
+```csharp
+var tools = new List<AITool> { /* your tools */ ApprovalProposalTool.Create() };
+var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
+```
+
+The model then calls `propose_for_approval` in the same step as the call that needs approval - naming that call's tool, with up
+to 5 options (`id`, `label`, `rationale`), the id it recommends, or one question when it cannot recommend. For a call the policy
+asks about, the gate hands the approver `ApprovalRequest.ModelProposal` (a `ModelAuthoredProposal`; null for every other call,
+and always null in a loop without the tool). Read it as the model's *claim*:
+
+- It is **information only**. The policy verdict is reached first and a proposal never changes it, never replaces the approval and
+  never reaches `Description`, `Arguments` or `RiskAssessment`. Text in a tool result never becomes a proposal - only a call to
+  the proposal tool does.
+- Show it **apart** from the verified fields, as **plain text**: never as markup or a link, whatever it contains. The shape is
+  closed (`ModelAuthoredProposal.MaxOptions` and the length constants); control and formatting characters (such as a
+  right-to-left override) are removed, but links are not detected - rendering as text is the host's part.
+- A proposal belongs to a call only when that is unambiguous: it names the call's tool, the step holds exactly one call to that
+  tool, and exactly one valid proposal names it. Otherwise the call has none. A proposal that breaks the shape (too many options,
+  a missing or repeated id, a recommendation naming no option) is not kept, and the tool's answer tells the model why.
+- **Tell the model which calls need approval.** It cannot know which of its calls the policy asks about. Measured against a real
+  model: it proposed for every call when the instructions named the tool ("Every WriteFile call needs the user's approval. In the
+  same step as each WriteFile call, also call propose_for_approval with tool set to WriteFile, the alternatives you weighed and
+  your recommendation"), and for none when they only said approval *may* be needed, or said nothing. The order of the two calls
+  within the step does not matter - a model that writes first and proposes after is read the same.
+- To take the proposal from somewhere else, register your own `IApprovalProposalSource` (or pass one to
+  `ApprovalGateMiddleware`); build its result with `ModelAuthoredProposal.TryCreate` so the bounds hold. Without DI, a custom
+  loop calls `ApprovalGate.DecideAsync(tool, arguments, callId, proposalFactory, ct)`.
 
 ## Post-Turn Seam
 

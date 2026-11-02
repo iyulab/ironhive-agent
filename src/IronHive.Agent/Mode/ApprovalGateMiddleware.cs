@@ -22,8 +22,9 @@ namespace IronHive.Agent.Mode;
 public sealed class ApprovalGateMiddleware : IToolInvocationMiddleware
 {
     private readonly ApprovalGate _gate;
+    private readonly IApprovalProposalSource _proposals;
 
-    /// <summary>Creates the gate.</summary>
+    /// <summary>Creates the gate (the constructor of releases before <see cref="ModelAuthoredProposal"/>, kept so code built against them keeps working).</summary>
     /// <param name="policy">Produces the verdict for each call.</param>
     /// <param name="approvalService">Asked when the verdict is <c>Ask</c>; without one such a call is refused.</param>
     /// <param name="logger">Receives a line per refusal; optional.</param>
@@ -31,13 +32,34 @@ public sealed class ApprovalGateMiddleware : IToolInvocationMiddleware
     /// <param name="modeToolFilter">Says which tools a mode permits; required with <paramref name="modeManager"/>.</param>
     public ApprovalGateMiddleware(
         IToolCallPolicy policy,
+        IHumanApprovalService? approvalService,
+        ILogger<ApprovalGateMiddleware>? logger,
+        IModeManager? modeManager,
+        IModeToolFilter? modeToolFilter)
+        : this(policy, approvalService, logger, modeManager, modeToolFilter, proposalSource: null)
+    {
+    }
+
+    /// <summary>Creates the gate.</summary>
+    /// <param name="policy">Produces the verdict for each call.</param>
+    /// <param name="approvalService">Asked when the verdict is <c>Ask</c>; without one such a call is refused.</param>
+    /// <param name="logger">Receives a line per refusal; optional.</param>
+    /// <param name="modeManager">When given, Planning mode is enforced: a tool it does not permit is denied.</param>
+    /// <param name="modeToolFilter">Says which tools a mode permits; required with <paramref name="modeManager"/>.</param>
+    /// <param name="proposalSource">Supplies the model's own proposal for a call that needs approval
+    /// (<see cref="ApprovalRequest.ModelProposal"/>); <see cref="ToolCallProposalSource"/> when null, which finds a proposal
+    /// only if the model used <see cref="ApprovalProposalTool"/> - a loop without that tool has none.</param>
+    public ApprovalGateMiddleware(
+        IToolCallPolicy policy,
         IHumanApprovalService? approvalService = null,
         ILogger<ApprovalGateMiddleware>? logger = null,
         IModeManager? modeManager = null,
-        IModeToolFilter? modeToolFilter = null)
+        IModeToolFilter? modeToolFilter = null,
+        IApprovalProposalSource? proposalSource = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
         _gate = new ApprovalGate(policy, approvalService, logger, modeManager, modeToolFilter);
+        _proposals = proposalSource ?? ToolCallProposalSource.Default;
     }
 
     /// <inheritdoc />
@@ -52,7 +74,12 @@ public sealed class ApprovalGateMiddleware : IToolInvocationMiddleware
             return await next(context, cancellationToken);
         }
 
-        var decision = await _gate.DecideAsync(context.Function.Name, context.Arguments, context.CallContent?.CallId, cancellationToken);
+        var decision = await _gate.DecideAsync(
+            context.Function.Name,
+            context.Arguments,
+            context.CallContent?.CallId,
+            token => _proposals.GetProposalAsync(context, token),
+            cancellationToken);
         if (!decision.ShouldProceed)
         {
             return decision.Refusal;
