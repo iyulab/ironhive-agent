@@ -11,6 +11,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.26.0 -> 0.27.0, `IronHive.Abstractions` 0.73.0 -> 0.75.0, `IronHive.Extensions.AI` 0.73.0 -> 0.75.0.
+- Re-pinned third-party packages: `ModelContextProtocol` 2.3.0 -> 2.3.1.
 
 ## [0.81.0] - 2026-11-03
 
