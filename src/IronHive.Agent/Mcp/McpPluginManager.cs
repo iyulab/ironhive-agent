@@ -402,7 +402,11 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
 
         // The plugin may ask a person about this call while it runs (elicitation); the request arrives on the client's own
         // loop, not in this call's flow, so the call is registered here for the handler to find.
-        using var inFlight = TrackCall(pluginName, new McpCallInfo(toolName, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId));
+        var invocation = FunctionInvokingChatClient.CurrentContext;
+        using var inFlight = TrackCall(pluginName, new McpCallInfo(toolName, invocation?.CallContent?.CallId)
+        {
+            ModelProposal = await ReadProposalAsync(invocation, cancellationToken)
+        });
 
         // Convert IDictionary to IReadOnlyDictionary
         IReadOnlyDictionary<string, object?>? args = arguments != null
@@ -599,6 +603,29 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         _clients.Clear();
         _pending.Clear();
         GC.SuppressFinalize(this);
+    }
+
+    // What the model proposed for the call being run, for the handler to show beside a plugin's question about it. Read only when
+    // a handler exists (nobody else could show it) and with the same rule the approval gate uses; a failure to read is a proposal
+    // not made, never a failed call.
+    private async ValueTask<Mode.ModelAuthoredProposal?> ReadProposalAsync(FunctionInvocationContext? invocation, CancellationToken cancellationToken)
+    {
+        if (_elicitation is null || invocation is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await Mode.ToolCallProposalSource.Default.GetProposalAsync(invocation, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+            _logger?.LogWarning(ex, "Reading the model's approval proposal for a call to '{Tool}' failed - asking without one", invocation.Function.Name);
+#pragma warning restore CA1848
+            return null;
+        }
     }
 
     private readonly Lock _inFlightLock = new();

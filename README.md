@@ -797,6 +797,11 @@ and always null in a loop without the tool). Read it as the model's *claim*:
   same step as each WriteFile call, also call propose_for_approval with tool set to WriteFile, the alternatives you weighed and
   your recommendation"), and for none when they only said approval *may* be needed, or said nothing. The order of the two calls
   within the step does not matter - a model that writes first and proposes after is read the same.
+- **When the approval is an MCP server's question, not the engine's `Ask`** (the tool is allowed by the policy and the server answers
+  the call with an `input_required` URL-mode elicitation, e.g. an external approval gate): the same proposal is on
+  `McpCallInfo.ModelProposal`, the call-aware argument of `IMcpElicitationHandler.ElicitAsync(pluginName, call, request, ct)`.
+  Same rule (the step's one valid proposal naming that call's tool), same bounds, read only when a handler is registered; it is
+  null when the call is not tied to one in-flight call. Show it as the model's claim, apart from the server's own message.
 - To take the proposal from somewhere else, register your own `IApprovalProposalSource` (or pass one to
   `ApprovalGateMiddleware`); build its result with `ModelAuthoredProposal.TryCreate` so the bounds hold. Without DI, a custom
   loop calls `ApprovalGate.DecideAsync(tool, arguments, callId, proposalFactory, ct)`.

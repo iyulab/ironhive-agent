@@ -6,6 +6,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **The model's proposal also reaches the person when the approval is an MCP server's question about the call, not the engine's own `Ask`.** `McpCallInfo.ModelProposal` (an init property - the two-argument shape is unchanged) is filled when the plugin is asked to run a call made from a function-invocation turn, with the same rule and bounds as `ApprovalRequest.ModelProposal` (the call's tool is named by exactly one valid `propose_for_approval` in the same step). An `IMcpElicitationHandler` that overrides the call-aware `ElicitAsync` sees it next to the question; it is read only when a handler is registered, and a failure to read is a proposal not made, never a failed call. Opt-in exactly as before (the loop must offer `ApprovalProposalTool`).
+
 ### Dependencies
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.26.0 -> 0.27.0, `IronHive.Abstractions` 0.73.0 -> 0.75.0, `IronHive.Extensions.AI` 0.73.0 -> 0.75.0.
 

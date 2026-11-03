@@ -1,6 +1,7 @@
 using System.IO.Pipelines;
 using AwesomeAssertions;
 using IronHive.Agent.Mcp;
+using IronHive.Agent.Mode;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -73,6 +74,53 @@ public sealed class McpElicitationTests : IAsyncDisposable
         public void Dispose()
         {
         }
+    }
+
+    /// <summary>Answers a first request with the given calls in ONE assistant message (a batch), then with text.</summary>
+    private sealed class ScriptedBatch(params FunctionCallContent[] calls) : IChatClient
+    {
+        private int _turn;
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_turn++ == 0
+                ? new ChatResponse(new ChatMessage(ChatRole.Assistant, [.. calls]))
+                : new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static FunctionCallContent Proposal(string forTool, string recommended = "approve") => new(
+        "call_p", ApprovalProposalTool.ToolName, new Dictionary<string, object?>
+        {
+            ["tool"] = forTool,
+            ["options"] = new object[]
+            {
+                new Dictionary<string, object?> { ["id"] = "approve", ["label"] = "Pay now", ["rationale"] = "The invoice matches the order." },
+                new Dictionary<string, object?> { ["id"] = "hold", ["label"] = "Hold", ["rationale"] = "The amount is above the usual." },
+            },
+            ["recommendedOptionId"] = recommended,
+        });
+
+    private async Task<McpCallInfo> RunPaymentTurn(params FunctionCallContent[] extraCalls)
+    {
+        var person = new CallAware();
+        await using var manager = await Connect(new McpPluginManager(person));
+        var pay = AIFunctionFactory.Create(
+            async () => (await manager.CallToolAsync("approvals", "send_payment", new Dictionary<string, object?>(), Ct)).Content,
+            "send_payment");
+        using var chat = new FunctionInvokingChatClient(new ScriptedBatch(
+            [new FunctionCallContent("call_42", "send_payment", new Dictionary<string, object?>()), .. extraCalls]));
+
+        await chat.GetResponseAsync("pay it", new ChatOptions { Tools = [pay, ApprovalProposalTool.Create()] }, Ct);
+
+        return person.Calls.Should().ContainSingle().Subject!;
     }
 
     /// <summary>Waits for a person who never answers (until its token ends), the way a host with nobody attached does.</summary>
@@ -177,6 +225,35 @@ public sealed class McpElicitationTests : IAsyncDisposable
         var call = person.Calls.Should().ContainSingle().Subject;
         call!.ToolName.Should().Be("send_payment");
         call.CallId.Should().Be("call_42");
+        call.ModelProposal.Should().BeNull("the model made no proposal for this call");
+    }
+
+    [Fact]
+    public async Task AProposalTheModelMadeForTheCall_ReachesTheHandlerWithTheCallItIsAbout()
+    {
+        var call = await RunPaymentTurn(Proposal("send_payment"));
+
+        call.CallId.Should().Be("call_42");
+        call.ModelProposal.Should().NotBeNull("the same step holds one proposal naming this call's tool");
+        var proposal = call.ModelProposal!;
+        proposal.RecommendedOptionId.Should().Be("approve");
+        proposal.Options.Select(o => o.Id).Should().Equal("approve", "hold");
+    }
+
+    [Fact]
+    public async Task AProposalNamingAnotherTool_IsNotTheCallsProposal()
+    {
+        var call = await RunPaymentTurn(Proposal("delete_everything"));
+
+        call.ModelProposal.Should().BeNull("a proposal belongs to a call only when it names that call's tool");
+    }
+
+    [Fact]
+    public async Task AMalformedProposal_IsNoProposal_AndTheCallStillRuns()
+    {
+        var call = await RunPaymentTurn(Proposal("send_payment", recommended: "no-such-option"));
+
+        call.ModelProposal.Should().BeNull("a recommendation that matches no option fails the closed shape");
     }
 
     [Fact]

@@ -52,4 +52,16 @@ public interface IMcpElicitationHandler
 /// <param name="ToolName">The tool the plugin was asked to run.</param>
 /// <param name="CallId">The model's id for the call (the chat client's function-call id), or <see langword="null"/> when the
 /// call was not made from a function-invocation turn.</param>
-public sealed record McpCallInfo(string ToolName, string? CallId);
+/// <remarks>
+/// <see cref="ModelProposal"/> is not a constructor parameter so that code built against the two-argument shape keeps working.
+/// </remarks>
+public sealed record McpCallInfo(string ToolName, string? CallId)
+{
+    /// <summary>
+    /// What the model proposed for this call with <see cref="Mode.ApprovalProposalTool"/> - the same step, the same association
+    /// rule and the same bounds as <see cref="Mode.ApprovalRequest.ModelProposal"/> - or <see langword="null"/> when it made
+    /// none (or the call was not made from a function-invocation turn). It is the model's claim: show it as such, apart from
+    /// what the plugin itself says, and never as a reason to answer <c>accept</c>.
+    /// </summary>
+    public Mode.ModelAuthoredProposal? ModelProposal { get; init; }
+}
