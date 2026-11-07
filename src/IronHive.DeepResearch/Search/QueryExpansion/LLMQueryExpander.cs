@@ -172,9 +172,12 @@ public partial class LLMQueryExpander : IQueryExpander
 
     private static string BuildDecompositionPrompt(string query, QueryExpansionOptions options)
     {
-        var langNote = options.Language == "ko"
-            ? "모든 출력은 한국어로 작성하세요."
-            : $"Write all output in {options.Language}.";
+        var langNote = options.Language switch
+        {
+            "ko" => "모든 출력은 한국어로 작성하세요.",
+            null or "" => "Write all output in the language of the user's question.",
+            var language => $"Write all output in {language}."
+        };
 
         return $$"""
             사용자 질문: {{query}}

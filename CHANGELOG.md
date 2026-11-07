@@ -9,6 +9,9 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ### Added
 - **The model's proposal also reaches the person when the approval is an MCP server's question about the call, not the engine's own `Ask`.** `McpCallInfo.ModelProposal` (an init property - the two-argument shape is unchanged) is filled when the plugin is asked to run a call made from a function-invocation turn, with the same rule and bounds as `ApprovalRequest.ModelProposal` (the call's tool is named by exactly one valid `propose_for_approval` in the same step). An `IMcpElicitationHandler` that overrides the call-aware `ElicitAsync` sees it next to the question; it is read only when a handler is registered, and a failure to read is a proposal not made, never a failed call. Opt-in exactly as before (the loop must offer `ApprovalProposalTool`).
 
+### Changed
+- **Deep research no longer assumes Korean when no language is given.** `ResearchRequest.Language`, `QueryExpansionOptions.Language`, `ReportGenerationOptions.Language` and `AnalysisOptions.Language` default to empty (they were `"ko"`), and an empty value means "answer in the language of the user's question": the query-decomposition prompt says so instead of naming a language, and the other prompts use their English system prompt. **Breaking** (by observation): a caller that never set `Language` and relied on Korean output now gets the language of its question - set `Language = "ko"` to keep the old behaviour. A named language works as before. The prompt bodies themselves are still written in Korean; `Language` directs the output language, it does not translate the pipeline.
+
 ### Dependencies
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.26.0 -> 0.27.0, `IronHive.Abstractions` 0.73.0 -> 0.75.0, `IronHive.Extensions.AI` 0.73.0 -> 0.75.0.
 - Re-pinned third-party packages: `ModelContextProtocol` 2.3.0 -> 2.3.1.

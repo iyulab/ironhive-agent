@@ -16,9 +16,9 @@ public record ResearchRequest
     public ResearchDepth Depth { get; init; } = ResearchDepth.Standard;
 
     /// <summary>
-    /// 출력 언어
+    /// 출력 언어 (<c>ko</c>, <c>en</c>, …). 비어 있으면(기본) 질문의 언어를 따른다.
     /// </summary>
-    public string Language { get; init; } = "ko";
+    public string Language { get; init; } = string.Empty;
 
     /// <summary>
     /// 최대 반복 횟수

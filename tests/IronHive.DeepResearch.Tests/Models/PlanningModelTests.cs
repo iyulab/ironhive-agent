@@ -157,7 +157,7 @@ public class QueryExpansionOptionsTests
         options.MaxExpandedQueries.Should().Be(15);
         options.IncludeAcademic.Should().BeFalse();
         options.IncludeNews.Should().BeFalse();
-        options.Language.Should().Be("ko");
+        options.Language.Should().BeEmpty("no language is assumed - an empty value follows the language of the question");
     }
 
     [Fact]

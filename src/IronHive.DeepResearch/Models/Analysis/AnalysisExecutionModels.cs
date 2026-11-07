@@ -67,9 +67,9 @@ public record AnalysisOptions
     public decimal SufficiencyThreshold { get; init; } = 0.8m;
 
     /// <summary>
-    /// 분석 언어
+    /// 분석 언어 (<c>ko</c>, <c>en</c>, …). 비어 있으면(기본) 질문의 언어를 따른다.
     /// </summary>
-    public string Language { get; init; } = "ko";
+    public string Language { get; init; } = string.Empty;
 
     /// <summary>
     /// 분석에 포함할 최대 소스 수
