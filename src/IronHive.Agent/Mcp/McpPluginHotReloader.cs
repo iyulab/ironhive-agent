@@ -299,6 +299,7 @@ public class McpPluginHotReloader : IAsyncDisposable, IDisposable
                a.Url == b.Url &&
                a.WorkingDirectory == b.WorkingDirectory &&
                a.AutoReconnect == b.AutoReconnect &&
+               a.TrustReadOnlyHints == b.TrustReadOnlyHints &&
                a.TimeoutMs == b.TimeoutMs &&
                ArgumentsEqual(a.Arguments, b.Arguments) &&
                EnvironmentEqual(a.Environment, b.Environment);

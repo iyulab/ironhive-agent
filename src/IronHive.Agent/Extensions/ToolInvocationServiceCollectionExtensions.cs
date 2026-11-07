@@ -107,7 +107,7 @@ public static class ToolInvocationServiceCollectionExtensions
         // MCP tools keep their servers' names, so the McpTools rules reach them through the plugin manager, when there is one.
         services.TryAddSingleton<IToolCallPolicy>(sp =>
             sp.GetService<Mcp.IMcpPluginManager>() is { } mcp
-                ? new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>(), mcp.IsMcpTool)
+                ? new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>(), mcp.IsMcpTool, mcp.IsTrustedReadOnly)
                 : new ToolCallPolicy(sp.GetRequiredService<IPermissionEvaluator>()));
         return services;
     }

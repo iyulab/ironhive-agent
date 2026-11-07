@@ -283,7 +283,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             {
                 // McpClientTool inherits from AIFunction which inherits from AITool
                 var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
-                wrapper.ToolNames = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+                wrapper.Record(tools);
                 allTools.AddRange(tools.Select(WithDeclaredHints));
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -309,7 +309,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         }
 
         var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
-        wrapper.ToolNames = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        wrapper.Record(tools);
         return tools.Select(WithDeclaredHints).ToList().AsReadOnly();
     }
 
@@ -318,6 +318,16 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     {
         ArgumentNullException.ThrowIfNull(toolName);
         return _clients.Values.Any(wrapper => wrapper.ToolNames.Contains(toolName));
+    }
+
+    /// <inheritdoc />
+    public bool IsTrustedReadOnly(string toolName)
+    {
+        ArgumentNullException.ThrowIfNull(toolName);
+        // A name two plugins both list is read-only only when each of them is trusted and says so: the policy sees a name, not a plugin.
+        var owners = _clients.Values.Where(wrapper => wrapper.ToolNames.Contains(toolName)).ToList();
+        return owners.Count > 0
+            && owners.All(wrapper => wrapper.Config.TrustReadOnlyHints && wrapper.ReadOnlyToolNames.Contains(toolName));
     }
 
     /// <summary>
@@ -774,5 +784,18 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     {
         // The names this plugin's last listing returned; replaced whole on each listing, read by IsMcpTool.
         public volatile HashSet<string> ToolNames = new(StringComparer.Ordinal);
+
+        // Of those, the ones the server declared read-only (annotations.readOnlyHint == true); read by IsTrustedReadOnly.
+        public volatile HashSet<string> ReadOnlyToolNames = new(StringComparer.Ordinal);
+
+        public void Record(IEnumerable<McpClientTool> tools)
+        {
+            var listed = tools.ToList();
+            ReadOnlyToolNames = listed
+                .Where(tool => tool.ProtocolTool.Annotations?.ReadOnlyHint == true)
+                .Select(tool => tool.Name)
+                .ToHashSet(StringComparer.Ordinal);
+            ToolNames = listed.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
+        }
     }
 }

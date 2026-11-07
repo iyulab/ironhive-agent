@@ -112,6 +112,7 @@ public sealed class ToolCallPolicy : IToolCallPolicy
 {
     private readonly IPermissionEvaluator _evaluator;
     private readonly Func<string, bool>? _isMcpTool;
+    private Func<string, bool>? _isTrustedReadOnly;
 
     /// <summary>Creates the policy over <see cref="PermissionConfig.CreateDefault"/>.</summary>
     public ToolCallPolicy() : this(new PermissionEvaluator())
@@ -146,6 +147,18 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         _isMcpTool = isMcpTool ?? throw new ArgumentNullException(nameof(isMcpTool));
     }
 
+    /// <summary>
+    /// As the overload with <paramref name="isMcpTool"/>, and <paramref name="isTrustedReadOnly"/> says which MCP tools a trusted
+    /// server declared read-only (usually <see cref="Mcp.IMcpPluginManager.IsTrustedReadOnly"/>): such a tool is allowed when no
+    /// <c>McpTools</c> rule speaks about it and the default action would only ask. A rule - allow, ask or deny - wins, and so does
+    /// a default action of <c>Deny</c>; a tool not declared read-only, or from a server not trusted for it, is judged as before.
+    /// </summary>
+    public ToolCallPolicy(IPermissionEvaluator evaluator, Func<string, bool> isMcpTool, Func<string, bool> isTrustedReadOnly)
+        : this(evaluator, isMcpTool)
+    {
+        _isTrustedReadOnly = isTrustedReadOnly ?? throw new ArgumentNullException(nameof(isTrustedReadOnly));
+    }
+
     /// <inheritdoc />
     public RiskAssessment Evaluate(string toolName, IDictionary<string, object?>? arguments)
     {
@@ -159,9 +172,21 @@ public sealed class ToolCallPolicy : IToolCallPolicy
             "glob_files" or "grep_files" or "list_directory" => AssessDirectoryRead(toolName, arguments),
             "shell" or "execute_command" => AssessShell(arguments),
             _ when toolName.StartsWith("mcp__", StringComparison.Ordinal) || _isMcpTool?.Invoke(toolName) == true
-                => ToRiskAssessment(_evaluator.EvaluateMcpTool(toolName), $"MCP tool: {toolName}"),
+                => AssessMcpTool(toolName),
             _ => AssessTool(toolName)
         };
+    }
+
+    private RiskAssessment AssessMcpTool(string toolName)
+    {
+        var result = _evaluator.EvaluateMcpTool(toolName);
+        // No rule spoke and the default would ask: a read-only tool of a server the host trusts for that claim needs no approval.
+        if (result.MatchedRule is null && result.Action == PermissionAction.Ask && _isTrustedReadOnly?.Invoke(toolName) == true)
+        {
+            return RiskAssessment.Safe;
+        }
+
+        return ToRiskAssessment(result, $"MCP tool: {toolName}");
     }
 
     // A tool with no dedicated category is judged by name against PermissionConfig.Tools. Anything

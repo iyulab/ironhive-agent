@@ -275,6 +275,14 @@ without `timeoutMs` takes the document's `defaultTimeoutMs`, and `disabled: true
 but adds it to `ExcludePlugins`. Problems are reported per entry; only a document that is not a JSON object throws
 (`JsonException`). `McpPluginHotReloader` passes a reloaded document's issues on `PluginReloadEventArgs.ConfigIssues`.
 
+**A server's `readOnlyHint` and permissions.** The permission policy judges an MCP tool by name (`McpTools` rules, then the default
+action - `ask`, which an unattended run reads as a refusal). A server may declare a tool read-only (`readOnlyHint: true`), but that
+is its own claim, so it counts only for a server the host names: `trustReadOnlyHints: true` on the entry (`McpPluginConfig.TrustReadOnlyHints`,
+off by default). For such a server, a tool declared read-only is allowed when no rule speaks about it and the default would ask; a rule on the
+tool (allow, ask or deny) and a default of `deny` still win, and a tool the server did not declare read-only is judged as before.
+`McpPluginManager` answers `IsTrustedReadOnly(toolName)` from its last tool listing; the registered `ToolCallPolicy` is wired to it, and
+a hand-built one takes it as the third constructor argument: `new ToolCallPolicy(evaluator, manager.IsMcpTool, manager.IsTrustedReadOnly)`.
+
 `McpPluginsConfigLoader.LoadFromDefault(baseDirectory)` reads the first of `.ironhive/plugins.yaml`, `.ironhive/plugins.yml`,
 `.ironhive/plugins.json` (then `plugins.yaml|yml|json`) under the directory (default: the current directory), or returns an
 empty configuration. For hot reload, hand it to `new McpPluginHotReloader(pluginManager, config, watchDirectory)` and call

@@ -82,6 +82,15 @@ public interface IMcpPluginManager : IAsyncDisposable
     bool IsMcpTool(string toolName);
 
     /// <summary>
+    /// Whether <paramref name="toolName"/> is a tool whose server declares it read-only (<c>readOnlyHint: true</c>) <b>and</b> whose
+    /// plugin is trusted for that claim (<see cref="McpPluginConfig.TrustReadOnlyHints"/>). A hint is the server's statement about
+    /// itself, so it counts only from a plugin the host named; a name listed by several plugins counts only when every one of them
+    /// qualifies. Reads the last listing (<see cref="GetToolsAsync(CancellationToken)"/>). The default says <c>false</c>, so a manager
+    /// that does not implement it trusts nothing.
+    /// </summary>
+    bool IsTrustedReadOnly(string toolName) => false;
+
+    /// <summary>
     /// Calls a tool on a specific plugin.
     /// </summary>
     /// <param name="pluginName">Plugin name</param>
@@ -170,6 +179,15 @@ public record McpPluginConfig
     /// (<see cref="IMcpPluginManager.PendingPlugins"/>, <see cref="IMcpPluginManager.ReconnectPendingAsync"/>). On by default.
     /// </summary>
     public bool AutoReconnect { get; init; } = true;
+
+    /// <summary>
+    /// Whether the tool-call permission policy believes this server's <c>readOnlyHint</c>: a tool the server declares read-only
+    /// is allowed without an approval when no permission rule speaks about it (<see cref="IMcpPluginManager.IsTrustedReadOnly"/>).
+    /// Off by default - a server declaring itself harmless is a claim, and trusting it is the host's decision per server. A
+    /// <c>Deny</c> rule, an explicit <c>Ask</c>/<c>Allow</c> rule on the tool's name, and a <c>Deny</c> default action all still win;
+    /// <c>destructiveHint</c> and the other annotations are not read.
+    /// </summary>
+    public bool TrustReadOnlyHints { get; init; }
 
     /// <summary>
     /// Connection timeout in milliseconds.

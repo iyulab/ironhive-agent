@@ -17,7 +17,7 @@ namespace IronHive.Agent.Mcp;
 /// <item>The entry's key is its name. A name already read is refused.</item>
 /// <item>Keys are case-insensitive and have one spelling per shape: <c>type</c>/<c>transport</c>,
 /// <c>command</c>, <c>args</c>/<c>arguments</c>, <c>env</c>/<c>environment</c>,
-/// <c>cwd</c>/<c>workingDirectory</c>, <c>url</c>, <c>headers</c>, <c>autoReconnect</c>, <c>timeoutMs</c>,
+/// <c>cwd</c>/<c>workingDirectory</c>, <c>url</c>, <c>headers</c>, <c>autoReconnect</c>, <c>trustReadOnlyHints</c>, <c>timeoutMs</c>,
 /// and <c>disabled</c> (or <c>enabled: false</c>), which keeps the entry but adds it to
 /// <see cref="McpPluginsConfig.ExcludePlugins"/>.</item>
 /// <item>Transport: an explicit <c>type</c> wins — <c>stdio</c>, or <c>http</c> / <c>sse</c> /
@@ -301,6 +301,7 @@ public static class McpPluginsConfigLoader
                     break;
 
                 case Field.AutoReconnect:
+                case Field.TrustReadOnlyHints:
                 case Field.Disabled:
                 case Field.Enabled:
                     if (v.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
@@ -363,6 +364,7 @@ public static class McpPluginsConfigLoader
                     break;
 
                 case Field.AutoReconnect:
+                case Field.TrustReadOnlyHints:
                 case Field.Disabled:
                 case Field.Enabled:
                     if (!bool.TryParse(child.Value, out var flag))
@@ -473,6 +475,7 @@ public static class McpPluginsConfigLoader
                 Environment = fields.Environment,
                 WorkingDirectory = fields.WorkingDirectory,
                 AutoReconnect = fields.AutoReconnect ?? true,
+                TrustReadOnlyHints = fields.TrustReadOnlyHints ?? false,
                 TimeoutMs = fields.TimeoutMs ?? defaultTimeoutMs
             }
             : new McpPluginConfig
@@ -481,6 +484,7 @@ public static class McpPluginsConfigLoader
                 Url = fields.Url,
                 Headers = fields.Headers,
                 AutoReconnect = fields.AutoReconnect ?? true,
+                TrustReadOnlyHints = fields.TrustReadOnlyHints ?? false,
                 TimeoutMs = fields.TimeoutMs ?? defaultTimeoutMs
             };
     }
@@ -499,6 +503,7 @@ public static class McpPluginsConfigLoader
         "url" => Field.Url,
         "headers" => Field.Headers,
         "autoreconnect" => Field.AutoReconnect,
+        "trustreadonlyhints" => Field.TrustReadOnlyHints,
         "timeoutms" => Field.TimeoutMs,
         "disabled" => Field.Disabled,
         "enabled" => Field.Enabled,
@@ -552,6 +557,7 @@ public static class McpPluginsConfigLoader
         Url,
         Headers,
         AutoReconnect,
+        TrustReadOnlyHints,
         TimeoutMs,
         Disabled,
         Enabled
@@ -567,6 +573,7 @@ public static class McpPluginsConfigLoader
         public Dictionary<string, string>? Environment { get; set; }
         public Dictionary<string, string>? Headers { get; set; }
         public bool? AutoReconnect { get; private set; }
+        public bool? TrustReadOnlyHints { get; private set; }
         public bool Disabled { get; private set; }
         public int? TimeoutMs { get; set; }
 
@@ -586,6 +593,7 @@ public static class McpPluginsConfigLoader
             switch (field)
             {
                 case Field.AutoReconnect: AutoReconnect = value; break;
+                case Field.TrustReadOnlyHints: TrustReadOnlyHints = value; break;
                 case Field.Disabled: Disabled |= value; break;
                 case Field.Enabled: Disabled |= !value; break;
             }
