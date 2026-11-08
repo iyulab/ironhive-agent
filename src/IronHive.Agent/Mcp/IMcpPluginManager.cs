@@ -175,6 +175,14 @@ public record McpPluginConfig
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
 
     /// <summary>
+    /// Headers whose value is read from a source before every HTTP request instead of fixed at connect time (for http
+    /// transport) - a credential that expires and is refreshed elsewhere. In a plugin file: <c>headerSources</c>, each
+    /// <c>env:NAME</c> or <c>file:PATH</c> (<see cref="McpHeaderSources"/>). A header name may be in <see cref="Headers"/> or
+    /// here, not both.
+    /// </summary>
+    public IReadOnlyDictionary<string, IMcpHeaderValueSource>? HeaderSources { get; init; }
+
+    /// <summary>
     /// Whether the manager connects this plugin again when it could not be connected or was lost
     /// (<see cref="IMcpPluginManager.PendingPlugins"/>, <see cref="IMcpPluginManager.ReconnectPendingAsync"/>). On by default.
     /// </summary>

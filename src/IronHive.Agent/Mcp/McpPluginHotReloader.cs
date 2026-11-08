@@ -292,7 +292,7 @@ public class McpPluginHotReloader : IAsyncDisposable, IDisposable
         _pendingReloadTask = task;
     }
 
-    private static bool ConfigEquals(McpPluginConfig a, McpPluginConfig b)
+    internal static bool ConfigEquals(McpPluginConfig a, McpPluginConfig b)
     {
         return a.Transport == b.Transport &&
                a.Command == b.Command &&
@@ -302,7 +302,25 @@ public class McpPluginHotReloader : IAsyncDisposable, IDisposable
                a.TrustReadOnlyHints == b.TrustReadOnlyHints &&
                a.TimeoutMs == b.TimeoutMs &&
                ArgumentsEqual(a.Arguments, b.Arguments) &&
-               EnvironmentEqual(a.Environment, b.Environment);
+               EnvironmentEqual(a.Environment, b.Environment) &&
+               EnvironmentEqual(a.Headers, b.Headers) &&
+               HeaderSourcesEqual(a.HeaderSources, b.HeaderSources);
+    }
+
+    private static bool HeaderSourcesEqual(
+        IReadOnlyDictionary<string, IMcpHeaderValueSource>? a, IReadOnlyDictionary<string, IMcpHeaderValueSource>? b)
+    {
+        if (a is null or { Count: 0 } && b is null or { Count: 0 })
+        {
+            return true;
+        }
+
+        if (a is null || b is null || a.Count != b.Count)
+        {
+            return false;
+        }
+
+        return a.All(kvp => b.TryGetValue(kvp.Key, out var other) && Equals(kvp.Value, other));
     }
 
     private static bool ArgumentsEqual(IReadOnlyList<string>? a, IReadOnlyList<string>? b)

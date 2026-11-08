@@ -778,7 +778,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         return new StdioClientTransport(options);
     }
 
-    private static HttpClientTransport CreateHttpTransport(string name, McpPluginConfig config)
+    internal static HttpClientTransport CreateHttpTransport(string name, McpPluginConfig config)
     {
         if (string.IsNullOrWhiteSpace(config.Url))
         {
@@ -796,7 +796,22 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             options.AdditionalHeaders = new Dictionary<string, string>(config.Headers);
         }
 
-        return new HttpClientTransport(options);
+        if (config.HeaderSources is not { Count: > 0 } sources)
+        {
+            return new HttpClientTransport(options);
+        }
+
+        // No silent precedence: a header is a fixed value or a source, not both.
+        foreach (var header in sources.Keys)
+        {
+            if (config.Headers is not null && config.Headers.Keys.Any(k => string.Equals(k, header, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new ArgumentException($"Header '{header}' is in both Headers and HeaderSources for plugin '{name}'; use one.");
+            }
+        }
+
+        var client = new HttpClient(new McpHeaderSourceHandler(name, sources, new HttpClientHandler()));
+        return new HttpClientTransport(options, client, loggerFactory: null, ownsHttpClient: true);
     }
 
     private sealed record PendingPlugin(McpPluginConfig Config, string LastError, int Attempts, DateTimeOffset NextAttempt)

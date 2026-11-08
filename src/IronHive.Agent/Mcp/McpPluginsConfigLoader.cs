@@ -285,19 +285,13 @@ public static class McpPluginsConfigLoader
 
                 case Field.Environment:
                 case Field.Headers:
+                case Field.HeaderSources:
                     if (!TryReadStringMap(v, out var map))
                     {
                         reader.Refuse(name, $"'{key}' must be an object whose values are strings.");
                         return null;
                     }
-                    if (field == Field.Environment)
-                    {
-                        fields.Environment = map;
-                    }
-                    else
-                    {
-                        fields.Headers = map;
-                    }
+                    fields.SetMap(field, map);
                     break;
 
                 case Field.AutoReconnect:
@@ -352,15 +346,9 @@ public static class McpPluginsConfigLoader
 
                 case Field.Environment:
                 case Field.Headers:
+                case Field.HeaderSources:
                     var map = child.GetChildren().Where(c => c.Value is not null).ToDictionary(c => c.Key, c => c.Value!);
-                    if (field == Field.Environment)
-                    {
-                        fields.Environment = map;
-                    }
-                    else
-                    {
-                        fields.Headers = map;
-                    }
+                    fields.SetMap(field, map);
                     break;
 
                 case Field.AutoReconnect:
@@ -466,6 +454,33 @@ public static class McpPluginsConfigLoader
             return null;
         }
 
+        Dictionary<string, IMcpHeaderValueSource>? headerSources = null;
+        if (transport == McpTransportType.Http && fields.HeaderSources is { Count: > 0 } declared)
+        {
+            headerSources = [];
+            foreach (var (header, text) in declared)
+            {
+                if (fields.Headers is not null && fields.Headers.Keys.Any(k => string.Equals(k, header, StringComparison.OrdinalIgnoreCase)))
+                {
+                    reader.Refuse(name, $"Header '{header}' is in both 'headers' and 'headerSources'; use one.");
+                    return null;
+                }
+
+                // The text is not echoed: a mistyped source may hold a token.
+                if (!McpHeaderSources.TryParse(text, out var parsed, out var sourceError))
+                {
+                    reader.Refuse(name, $"'headerSources' entry '{header}': {sourceError}");
+                    return null;
+                }
+
+                headerSources[header] = parsed!;
+            }
+        }
+        else if (transport == McpTransportType.Stdio && fields.HeaderSources is { Count: > 0 })
+        {
+            reader.Ignore(name, "'headerSources' was ignored: the type is stdio.");
+        }
+
         return transport == McpTransportType.Stdio
             ? new McpPluginConfig
             {
@@ -483,6 +498,7 @@ public static class McpPluginsConfigLoader
                 Transport = transport,
                 Url = fields.Url,
                 Headers = fields.Headers,
+                HeaderSources = headerSources,
                 AutoReconnect = fields.AutoReconnect ?? true,
                 TrustReadOnlyHints = fields.TrustReadOnlyHints ?? false,
                 TimeoutMs = fields.TimeoutMs ?? defaultTimeoutMs
@@ -502,6 +518,7 @@ public static class McpPluginsConfigLoader
         "cwd" or "workingdirectory" => Field.WorkingDirectory,
         "url" => Field.Url,
         "headers" => Field.Headers,
+        "headersources" => Field.HeaderSources,
         "autoreconnect" => Field.AutoReconnect,
         "trustreadonlyhints" => Field.TrustReadOnlyHints,
         "timeoutms" => Field.TimeoutMs,
@@ -556,6 +573,7 @@ public static class McpPluginsConfigLoader
         WorkingDirectory,
         Url,
         Headers,
+        HeaderSources,
         AutoReconnect,
         TrustReadOnlyHints,
         TimeoutMs,
@@ -572,6 +590,23 @@ public static class McpPluginsConfigLoader
         public List<string>? Arguments { get; set; }
         public Dictionary<string, string>? Environment { get; set; }
         public Dictionary<string, string>? Headers { get; set; }
+        public Dictionary<string, string>? HeaderSources { get; set; }
+
+        public void SetMap(Field field, Dictionary<string, string> map)
+        {
+            switch (field)
+            {
+                case Field.Environment:
+                    Environment = map;
+                    break;
+                case Field.Headers:
+                    Headers = map;
+                    break;
+                default:
+                    HeaderSources = map;
+                    break;
+            }
+        }
         public bool? AutoReconnect { get; private set; }
         public bool? TrustReadOnlyHints { get; private set; }
         public bool Disabled { get; private set; }

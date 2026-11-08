@@ -256,6 +256,26 @@ plugins:
       X-Session-Id: abc123
 ```
 
+**A credential that expires** (an access token minutes old, refreshed by something else) cannot be a fixed `headers` value. Name
+the header in `headerSources` instead (`McpPluginConfig.HeaderSources` in code): the manager reads its value before **every** HTTP
+request of the plugin, so the plugin stays authenticated for longer than one token's life.
+
+```yaml
+plugins:
+  remote-tool:
+    url: https://tools.example.com/mcp
+    headerSources:
+      Authorization: file:/run/secrets/mcp-token   # the file holds the whole value: Bearer <token>; re-read when it changes
+      X-Api-Key: env:MCP_API_KEY                   # read on every request
+```
+
+`file:PATH` and `env:NAME` need no code (`McpHeaderSources.FromFile` / `FromEnvironment`); anything richer implements
+`IMcpHeaderValueSource` (`ValueTask<string?> GetAsync(ct)`, called concurrently, cheap) — for example one that calls your token
+endpoint and caches the token until shortly before it expires. A source with no value fails that request, naming the header (a
+missing credential never becomes an unauthenticated call); values are never logged or quoted in errors. A header name is in
+`headers` or in `headerSources`, not both (refused when read; `ArgumentException` in code). Editing either in the plugin file
+reconnects the plugin (the hot reloader compares `headers` and `headerSources` too).
+
 The snippet an MCP server's documentation gives can be used as it is — an `mcpServers` object (Claude Desktop, Cursor
 and others) or VS Code's `servers` object, in the same file or pasted into a host:
 
