@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.82.0] - 2026-11-09
 
 ### Added
 - **An MCP server's `readOnlyHint` can reach the permission decision, for a server the host trusts.** `McpPluginConfig.TrustReadOnlyHints` (`trustReadOnlyHints` in the plugin file; off by default) marks a server whose read-only declaration is believed: `IMcpPluginManager.IsTrustedReadOnly(toolName)` (a default interface member answering `false`, so existing implementations compile unchanged; `McpPluginManager` answers from its last tool listing) and a new `ToolCallPolicy(evaluator, isMcpTool, isTrustedReadOnly)` constructor, which the registered policy uses. A tool such a server declared read-only is now allowed when no `McpTools` rule speaks about it and the default action would only ask - an unattended run no longer refuses it. A rule on the tool (allow, ask or deny) and a default action of `deny` still win; other annotations are not read; a server without the option behaves as before.
