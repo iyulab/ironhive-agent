@@ -809,7 +809,9 @@ and always null in a loop without the tool). Read it as the model's *claim*:
   the call with an `input_required` URL-mode elicitation, e.g. an external approval gate): the same proposal is on
   `McpCallInfo.ModelProposal`, the call-aware argument of `IMcpElicitationHandler.ElicitAsync(pluginName, call, request, ct)`.
   Same rule (the step's one valid proposal naming that call's tool), same bounds, read only when a handler is registered; it is
-  null when the call is not tied to one in-flight call. Show it as the model's claim, apart from the server's own message.
+  null when the call is not tied to one in-flight call. A call the model makes to a tool from `GetToolsAsync` is tied to its
+  call id the same way as one made through `CallToolAsync` (with a handler registered, the listed tools register the call while
+  they run; their `GetService<McpClientTool>()` still answers). Show it as the model's claim, apart from the server's own message.
 - To take the proposal from somewhere else, register your own `IApprovalProposalSource` (or pass one to
   `ApprovalGateMiddleware`); build its result with `ModelAuthoredProposal.TryCreate` so the bounds hold. Without DI, a custom
   loop calls `ApprovalGate.DecideAsync(tool, arguments, callId, proposalFactory, ct)`.

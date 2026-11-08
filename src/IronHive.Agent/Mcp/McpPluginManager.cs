@@ -284,7 +284,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                 // McpClientTool inherits from AIFunction which inherits from AITool
                 var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
                 wrapper.Record(tools);
-                allTools.AddRange(tools.Select(WithDeclaredHints));
+                allTools.AddRange(tools.Select(tool => WithCallTracking(WithDeclaredHints(tool), wrapper.Name, tool.Name)));
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
@@ -310,7 +310,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
 
         var tools = await wrapper.Client.ListToolsAsync(cancellationToken: cancellationToken);
         wrapper.Record(tools);
-        return tools.Select(WithDeclaredHints).ToList().AsReadOnly();
+        return tools.Select(tool => WithCallTracking(WithDeclaredHints(tool), pluginName, tool.Name)).ToList().AsReadOnly();
     }
 
     /// <inheritdoc />
@@ -410,13 +410,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             return McpToolResult.Error($"Plugin '{pluginName}' is not connected.");
         }
 
-        // The plugin may ask a person about this call while it runs (elicitation); the request arrives on the client's own
-        // loop, not in this call's flow, so the call is registered here for the handler to find.
-        var invocation = FunctionInvokingChatClient.CurrentContext;
-        using var inFlight = TrackCall(pluginName, new McpCallInfo(toolName, invocation?.CallContent?.CallId)
-        {
-            ModelProposal = await ReadProposalAsync(invocation, cancellationToken)
-        });
+        using var inFlight = await TrackCurrentCallAsync(pluginName, toolName, cancellationToken);
 
         // Convert IDictionary to IReadOnlyDictionary
         IReadOnlyDictionary<string, object?>? args = arguments != null
@@ -635,6 +629,36 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             _logger?.LogWarning(ex, "Reading the model's approval proposal for a call to '{Tool}' failed - asking without one", invocation.Function.Name);
 #pragma warning restore CA1848
             return null;
+        }
+    }
+
+    // The plugin may ask a person about a call while it runs (elicitation); the request arrives on the client's own loop, not
+    // in the call's flow, so the call is registered for the handler to find - with the model's call id and proposal when it
+    // is made from a function-invocation turn.
+    private async ValueTask<IDisposable> TrackCurrentCallAsync(string pluginName, string toolName, CancellationToken cancellationToken)
+    {
+        var invocation = FunctionInvokingChatClient.CurrentContext;
+        return TrackCall(pluginName, new McpCallInfo(toolName, invocation?.CallContent?.CallId)
+        {
+            ModelProposal = await ReadProposalAsync(invocation, cancellationToken)
+        });
+    }
+
+    // A tool the manager lists is what the model calls, and an MCP client tool invokes its server directly - without this a
+    // call the model makes never reaches CallToolAsync, so the handler is asked about a request tied to no call. Only a
+    // manager with a handler tracks: nobody else reads the registration.
+    private AITool WithCallTracking(AITool tool, string pluginName, string toolName) =>
+        _elicitation is not null && tool is AIFunction function
+            ? new CallTrackingFunction(function, this, pluginName, toolName)
+            : tool;
+
+    private sealed class CallTrackingFunction(AIFunction inner, McpPluginManager owner, string pluginName, string toolName)
+        : DelegatingAIFunction(inner)
+    {
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            using var inFlight = await owner.TrackCurrentCallAsync(pluginName, toolName, cancellationToken);
+            return await base.InvokeCoreAsync(arguments, cancellationToken);
         }
     }
 

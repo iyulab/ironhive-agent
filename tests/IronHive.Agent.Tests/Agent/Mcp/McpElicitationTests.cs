@@ -229,6 +229,62 @@ public sealed class McpElicitationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ACallTheModelMakesToAToolTheManagerListed_CarriesTheModelsCallIdToTheHandler()
+    {
+        // The model reaches an MCP tool through the tools the manager lists, not through CallToolAsync: the request
+        // must still be tied to the call it belongs to, or a client cannot show the person which call is asking.
+        var person = new CallAware();
+        await using var manager = await Connect(new McpPluginManager(person));
+        var listed = (await manager.GetToolsAsync(Ct)).OfType<AIFunction>().Single(t => t.Name == "send_payment");
+        using var chat = new FunctionInvokingChatClient(new ScriptedModel("call_42", "send_payment"));
+
+        await chat.GetResponseAsync("pay it", new ChatOptions { Tools = [listed] }, Ct);
+
+        var call = person.Calls.Should().ContainSingle().Subject;
+        call!.ToolName.Should().Be("send_payment");
+        call.CallId.Should().Be("call_42");
+    }
+
+    [Fact]
+    public async Task AProposalTheModelMade_ReachesTheHandlerForAToolTheManagerListed()
+    {
+        var person = new CallAware();
+        await using var manager = await Connect(new McpPluginManager(person));
+        var listed = (await manager.GetToolsAsync(Ct)).OfType<AIFunction>().Single(t => t.Name == "send_payment");
+        using var chat = new FunctionInvokingChatClient(new ScriptedBatch(
+            new FunctionCallContent("call_42", "send_payment", new Dictionary<string, object?>()), Proposal("send_payment")));
+
+        await chat.GetResponseAsync("pay it", new ChatOptions { Tools = [listed, ApprovalProposalTool.Create()] }, Ct);
+
+        var call = person.Calls.Should().ContainSingle().Subject;
+        call!.CallId.Should().Be("call_42");
+        call.ModelProposal.Should().NotBeNull("the same step holds one proposal naming this call's tool");
+        call.ModelProposal!.RecommendedOptionId.Should().Be("approve");
+    }
+
+    [Fact]
+    public async Task ListedToolsOfAManagerWithoutAHandler_AreTheServersOwnTools()
+    {
+        await using var manager = await Connect(new McpPluginManager());
+
+        var listed = (await manager.GetToolsAsync(Ct)).OfType<AIFunction>().Single(t => t.Name == "send_payment");
+
+        listed.GetService<ModelContextProtocol.Client.McpClientTool>().Should().NotBeNull();
+        listed.Should().BeAssignableTo<ModelContextProtocol.Client.McpClientTool>("nobody reads a registration, so nothing wraps the tool");
+    }
+
+    [Fact]
+    public async Task AWrappedListedTool_StillAnswersForTheServersToolAndItsHints()
+    {
+        await using var manager = await Connect(new McpPluginManager(new CallAware()));
+
+        var listed = (await manager.GetToolsAsync(Ct)).OfType<AIFunction>().Single(t => t.Name == "send_payment");
+
+        listed.GetService<ModelContextProtocol.Client.McpClientTool>().Should().NotBeNull("a wrapped tool still answers GetService for the server's tool");
+        listed.Description.Should().Be(listed.GetService<ModelContextProtocol.Client.McpClientTool>()!.Description);
+    }
+
+    [Fact]
     public async Task AProposalTheModelMadeForTheCall_ReachesTheHandlerWithTheCallItIsAbout()
     {
         var call = await RunPaymentTurn(Proposal("send_payment"));
