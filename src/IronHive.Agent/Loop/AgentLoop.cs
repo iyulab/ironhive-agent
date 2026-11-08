@@ -196,7 +196,7 @@ public class AgentLoop : IAgentLoop
         _hostResults.MarkProduced(response.Messages);
         var produced = new List<ChatMessage>(response.Messages);
 
-        var toolCalls = ToolCallResultFactory.Extract(response);
+        var toolCalls = ToolCallResultFactory.Extract(response, _toolPipeline?.Options);
         var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
         var usageDetails = response.Usage;
         var text = response.Text ?? string.Empty;
@@ -213,7 +213,8 @@ public class AgentLoop : IAgentLoop
             produced.AddRange(prelude.Messages);
             toolCalls = ToolCallResultFactory.Extract(
                 response.Messages.SelectMany(m => m.Contents.OfType<FunctionCallContent>()),
-                [.. response.Messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), .. prelude.Results]);
+                [.. response.Messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), .. prelude.Results],
+                _toolPipeline?.Options);
             if (prelude.Terminated)
             {
                 // A finishing call ended the turn: no closing request.
@@ -231,7 +232,7 @@ public class AgentLoop : IAgentLoop
                 _history.AddRange(closed.Messages);
                 _hostResults.MarkProduced(closed.Messages);
                 produced.AddRange(closed.Messages);
-                toolCalls.AddRange(ToolCallResultFactory.Extract(closed));
+                toolCalls.AddRange(ToolCallResultFactory.Extract(closed, _toolPipeline?.Options));
                 if (closed.Usage is { } closedUsage)
                 {
                     usageDetails ??= new UsageDetails();
@@ -376,7 +377,7 @@ public class AgentLoop : IAgentLoop
             _hostResults.MarkProduced(prelude.Messages);
             produced.AddRange(prelude.Messages);
             round.ToolResults.AddRange(prelude.Results);
-            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(round.ToolCalls, [.. prelude.Ran]))
+            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(round.ToolCalls, [.. prelude.Ran], _toolPipeline?.Options))
             {
                 yield return new AgentResponseChunk { ToolResult = arrived };
             }
@@ -430,7 +431,7 @@ public class AgentLoop : IAgentLoop
         var turn = new TurnRecord
         {
             Content = string.Concat(rounds.Select(r => r.Text.ToString())),
-            ToolCalls = ToolCallResultFactory.Extract([.. rounds.SelectMany(r => r.ToolCalls)], [.. rounds.SelectMany(r => r.ToolResults)]),
+            ToolCalls = ToolCallResultFactory.Extract([.. rounds.SelectMany(r => r.ToolCalls)], [.. rounds.SelectMany(r => r.ToolResults)], _toolPipeline?.Options),
             Usage = streamedUsage,
             ThinkingContent = LiveReasoning.ToThinkingContent(string.Concat(rounds.Select(r => r.Reasoning.ToString()))),
             StopReason = streamedStopReason,
@@ -563,7 +564,7 @@ public class AgentLoop : IAgentLoop
             round.History.AppendResults(updateResults);
 
             // Each call's outcome as it arrives, not only in the final Turn record.
-            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(round.ToolCalls, updateResults))
+            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(round.ToolCalls, updateResults, _toolPipeline?.Options))
             {
                 yield return new AgentResponseChunk { ToolResult = arrived };
             }

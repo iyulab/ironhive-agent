@@ -29,6 +29,10 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
     private readonly ModelView _view = new();
     private readonly HostToolResultStage _hostResults;
 
+    // What the chat client's tool invocation pipeline recognises as a failure reported in a result; a call's outcome is
+    // read by the same rule the loop guards use
+    private readonly Invocation.ToolInvocationOptions? _toolOptions;
+
     /// <param name="chatClient">The client the thinking layer wraps.</param>
     /// <param name="turnManager">IndexThinking's turn manager (reasoning extraction, truncation continuation).</param>
     /// <param name="options">Loop options — system prompt, tools, model id used for pricing.</param>
@@ -79,6 +83,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         }
         _toolRetriever = toolRetriever;
         _hostResults = new HostToolResultStage(chatClient);
+        _toolOptions = chatClient.GetService<Invocation.ToolInvocationPipeline>()?.Options;
         _turnObservers = turnObservers?.ToArray() ?? [];
         _guards = new TurnGuards(usageLimiter, errorRecovery, _options.ModelId, chatClient);
 
@@ -222,7 +227,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         _hostResults.MarkProduced(response.Messages);
         var added = TurnMessages.Of(started, response.Messages);
 
-        var toolCalls = ToolCallResultFactory.Extract(response);
+        var toolCalls = ToolCallResultFactory.Extract(response, _toolOptions);
         var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient));
         var thinkingContent = ExtractThinkingContent(response);
         var usage = MapUsage(response.Usage);
@@ -429,7 +434,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
             historyBuilder.AppendResults(updateResults);
 
             // Each call's outcome as it arrives, not only in the final Turn record.
-            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(toolCalls, updateResults))
+            foreach (var arrived in ToolCallResultFactory.ForArrivedResults(toolCalls, updateResults, _toolOptions))
             {
                 yield return new AgentResponseChunk { ToolResult = arrived };
             }
@@ -468,7 +473,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var turn = new TurnRecord
         {
             Content = responseBuilder.ToString(),
-            ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults),
+            ToolCalls = ToolCallResultFactory.Extract(toolCalls, toolResults, _toolOptions),
             Usage = streamedUsage,
             ThinkingContent = thinking,
             StopReason = streamedStopReason,

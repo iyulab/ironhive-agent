@@ -1032,7 +1032,12 @@ check needs the outcome too, confirm your client wraps function invocation.
 
 A call the tool invocation pipeline refused has `Success = false` and a `RefusalKind` (`Denied`, `ApprovalUnavailable`,
 `Rejected`, `AwaitingApproval`, a loop guard, `InvalidArguments`, `ResultWithheld`, `TimedOut`); a tool that ran and failed has
-`RefusalKind = null`.
+`RefusalKind = null`. A tool that reports failure as its *result* instead of throwing is a failure too: an MCP result with
+`isError: true` (as the protocol object, as the JSON an MCP client tool returns, or as an `McpToolResult`), or whatever
+`ToolInvocationOptions.FailureOf` recognises, is reported with `Success = false` and its text as `Result` — by the same
+recognition the repeated-call and repeated-error guards count a failure by, so the outcome a client reads and the one the
+guards act on do not disagree. `ToolCallResultFactory.Extract(response, options)` takes the options for a host that builds
+turn records itself; the loops use the options of the tool invocation pipeline their chat client carries.
 
 ## Tracing
 

@@ -22,6 +22,12 @@ public sealed class ToolInvocationPipeline
     private readonly IToolResultMiddleware[] _results;
     private readonly ToolInvocationOptions _options;
 
+    /// <summary>
+    /// The options this pipeline's guards read. A loop reports a call's outcome by the same failure recognition
+    /// (<see cref="ToolInvocationOptions.FailureOf"/>), so a result the guards count as a failure is not reported as a success.
+    /// </summary>
+    internal ToolInvocationOptions Options => _options;
+
     /// <summary>Folds <paramref name="invocationMiddleware"/> and <paramref name="resultMiddleware"/> into one pipeline.</summary>
     /// <param name="invocationMiddleware">Steps around each call, outermost first.</param>
     /// <param name="resultMiddleware">Steps over each result, in the order they run.</param>

@@ -99,6 +99,25 @@ public class MockChatClient : IChatClient
     }
 
     /// <summary>
+    /// <see cref="EnqueueResolvedToolCallResponse"/> with the value the tool returned as it is -- a
+    /// <see cref="System.Text.Json.JsonElement"/> for an MCP client tool, a protocol result object, anything
+    /// -- instead of text.
+    /// </summary>
+    public MockChatClient EnqueueResolvedToolCallResponseWithValue(string toolName, string arguments, object? value)
+    {
+        var callId = Guid.NewGuid().ToString();
+        var argsDict = JsonSerializer.Deserialize<Dictionary<string, object?>>(arguments)
+            ?? new Dictionary<string, object?>();
+
+        _responses.Enqueue(new ChatResponse(
+        [
+            new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, toolName, argsDict)]),
+            new ChatMessage(ChatRole.Tool, [new FunctionResultContent(callId, value)]),
+        ]));
+        return this;
+    }
+
+    /// <summary>
     /// Enqueues a response with a tool call whose arguments the provider failed to parse, as
     /// surfaced by Microsoft.Extensions.AI via <see cref="FunctionCallContent.Exception"/>.
     /// </summary>

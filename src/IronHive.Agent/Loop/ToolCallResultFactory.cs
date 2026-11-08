@@ -27,13 +27,21 @@ public static class ToolCallResultFactory
     /// Extracts one <see cref="ToolCallResult"/> per <see cref="FunctionCallContent"/> found across
     /// all messages in <paramref name="response"/>.
     /// </summary>
-    public static List<ToolCallResult> Extract(ChatResponse response)
+    public static List<ToolCallResult> Extract(ChatResponse response) => Extract(response, options: null);
+
+    /// <summary>
+    /// <see cref="Extract(ChatResponse)"/>, recognising a failure a tool reports as its result by
+    /// <paramref name="options"/> (<see cref="IronHive.Agent.Invocation.ToolInvocationOptions.FailureOf"/>) as well as by the
+    /// built-in rule.
+    /// </summary>
+    public static List<ToolCallResult> Extract(ChatResponse response, IronHive.Agent.Invocation.ToolInvocationOptions? options)
     {
         ArgumentNullException.ThrowIfNull(response);
 
         return Extract(
             response.Messages.SelectMany(m => m.Contents.OfType<FunctionCallContent>()),
-            response.Messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()));
+            response.Messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()),
+            options);
     }
 
     /// <summary>
@@ -48,7 +56,23 @@ public static class ToolCallResultFactory
     /// </remarks>
     public static List<ToolCallResult> Extract(
         IEnumerable<FunctionCallContent> functionCalls,
-        IEnumerable<FunctionResultContent> functionResults)
+        IEnumerable<FunctionResultContent> functionResults) => Extract(functionCalls, functionResults, options: null);
+
+    /// <summary>
+    /// <see cref="Extract(IEnumerable{FunctionCallContent}, IEnumerable{FunctionResultContent})"/>, recognising a failure a
+    /// tool reports as its result by <paramref name="options"/> as well as by the built-in rule.
+    /// </summary>
+    /// <remarks>
+    /// A call is a success only when the tool ran and reported none: a result that threw, was refused, or is a failure
+    /// carried as a value (an MCP result with <c>isError: true</c>, or whatever
+    /// <see cref="IronHive.Agent.Invocation.ToolInvocationOptions.FailureOf"/> recognises) is reported with
+    /// <c>Success = false</c> — the same recognition the loop guards count a failure by, so the outcome a client reads
+    /// and the one the guards act on cannot disagree.
+    /// </remarks>
+    public static List<ToolCallResult> Extract(
+        IEnumerable<FunctionCallContent> functionCalls,
+        IEnumerable<FunctionResultContent> functionResults,
+        IronHive.Agent.Invocation.ToolInvocationOptions? options)
     {
         ArgumentNullException.ThrowIfNull(functionCalls);
         ArgumentNullException.ThrowIfNull(functionResults);
@@ -93,7 +117,8 @@ public static class ToolCallResultFactory
                     ToolName = call.Name,
                     Arguments = arguments,
                     Result = IronHive.Agent.Context.ToolResultText.Of(functionResult.Result),
-                    Success = functionResult.Exception is null && refusal is null,
+                    Success = functionResult.Exception is null && refusal is null
+                        && IronHive.Agent.Invocation.ToolResultFailure.Of(functionResult.Result, options) is null,
                     RefusalKind = refusal?.Kind,
                     Stats = IronHive.Agent.Invocation.ToolCallStats.For(call)
                 });
@@ -123,7 +148,16 @@ public static class ToolCallResultFactory
     /// </summary>
     public static IEnumerable<ToolCallResult> ForArrivedResults(
         IReadOnlyList<FunctionCallContent> functionCallsSoFar,
-        IEnumerable<FunctionResultContent> functionResults)
+        IEnumerable<FunctionResultContent> functionResults) => ForArrivedResults(functionCallsSoFar, functionResults, options: null);
+
+    /// <summary>
+    /// <see cref="ForArrivedResults(IReadOnlyList{FunctionCallContent}, IEnumerable{FunctionResultContent})"/>, recognising a
+    /// failure a tool reports as its result by <paramref name="options"/> as well as by the built-in rule.
+    /// </summary>
+    public static IEnumerable<ToolCallResult> ForArrivedResults(
+        IReadOnlyList<FunctionCallContent> functionCallsSoFar,
+        IEnumerable<FunctionResultContent> functionResults,
+        IronHive.Agent.Invocation.ToolInvocationOptions? options)
     {
         ArgumentNullException.ThrowIfNull(functionCallsSoFar);
         ArgumentNullException.ThrowIfNull(functionResults);
@@ -136,7 +170,7 @@ public static class ToolCallResultFactory
                 continue; // a result for a call this turn never announced has nothing to correlate with
             }
 
-            yield return Extract([call], [result])[0];
+            yield return Extract([call], [result], options)[0];
         }
     }
 }

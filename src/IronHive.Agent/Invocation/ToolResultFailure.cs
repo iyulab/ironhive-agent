@@ -17,7 +17,7 @@ namespace IronHive.Agent.Invocation;
 internal static class ToolResultFailure
 {
     /// <summary>The error text when <paramref name="result"/> is a failure, otherwise null.</summary>
-    public static string? Of(object? result, ToolInvocationOptions options)
+    public static string? Of(object? result, ToolInvocationOptions? options)
     {
         if (result is null)
         {
@@ -27,7 +27,7 @@ internal static class ToolResultFailure
         // A function made by AIFunctionFactory returns its value serialized; a host recognising its own string
         // convention should not have to unwrap that.
         var forHost = result is JsonElement { ValueKind: JsonValueKind.String } text ? text.GetString() : result;
-        return options.FailureOf?.Invoke(forHost) ?? BuiltIn(result);
+        return options?.FailureOf?.Invoke(forHost) ?? BuiltIn(result);
     }
 
     private static string? BuiltIn(object result) => result switch
