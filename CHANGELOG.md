@@ -23,6 +23,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 - Re-pinned sibling package(s) `FluxGuard.Remote` 0.26.0 -> 0.27.0, `IronHive.Abstractions` 0.73.0 -> 0.75.0, `IronHive.Extensions.AI` 0.73.0 -> 0.75.0.
 - Re-pinned third-party packages: `ModelContextProtocol` 2.3.0 -> 2.3.1.
 - Re-pinned third-party packages: `ModelContextProtocol` 2.3.1 -> 2.4.0, `OpenAI` 2.14.0 -> 2.15.0.
+- Re-pinned third-party packages: `Polly` 8.9.0 -> 8.9.1, `Polly.Extensions` 8.9.0 -> 8.9.1.
 
 ## [0.81.0] - 2026-11-03
 
