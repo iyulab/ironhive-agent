@@ -228,7 +228,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         var added = TurnMessages.Of(started, response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response, _toolOptions);
-        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient));
+        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient, chatOptions));
         var thinkingContent = ExtractThinkingContent(response);
         var usage = MapUsage(response.Usage);
 
@@ -452,7 +452,7 @@ public class ThinkingAgentLoop : IAgentLoop, IAsyncDisposable
         }
 
         var turnMessages = historyBuilder.Build();
-        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient));
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, finishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_thinkingClient, chatOptions));
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
         var streamedAdded = TurnMessages.Of(started, turnMessages);

@@ -48,6 +48,22 @@ internal static class TurnStopReasons
     public static int? MaximumIterationsOf(IChatClient client) =>
         client.GetService<FunctionInvokingChatClient>()?.MaximumIterationsPerRequest;
 
+    /// <summary>
+    /// The cap that applies to one turn: the smaller of the process-wide cap of <paramref name="client"/>'s function invocation
+    /// and the turn's own (<see cref="TurnLimits.WithMaxIterations"/> on <paramref name="options"/>) — the turn's value counts only
+    /// when the pipeline has a <see cref="TurnLimitChatClient"/> to enforce it, so a stop reason never claims a cap nobody applied.
+    /// </summary>
+    public static int? MaximumIterationsOf(IChatClient client, ChatOptions? options)
+    {
+        var process = MaximumIterationsOf(client);
+        if (TurnLimits.MaxIterationsOf(options) is not { } turn || client.GetService<TurnLimitChatClient>() is null)
+        {
+            return process;
+        }
+
+        return process is { } ceiling ? Math.Min(ceiling, turn) : turn;
+    }
+
     /// <summary>Classifies a turn from the messages it added to the history and the model's last finish reason.</summary>
     /// <param name="messages">The messages the turn added.</param>
     /// <param name="finishReason">The model's last finish reason.</param>

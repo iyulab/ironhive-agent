@@ -197,7 +197,7 @@ public class AgentLoop : IAgentLoop
         var produced = new List<ChatMessage>(response.Messages);
 
         var toolCalls = ToolCallResultFactory.Extract(response, _toolPipeline?.Options);
-        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
+        var stopReason = TurnStopReasons.Classify(response.Messages, response.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient, chatOptions));
         var usageDetails = response.Usage;
         var text = response.Text ?? string.Empty;
         var reasoning = LiveReasoning.Extract(response);
@@ -242,7 +242,7 @@ public class AgentLoop : IAgentLoop
                 text = JoinParts(text, closed.Text);
                 reasoning = JoinParts(reasoning ?? string.Empty, LiveReasoning.Extract(closed));
                 stopReason = StepLimitWrapUps.StopReason(
-                    TurnStopReasons.Classify(closed.Messages, closed.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+                    TurnStopReasons.Classify(closed.Messages, closed.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient, closingOptions)));
             }
         }
 
@@ -361,7 +361,7 @@ public class AgentLoop : IAgentLoop
         // Add the turn to history for multi-turn conversations. Rebuilt to the same shape the
         // non-streaming path leaves behind -- tool results included, and in the order they arrived.
         var turnMessages = round.History.Build();
-        var streamedStopReason = TurnStopReasons.Classify(turnMessages, round.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient));
+        var streamedStopReason = TurnStopReasons.Classify(turnMessages, round.FinishReason, chatOptions?.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient, chatOptions));
         _history.AddRange(turnMessages);
         _hostResults.MarkProduced(turnMessages);
         var produced = new List<ChatMessage>(turnMessages);
@@ -405,7 +405,7 @@ public class AgentLoop : IAgentLoop
                 produced.AddRange(closingMessages);
                 rounds.Add(closingRound);
                 streamedStopReason = StepLimitWrapUps.StopReason(
-                    TurnStopReasons.Classify(closingMessages, closingRound.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient)));
+                    TurnStopReasons.Classify(closingMessages, closingRound.FinishReason, closingOptions.Tools, TurnStopReasons.MaximumIterationsOf(_chatClient, closingOptions)));
             }
         }
 

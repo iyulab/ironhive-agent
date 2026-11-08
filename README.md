@@ -910,6 +910,29 @@ request — `History` keeps them in full.
 `ToolRoundContextChatClient` also applies tool-result compaction (`EnableToolResultCompaction`) per round. It makes no LLM
 call of its own, except to compact after an overflow (below); summarizing compaction otherwise runs once per turn in the loop.
 
+### Capping one turn's tool rounds
+
+`FunctionInvokingChatClient.MaximumIterationsPerRequest` belongs to the client, so every turn that runs through it shares
+one number. To bound a single turn lower — a quick lookup next to long tasks — put `UseTurnLimits()` directly under function
+invocation and give that turn's options a cap:
+
+```csharp
+var client = chatClient.AsBuilder()
+    .UseFunctionInvocation(configure: c => c.MaximumIterationsPerRequest = 25)   // the ceiling for every turn
+    .UseTurnLimits()                                                             // inside function invocation, above UseToolRoundContext
+    .Build();
+var loop = new AgentLoop(client, options);
+
+var lookup = await loop.RunAsync("what is in config.json?", new ChatOptions().WithMaxIterations(3));   // ends after 3 tool rounds
+var task = await loop.RunAsync("migrate the project");                                                    // runs to 25
+```
+
+At the cap the turn gets one more model call **without tools** and ends on its text answer, as at the client's own cap;
+`StopReason` is `StepLimit` (and `AgentOptions.WrapUpAtStepLimit` applies). The client's value stays the ceiling: a turn
+cap above it changes nothing. The cap is read from the request, so two turns running through one client at the same time keep
+their own. Without `UseTurnLimits()` in the pipeline the value is ignored, and so is `StopReason`'s knowledge of it. After
+host-run tools (`ContinueAsync`) the cap counts the rounds of the whole turn, while the client counts the continuation from zero.
+
 ### The same preparation in another pipeline
 
 A loop that is not `AgentLoop` — your own, or a framework's that takes an M.E.AI `IChatReducer` — can send its message list
@@ -1095,7 +1118,7 @@ An app that runs its tool rounds in IronHive's `IMessageService` (`MessageReques
 | `MessageRequest.System` | `ChatOptions.Instructions` or a system message in the history |
 | `MessageRequest.ThinkingEffort` | `AgentOptions.Reasoning = new ReasoningOptions { Effort = … }` (`XHigh` = `ReasoningEffort.ExtraHigh`); per turn `ChatOptions.Reasoning` |
 | `MessageRequest.Suggestions` / `MessageResponse.Suggestions` | `AgentOptions.Suggestions` / `AgentResponse.Suggestions` (`TurnRecord.Suggestions` on a stream) |
-| `MessageRequest.MaxTurns` | `FunctionInvokingChatClient.MaximumIterationsPerRequest` (at the cap the turn ends with `StopReason = StepLimit`, or is closed by `AgentOptions.WrapUpAtStepLimit`) |
+| `MessageRequest.MaxTurns` | `FunctionInvokingChatClient.MaximumIterationsPerRequest` (at the cap the turn ends with `StopReason = StepLimit`, or is closed by `AgentOptions.WrapUpAtStepLimit`); lower for one turn: `.UseTurnLimits()` + `ChatOptions.WithMaxIterations(n)` ([Capping one turn's tool rounds](#capping-one-turns-tool-rounds)) |
 | per-result limits (`ToolOptions.OnAfterInvoke` + `TextCompactor`) | `CompactionConfig.MaxToolResultChars` (head + tail lines kept; default 30,000 characters) |
 | `ToolResultBudgetMiddleware(maxTotalChars)` — a call-wide total, then tools are withdrawn | `CompactionConfig.ObservationMaskingProtectedTokens` with `.UseToolRoundContext()` ([Long single-message tasks](#long-single-message-tasks)): every round of the turn is sent with the newest results whole and older ones masked (re-readable by the same call), so the request stays bounded without cutting the model off; the round cap above ends a turn that keeps calling |
 
