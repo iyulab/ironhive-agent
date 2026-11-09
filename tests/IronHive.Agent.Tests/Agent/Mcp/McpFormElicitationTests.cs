@@ -2,6 +2,7 @@ using System.IO.Pipelines;
 using System.Text.Json;
 using AwesomeAssertions;
 using IronHive.Agent.Mcp;
+using IronHive.Agent.Tools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Xunit;
@@ -25,6 +26,7 @@ public sealed class McpFormElicitationTests : IAsyncDisposable
     private readonly CancellationTokenSource _serverStop = new();
     private Task? _server;
     private McpServer? _mcpServer;
+    private bool _schemaless;
 
     private static JsonElement Json(object value) => JsonSerializer.SerializeToElement(value);
 
@@ -83,7 +85,10 @@ public sealed class McpFormElicitationTests : IAsyncDisposable
                 }
 
                 throw new InputRequiredException(
-                    new Dictionary<string, InputRequest> { ["pick"] = InputRequest.ForElicitation(AccountForm()) },
+                    new Dictionary<string, InputRequest>
+                    {
+                        ["pick"] = InputRequest.ForElicitation(_schemaless ? new ElicitRequestParams { Mode = "form", Message = "Anything?" } : AccountForm()),
+                    },
                     State);
             },
             new McpServerToolCreateOptions { Name = "file_report" });
@@ -159,6 +164,34 @@ public sealed class McpFormElicitationTests : IAsyncDisposable
         _mcpServer!.ClientCapabilities!.Elicitation!.Form.Should().BeNull();
         _mcpServer.ClientCapabilities.Elicitation.Url.Should().NotBeNull();
         result.Content.Should().NotContain("picked:");
+    }
+
+    [Fact]
+    public async Task AFormWithNoSchema_IsNotShown_TheServerReadsDecline()
+    {
+        _schemaless = true;
+        var person = new FormPerson("accept", new() { ["anything"] = Json("x") });
+        await using var manager = await Connect(new McpPluginManager(person));
+
+        var result = await manager.CallToolAsync("reports", "file_report", new Dictionary<string, object?>(), Ct);
+
+        person.Asked.Should().BeEmpty("there is nothing to fill in");
+        result.Content.Should().Contain("no-answer:decline");
+    }
+
+    [Fact]
+    public async Task APluginCannotTakeTheNameTheModelAsksUnder()
+    {
+        await using var manager = new McpPluginManager(new FormPerson("cancel", content: null));
+        StartServer();
+
+        var connect = () => manager.ConnectCoreAsync(
+            AskUserTool.AskerName,
+            new StreamClientTransport(_clientToServer.Writer.AsStream(), _serverToClient.Reader.AsStream()),
+            new McpPluginConfig(),
+            Ct);
+
+        await connect.Should().ThrowAsync<ArgumentException>().WithMessage("*reserved*");
     }
 
     [Fact]
@@ -267,6 +300,42 @@ public class ElicitationFormContentTests
         ElicitationFormContent.Validate(request, Content("s", "abc")).Should().BeNull();
         ElicitationFormContent.Validate(request, Content("s", "a")).Should().Contain("at least 2");
         ElicitationFormContent.Validate(request, Content("s", "abcde")).Should().Contain("at most 4");
+    }
+
+    [Fact]
+    public void Length_is_counted_in_code_points_not_utf16_units()
+    {
+        // JSON Schema counts characters: an emoji (two UTF-16 units) is one.
+        var request = Form("s", new ElicitRequestParams.StringSchema { MinLength = 2, MaxLength = 2 });
+
+        ElicitationFormContent.Validate(request, Content("s", "\U0001F600\U0001F600")).Should().BeNull();
+        ElicitationFormContent.Validate(request, Content("s", "\U0001F600")).Should().Contain("at least 2");
+        ElicitationFormContent.Validate(request, Content("s", "\U0001F600\U0001F600\U0001F600")).Should().Contain("at most 2");
+    }
+
+    [Fact]
+    public void A_malformed_schema_with_null_entries_is_checked_without_throwing()
+    {
+        var request = new ElicitRequestParams
+        {
+            Mode = "form",
+            Message = "m",
+            RequestedSchema = new ElicitRequestParams.RequestSchema
+            {
+                Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
+                {
+                    ["t"] = new ElicitRequestParams.TitledSingleSelectEnumSchema
+                    {
+                        OneOf = [null!, new ElicitRequestParams.EnumSchemaOption { Const = "k", Title = "K" }],
+                    },
+                },
+                Required = [null!, "t"],
+            },
+        };
+
+        ElicitationFormContent.Validate(request, Content("t", "k")).Should().BeNull();
+        ElicitationFormContent.Validate(request, Content("t", "z")).Should().Contain("'t'");
+        ElicitationFormContent.Validate(request, new Dictionary<string, JsonElement>()).Should().Contain("required");
     }
 
     [Theory]

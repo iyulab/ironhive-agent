@@ -153,6 +153,13 @@ public static class AskUserTool
                 return false;
             }
 
+            // The id comes back as the answer: a cut id would not match the one the model sent.
+            if (option!.Id.Trim().Length > MaxIdLength)
+            {
+                problem = $"option ids are at most {MaxIdLength} characters";
+                return false;
+            }
+
             if (label.Length == 0)
             {
                 problem = $"option '{id}' needs a label";
@@ -207,7 +214,7 @@ public static class AskUserTool
         switch (result.Action)
         {
             case "accept" when ElicitationFormContent.Validate(request, result.Content) is null:
-                var content = result.Content!;
+                var content = result.Content ?? new Dictionary<string, JsonElement>();
                 var gave = false;
                 if (content.TryGetValue("choice", out var choice))
                 {

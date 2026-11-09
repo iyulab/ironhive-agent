@@ -40,6 +40,12 @@ public static class ElicitationFormContent
 
         foreach (var name in schema.Required ?? [])
         {
+            // A schema with a null entry in `required` is malformed; there is no field to look for.
+            if (name is null)
+            {
+                continue;
+            }
+
             if (content is null || !content.ContainsKey(name))
             {
                 return $"'{name}' is required.";
@@ -73,9 +79,9 @@ public static class ElicitationFormContent
         ElicitRequestParams.NumberSchema n => CheckNumber(name, n, value),
         ElicitRequestParams.BooleanSchema => value.ValueKind is JsonValueKind.True or JsonValueKind.False ? null : $"'{name}' must be a boolean.",
         ElicitRequestParams.UntitledSingleSelectEnumSchema e => CheckOne(name, value, e.Enum),
-        ElicitRequestParams.TitledSingleSelectEnumSchema e => CheckOne(name, value, e.OneOf?.Select(o => o.Const)),
+        ElicitRequestParams.TitledSingleSelectEnumSchema e => CheckOne(name, value, e.OneOf?.Where(o => o is not null).Select(o => o.Const)),
         ElicitRequestParams.UntitledMultiSelectEnumSchema m => CheckMany(name, value, m.Items?.Enum, m.MinItems, m.MaxItems),
-        ElicitRequestParams.TitledMultiSelectEnumSchema m => CheckMany(name, value, m.Items?.AnyOf?.Select(o => o.Const), m.MinItems, m.MaxItems),
+        ElicitRequestParams.TitledMultiSelectEnumSchema m => CheckMany(name, value, m.Items?.AnyOf?.Where(o => o is not null).Select(o => o.Const), m.MinItems, m.MaxItems),
         _ => null,
     };
 
@@ -88,12 +94,15 @@ public static class ElicitationFormContent
 
         var text = value.GetString() ?? string.Empty;
 
-        if (schema.MinLength is { } min && text.Length < min)
+        // JSON Schema counts code points, not UTF-16 units: an emoji is one character.
+        var length = text.EnumerateRunes().Count();
+
+        if (schema.MinLength is { } min && length < min)
         {
             return $"'{name}' must be at least {min} characters.";
         }
 
-        if (schema.MaxLength is { } max && text.Length > max)
+        if (schema.MaxLength is { } max && length > max)
         {
             return $"'{name}' must be at most {max} characters.";
         }

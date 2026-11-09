@@ -230,6 +230,12 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     /// <summary>Connects over a given transport — the seam an in-process server test uses.</summary>
     internal async Task ConnectCoreAsync(string name, IClientTransport transport, McpPluginConfig config, CancellationToken cancellationToken)
     {
+        // The asker of a question the model puts to the person: a server of this name would be told apart from it by nothing.
+        if (string.Equals(name, Tools.AskUserTool.AskerName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"'{name}' is reserved for questions the model asks the person (AskUserTool.AskerName); name the plugin differently.", nameof(name));
+        }
+
         var client = await McpClient.CreateAsync(transport, ClientOptions(name), cancellationToken: cancellationToken);
 
         var wrapper = new McpClientWrapper(name, client, config);
@@ -729,9 +735,12 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             },
             Handlers = new McpClientHandlers
             {
+                // A form is not a URL step a server can report complete elsewhere: it does not go through the completion wait.
                 ElicitationHandler = (request, ct) => request is null
                     ? ValueTask.FromResult(new ElicitResult { Action = "cancel" })
-                    : waits.RunAsync(request, token => AskAsync(elicitation, name, request, token), ct),
+                    : IsForm(request)
+                        ? AskAsync(elicitation, name, request, ct)
+                        : waits.RunAsync(request, token => AskAsync(elicitation, name, request, token), ct),
                 NotificationHandlers =
                 [
                     new KeyValuePair<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>(
@@ -754,9 +763,10 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         IMcpElicitationHandler elicitation, string name, ElicitRequestParams request, CancellationToken cancellationToken)
     {
         var form = IsForm(request);
-        if (form && !elicitation.SupportsForms)
+        if (form && (!elicitation.SupportsForms || request.RequestedSchema is null))
         {
-            // A server that did not read the capabilities: the handler never opted in, so nobody is asked.
+            // A server that did not read the capabilities (the handler never opted in), or a form with nothing to fill in:
+            // nobody is asked.
             return new ElicitResult { Action = "decline" };
         }
 

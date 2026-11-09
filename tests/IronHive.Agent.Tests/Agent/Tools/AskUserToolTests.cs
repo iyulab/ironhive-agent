@@ -108,6 +108,30 @@ public class AskUserToolTests
     }
 
     [Fact]
+    public async Task An_accept_that_carries_no_content_at_all_reads_as_cancelled_not_as_a_fault()
+    {
+        // With allowOther and an option no field is required, so a bare accept is a valid (empty) submission.
+        var person = new Person("accept", content: null);
+
+        var text = await AskAsync(person,
+            """{"question":"What arrives?","options":[{"id":"inv","label":"Invoices"}],"allowOther":true}""");
+
+        JsonDocument.Parse(text).RootElement.GetProperty("answer").GetString().Should().Be("cancelled");
+    }
+
+    [Fact]
+    public async Task An_option_id_that_is_too_long_is_refused_rather_than_cut_to_an_id_the_model_did_not_send()
+    {
+        var person = new Person("accept", Answer(("choice", "x")));
+        var longId = new string('i', AskUserTool.MaxIdLength + 1);
+
+        var text = await AskAsync(person, $$"""{"question":"Q?","options":[{"id":"{{longId}}","label":"One"}]}""");
+
+        person.Asked.Should().BeEmpty();
+        text.Should().StartWith("Not asked").And.Contain("ids");
+    }
+
+    [Fact]
     public async Task Multiple_uses_a_multi_select_and_returns_an_array()
     {
         var person = new Person("accept", Answer(("choice", BothIds)));
