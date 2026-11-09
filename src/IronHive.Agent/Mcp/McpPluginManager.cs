@@ -1,3 +1,4 @@
+using System.Text.Json;
 ﻿using System.Collections.Concurrent;
 using System.Text;
 using IronHive.Agent.Mode;
@@ -830,7 +831,8 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             return await ask;
         }
 
-        if (call is null || tap.Find(request) is null)
+        // Another call may have started while the person was thinking: the state then cannot be told apart, so keep waiting.
+        if (SoleCallInFlight(name) is null || tap.Find(request) is null)
         {
             return await ask;
         }
@@ -846,6 +848,69 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         }
 
         throw new McpInputDeferredException(request);
+    }
+
+    /// <summary>
+    /// Sends a released call (<see cref="McpToolResult.AwaitingInput"/>) again with the person's answers: the call's own
+    /// arguments and the server's <c>requestState</c>, exactly as kept, plus one answer per request the server asked. The
+    /// server judges the answer and the state; what it replies - a result, or a refusal of a state it no longer honours - is the
+    /// call's result. The call is sent once.
+    /// </summary>
+    /// <param name="awaiting">The entry of the released call; it may come from an earlier session or manager, the plugin only
+    /// has to be connected under the same name.</param>
+    /// <param name="answers">The person's answer to each request, by the key the entry's <see cref="McpAwaitingInput.Requests"/>
+    /// names. A request without an answer is sent as <c>cancel</c>.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    public async Task<McpToolResult> ReissueAsync(
+        McpAwaitingInput awaiting, IReadOnlyDictionary<string, ElicitResult> answers, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(awaiting);
+        ArgumentNullException.ThrowIfNull(answers);
+
+        if (!_clients.TryGetValue(awaiting.PluginName, out var wrapper))
+        {
+            return McpToolResult.Error($"Plugin '{awaiting.PluginName}' is not connected.");
+        }
+
+        var inputResponses = new Dictionary<string, InputResponse>(StringComparer.Ordinal);
+        foreach (var key in awaiting.Requests.Keys)
+        {
+            inputResponses[key] = InputResponse.FromElicitResult(
+                answers.TryGetValue(key, out var answer) ? answer : new ElicitResult { Action = "cancel" });
+        }
+
+        using var inFlight = TrackCall(awaiting.PluginName, new McpCallInfo(awaiting.ToolName, awaiting.CallId));
+        try
+        {
+            var result = await wrapper.Client.CallToolAsync(
+                new CallToolRequestParams
+                {
+                    Name = awaiting.ToolName,
+                    Arguments = awaiting.Arguments?.ToDictionary(
+                        pair => pair.Key, pair => pair.Value is null ? default : JsonSerializer.SerializeToElement(pair.Value, ModelContextProtocol.McpJsonUtilities.DefaultOptions), StringComparer.Ordinal),
+                    RequestState = awaiting.RequestState,
+                    InputResponses = inputResponses,
+                },
+                cancellationToken);
+
+            return new McpToolResult
+            {
+                Content = ExtractTextContent(result),
+                Images = ExtractImages(result),
+                IsError = result.IsError ?? false,
+                StructuredContent = result.StructuredContent
+            };
+        }
+        catch (McpInputDeferredException deferred)
+        {
+            // The server asked again (a state it no longer honours, or a second question): the call waits for the person again.
+            return AwaitingResult(awaiting.PluginName, awaiting.ToolName, awaiting.Arguments, deferred, awaiting.CallId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return McpToolResult.Error($"Tool call failed: {ex.Message}");
+        }
     }
 
     /// <summary>Raised when a call is released to wait for a person's answer (see <see cref="IMcpElicitationHandler.DeferAfter"/>).</summary>

@@ -23,6 +23,8 @@ namespace IronHive.Agent.Mcp;
 /// </remarks>
 internal sealed class McpInputRequiredTap(IClientTransport inner) : IClientTransport
 {
+    private const int MaxCaptured = 64;
+
     private readonly ConcurrentQueue<CapturedInputRequired> _captured = new();
 
     /// <inheritdoc />
@@ -102,6 +104,10 @@ internal sealed class McpInputRequiredTap(IClientTransport inner) : IClientTrans
                     if (message is JsonRpcResponse response && TryRead(response, out var captured))
                     {
                         _captured.Enqueue(captured);
+                        // Only the recent ones can still be asked for: a released call is looked up right after its question.
+                        while (_captured.Count > MaxCaptured && _captured.TryDequeue(out _))
+                        {
+                        }
                     }
 
                     await _out.Writer.WriteAsync(message).ConfigureAwait(false);

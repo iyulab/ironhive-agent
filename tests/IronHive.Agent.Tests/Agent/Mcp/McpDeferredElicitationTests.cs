@@ -1,4 +1,5 @@
 using System.IO.Pipelines;
+using System.Text.Json;
 using AwesomeAssertions;
 using IronHive.Agent.Mcp;
 using ModelContextProtocol.Protocol;
@@ -25,6 +26,7 @@ public sealed class McpDeferredElicitationTests : IAsyncDisposable
     private Task? _server;
     private int _toolCalls;
     private string? _lastArgumentTheServerGot;
+    private string? _lastActionTheServerGot;
 
     /// <summary>A person who has not answered: the wait ends only when the token is cancelled, or when <see cref="Answer"/> is called.</summary>
     private sealed class SlowPerson(TimeSpan? deferAfter) : IMcpElicitationHandler
@@ -63,6 +65,8 @@ public sealed class McpDeferredElicitationTests : IAsyncDisposable
                 _lastArgumentTheServerGot = note;
                 if (context.Params?.RequestState == State)
                 {
+                    _lastActionTheServerGot = context.Params.InputResponses?["approval"]
+                        .Deserialize(InputResponse.ElicitResultJsonTypeInfo)?.Action;
                     return "sent";
                 }
 
@@ -154,6 +158,83 @@ public sealed class McpDeferredElicitationTests : IAsyncDisposable
 
         result.AwaitingInput.Should().BeNull();
         result.Content.Should().Contain("sent");
+    }
+
+    private static ElicitRequestParams ApprovalRequest() => new()
+    {
+        Mode = "url",
+        Message = "This action needs approval before it runs.",
+        ElicitationId = "apr_1",
+        Url = "https://approvals.example.invalid/asks/apr_1",
+    };
+
+    [Fact]
+    public async Task TheAnswer_SendsTheReleasedCallAgain_WithItsExactArgumentsAndTheStoredState()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var released = await manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, Ct);
+        released.AwaitingInput.Should().NotBeNull();
+
+        var result = await manager.ReissueAsync(
+            released.AwaitingInput!, new Dictionary<string, ElicitResult> { ["approval"] = new() { Action = "accept" } }, Ct);
+
+        result.AwaitingInput.Should().BeNull();
+        result.IsError.Should().BeFalse(result.Content);
+        result.Content.Should().Contain("sent");
+        _toolCalls.Should().Be(2, "once released, once sent again with the answer - never retried in between");
+        _lastArgumentTheServerGot.Should().Be("rent", "the call is not re-planned: the arguments are the stored ones");
+        _lastActionTheServerGot.Should().Be("accept", "the person's answer reached the server as the answer to its request");
+    }
+
+    [Fact]
+    public async Task AnEntryThatNoManagerHasSeen_CanBeSentAgain_AsAfterARestart()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var entry = new McpAwaitingInput(
+            "bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, State,
+            new Dictionary<string, ElicitRequestParams> { ["approval"] = ApprovalRequest() });
+
+        var result = await manager.ReissueAsync(
+            entry, new Dictionary<string, ElicitResult> { ["approval"] = new() { Action = "decline" } }, Ct);
+
+        result.Content.Should().Contain("sent", "the server judges the answer; this one only takes the state and the arguments");
+        _lastActionTheServerGot.Should().Be("decline");
+    }
+
+    [Fact]
+    public async Task AStateTheServerNoLongerHonours_IsItsVerdict_AndTheCallWaitsForThePersonAgain()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var stale = new McpAwaitingInput(
+            "bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, "expired-state",
+            new Dictionary<string, ElicitRequestParams> { ["approval"] = ApprovalRequest() });
+
+        var result = await manager.ReissueAsync(
+            stale, new Dictionary<string, ElicitResult> { ["approval"] = new() { Action = "accept" } }, Ct);
+
+        result.AwaitingInput.Should().NotBeNull("the server asked again with a fresh state; nobody answered yet");
+        result.AwaitingInput!.RequestState.Should().Be(State, "the new entry carries the server's new state, not the stale one");
+    }
+
+    [Fact]
+    public async Task TwoCallsInFlight_AreNotReleased_BecauseTheirStateCouldBePutOnTheWrongCall()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(150));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var first = manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "a" }, Ct);
+        var second = manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "b" }, Ct);
+
+        await WaitUntil(() => person.Asked == 2);
+        await Task.Delay(500, Ct);
+        first.IsCompleted.Should().BeFalse("two identical questions are in flight: neither call can be named, so neither is released");
+        second.IsCompleted.Should().BeFalse();
+        person.Answer("accept");
+        var results = await Task.WhenAll(first, second);
+
+        results.Should().OnlyContain(r => r.AwaitingInput == null && r.Content!.Contains("sent"));
     }
 
     private static async Task WaitUntil(Func<bool> condition)
