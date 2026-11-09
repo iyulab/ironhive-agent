@@ -22,11 +22,25 @@ namespace IronHive.Agent.Mcp;
 /// </para>
 /// <para>
 /// Without one, the server's request has nobody to answer it and the tool call fails, as before. Only URL mode is
-/// advertised: a form a server would have the agent fill in is not collected.
+/// advertised unless the handler says it can show a form (<see cref="SupportsForms"/>): then a server may also ask for a few
+/// non-sensitive values with a flat schema (<see cref="ElicitRequestParams.RequestedSchema"/>), and the handler returns them as
+/// <see cref="ElicitResult.Content"/> of an <c>accept</c> - including the defaults the schema names, which the handler fills
+/// in when it shows the form. A handler that does not opt in is never asked a form, and a server that sends one anyway reads
+/// <c>decline</c>. Secrets (passwords, keys, tokens, payment details) are not collected in a form; a server asks for them in
+/// URL mode.
 /// </para>
 /// </remarks>
 public interface IMcpElicitationHandler
 {
+    /// <summary>
+    /// Whether the handler can show a form-mode request to a person (and let them review and change the answer before it is
+    /// sent). When true the plugin manager advertises form mode next to URL mode and routes form requests here; the answer's
+    /// content is checked against the request's schema (<see cref="ElicitationFormContent.Validate"/>) and an <c>accept</c> that
+    /// fails the check reaches the server as <c>cancel</c>. The default is false: a handler written for URL mode only is
+    /// unchanged.
+    /// </summary>
+    bool SupportsForms => false;
+
     /// <summary>Puts a server's elicitation request in front of a person and returns their answer.</summary>
     /// <param name="pluginName">The plugin (server) asking.</param>
     /// <param name="request">The request: <see cref="ElicitRequestParams.Mode"/> <c>url</c>, its message, URL and id.</param>

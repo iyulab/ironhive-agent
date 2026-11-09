@@ -719,12 +719,19 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         var waits = new ElicitationWaits();
         return new McpClientOptions
         {
-            Capabilities = new ClientCapabilities { Elicitation = new ElicitationCapability { Url = new UrlElicitationCapability() } },
+            Capabilities = new ClientCapabilities
+            {
+                Elicitation = new ElicitationCapability
+                {
+                    Url = new UrlElicitationCapability(),
+                    Form = elicitation.SupportsForms ? new FormElicitationCapability() : null,
+                }
+            },
             Handlers = new McpClientHandlers
             {
                 ElicitationHandler = (request, ct) => request is null
                     ? ValueTask.FromResult(new ElicitResult { Action = "cancel" })
-                    : waits.RunAsync(request, token => elicitation.ElicitAsync(name, SoleCallInFlight(name), request, token), ct),
+                    : waits.RunAsync(request, token => AskAsync(elicitation, name, request, token), ct),
                 NotificationHandlers =
                 [
                     new KeyValuePair<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>(
@@ -737,6 +744,38 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                 ]
             }
         };
+    }
+
+    // A request is a form unless it names URL mode or carries a URL (the mode defaults to form when omitted).
+    private static bool IsForm(ElicitRequestParams request) =>
+        !string.Equals(request.Mode, "url", StringComparison.Ordinal) && request.Url is null;
+
+    private async ValueTask<ElicitResult> AskAsync(
+        IMcpElicitationHandler elicitation, string name, ElicitRequestParams request, CancellationToken cancellationToken)
+    {
+        var form = IsForm(request);
+        if (form && !elicitation.SupportsForms)
+        {
+            // A server that did not read the capabilities: the handler never opted in, so nobody is asked.
+            return new ElicitResult { Action = "decline" };
+        }
+
+        var result = await elicitation.ElicitAsync(name, SoleCallInFlight(name), request, cancellationToken);
+        if (!form || result.Action != "accept")
+        {
+            return result;
+        }
+
+        // The handler is the last place a wrong value can come from; an answer that breaks the schema is not forwarded as one.
+        if (ElicitationFormContent.Validate(request, result.Content) is { } problem)
+        {
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+            _logger?.LogWarning("The answer to a form request from plugin '{PluginName}' does not satisfy its schema ({Problem}) - the server reads cancel", name, problem);
+#pragma warning restore CA1848
+            return new ElicitResult { Action = "cancel" };
+        }
+
+        return result;
     }
 
     private static IClientTransport CreateTransport(string name, McpPluginConfig config)
