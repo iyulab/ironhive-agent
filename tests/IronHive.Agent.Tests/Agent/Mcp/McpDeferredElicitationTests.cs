@@ -1,6 +1,8 @@
 using System.IO.Pipelines;
 using System.Text.Json;
 using AwesomeAssertions;
+using IronHive.Agent.Mode;
+using Microsoft.Extensions.AI;
 using IronHive.Agent.Mcp;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -53,6 +55,75 @@ public sealed class McpDeferredElicitationTests : IAsyncDisposable
                 TokenWasCancelled = true;
                 throw;
             }
+        }
+    }
+
+    /// <summary>A person who answers in the last moment: honouring the cancelled token, they hand in an accept instead of giving up.</summary>
+    private sealed class LastMomentPerson(TimeSpan deferAfter) : IMcpElicitationHandler
+    {
+        public TimeSpan? DeferAfter { get; } = deferAfter;
+
+        public async ValueTask<ElicitResult> ElicitAsync(string pluginName, ElicitRequestParams request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            return new ElicitResult { Action = "accept" };
+        }
+    }
+
+    /// <summary>A handler that ignores its token: the wait ends only when <see cref="Answer"/> is called.</summary>
+    private sealed class DeafPerson(TimeSpan deferAfter) : IMcpElicitationHandler
+    {
+        private readonly TaskCompletionSource<ElicitResult> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TimeSpan? DeferAfter { get; } = deferAfter;
+
+        public void Answer() => _answer.TrySetResult(new ElicitResult { Action = "accept" });
+
+        public ValueTask<ElicitResult> ElicitAsync(string pluginName, ElicitRequestParams request, CancellationToken cancellationToken) =>
+            new(_answer.Task);
+    }
+
+    private sealed class CountingGuard : IMcpToolCallGuard
+    {
+        public int Calls;
+        public int Results;
+
+        public ValueTask<McpToolCallVerdict> CheckCallAsync(McpToolCallInspection call, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Calls);
+            return ValueTask.FromResult(McpToolCallVerdict.Allow());
+        }
+
+        public ValueTask<ToolResultVerdict> CheckResultAsync(McpToolCallInspection call, string result, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Results);
+            return ValueTask.FromResult(ToolResultVerdict.Allow());
+        }
+    }
+
+    private sealed class OneCallModel(string callId, string toolName, IDictionary<string, object?> arguments) : IChatClient
+    {
+        private int _turn;
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_turn++ == 0
+                ? new ChatResponse(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, toolName, arguments)]))
+                : new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
         }
     }
 
@@ -121,7 +192,7 @@ public sealed class McpDeferredElicitationTests : IAsyncDisposable
         awaiting.RequestState.Should().Be(State);
         awaiting.Requests.Should().ContainKey("approval").WhoseValue.ElicitationId.Should().Be("apr_1");
         result.Content.Should().Contain("awaiting_input");
-        raised.Should().BeEquivalentTo(awaiting, "the host that listens is handed the same entry");
+        raised.Should().BeSameAs(awaiting, "the host that listens is handed the entry the result carries");
         person.TokenWasCancelled.Should().BeTrue("the wait on the question was ended, so it is no longer pending in the handler");
         _toolCalls.Should().Be(1, "the call was released, not retried with an answer nobody gave");
         _lastArgumentTheServerGot.Should().Be("rent");
@@ -235,6 +306,132 @@ public sealed class McpDeferredElicitationTests : IAsyncDisposable
         var results = await Task.WhenAll(first, second);
 
         results.Should().OnlyContain(r => r.AwaitingInput == null && r.Content!.Contains("sent"));
+    }
+
+    [Fact]
+    public async Task ACallerWhoCancels_IsNotTakenForADeadline()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var call = manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, cancel.Token);
+
+        await WaitUntil(() => person.Asked == 1);
+        await cancel.CancelAsync();
+
+        var act = async () => await call;
+        await act.Should().ThrowAsync<OperationCanceledException>("the caller cancelled: that is not a call waiting for a person");
+    }
+
+    [Fact]
+    public async Task AnAnswerInTheLastMoment_CompletesTheCall_InsteadOfBeingThrownAway()
+    {
+        await using var manager = await Connect(new McpPluginManager(new LastMomentPerson(TimeSpan.FromMilliseconds(100))));
+
+        var result = await manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, Ct);
+
+        result.AwaitingInput.Should().BeNull("the handler answered when its wait was ended: that answer is the answer");
+        result.Content.Should().Contain("sent");
+    }
+
+    [Fact]
+    public async Task AHandlerThatIgnoresItsToken_DoesNotHoldTheCallForever()
+    {
+        var person = new DeafPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+
+        var result = await manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, Ct);
+
+        result.AwaitingInput.Should().NotBeNull("after a short grace the call is released although the handler never returned");
+        person.Answer();
+    }
+
+    [Fact]
+    public async Task ACallThatStartsWhilePersonThinks_KeepsTheWait()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(400));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var first = manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "a" }, Ct);
+        await WaitUntil(() => person.Asked == 1);
+        var second = manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "b" }, Ct);
+
+        await WaitUntil(() => person.Asked == 2);
+        await Task.Delay(700, Ct);
+        first.IsCompleted.Should().BeFalse("a second call started before the first one's deadline: its state could land on the wrong call");
+        person.Answer("accept");
+        var results = await Task.WhenAll(first, second);
+
+        results.Should().OnlyContain(r => r.AwaitingInput == null);
+    }
+
+    [Fact]
+    public async Task TheGuard_ChecksTheReleasedCallAndItsReissue_AndTheInterfaceReachesBoth()
+    {
+        var guard = new CountingGuard();
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person, guard: guard));
+        IMcpPluginManager iface = manager;
+        var raised = new List<McpAwaitingInput>();
+        iface.CallAwaitingInput += (_, e) => raised.Add(e.Awaiting);
+
+        var released = await iface.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, Ct);
+        var result = await iface.ReissueAsync(
+            released.AwaitingInput!, new Dictionary<string, ElicitResult> { ["approval"] = new() { Action = "accept" } }, Ct);
+
+        raised.Should().ContainSingle().Which.Should().BeSameAs(released.AwaitingInput);
+        result.Content.Should().Contain("sent");
+        guard.Calls.Should().Be(2, "the request is checked before the call and before its re-issue");
+        guard.Results.Should().Be(1, "the released call had no result to check; the re-issue's result is checked");
+    }
+
+    [Fact]
+    public async Task ANullArgument_SurvivesTheReissue()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var entry = new McpAwaitingInput(
+            "bank", "send_payment", new Dictionary<string, object?> { ["note"] = null }, State,
+            new Dictionary<string, ElicitRequestParams> { ["approval"] = ApprovalRequest() });
+
+        var result = await manager.ReissueAsync(
+            entry, new Dictionary<string, ElicitResult> { ["approval"] = new() { Action = "accept" } }, Ct);
+
+        result.IsError.Should().BeFalse(result.Content);
+        result.Content.Should().Contain("sent");
+        _lastArgumentTheServerGot.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TheModelsOwnCall_ReadsAwaitingInput_AndTheHostGetsTheEntryWithTheCallId()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        var raised = new List<McpAwaitingInput>();
+        manager.CallAwaitingInput += (_, e) => raised.Add(e.Awaiting);
+        var listed = (await manager.GetToolsAsync(Ct)).OfType<AIFunction>().Single(t => t.Name == "send_payment");
+        using var chat = new FunctionInvokingChatClient(new OneCallModel("call_42", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }));
+
+        var response = await chat.GetResponseAsync("pay it", new ChatOptions { Tools = [listed] }, Ct);
+
+        var entry = raised.Should().ContainSingle().Subject;
+        entry.CallId.Should().Be("call_42");
+        entry.ToolName.Should().Be("send_payment");
+        entry.Arguments.Should().ContainKey("note");
+        entry.RequestState.Should().Be(State);
+        response.Messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single().Result!.ToString()
+            .Should().Contain("awaiting_input", "the model reads that the call waits for the person");
+    }
+
+    [Fact]
+    public async Task ASubscriberThatThrows_DoesNotLoseTheEntry()
+    {
+        var person = new SlowPerson(TimeSpan.FromMilliseconds(100));
+        await using var manager = await Connect(new McpPluginManager(person));
+        manager.CallAwaitingInput += (_, _) => throw new InvalidOperationException("subscriber fault");
+
+        var result = await manager.CallToolAsync("bank", "send_payment", new Dictionary<string, object?> { ["note"] = "rent" }, Ct);
+
+        result.AwaitingInput.Should().NotBeNull("the entry is in the result whatever a listener does");
     }
 
     private static async Task WaitUntil(Func<bool> condition)

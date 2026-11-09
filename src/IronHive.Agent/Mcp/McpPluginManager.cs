@@ -426,9 +426,26 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             ? new Dictionary<string, object?>(arguments)
             : null;
 
+        return await DispatchAsync(
+            pluginName, toolName, args, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId,
+            () => wrapper.Client.CallToolAsync(toolName, args, progress: null, cancellationToken: cancellationToken).AsTask(),
+            cancellationToken);
+    }
+
+    // One path for a call and for the re-issue of a released one: the guard checks the request before it is sent and the result
+    // before it is returned, and a call released to wait for a person ends as awaiting.
+    private async Task<McpToolResult> DispatchAsync(
+        string pluginName,
+        string toolName,
+        IReadOnlyDictionary<string, object?>? args,
+        string? callId,
+        Func<Task<CallToolResult>> send,
+        CancellationToken cancellationToken)
+    {
+        McpToolCallInspection? inspection = null;
         if (_guard != null)
         {
-            var inspection = new McpToolCallInspection(pluginName, toolName, args);
+            inspection = new McpToolCallInspection(pluginName, toolName, args);
 
             McpToolCallVerdict requestVerdict;
             try
@@ -447,21 +464,19 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             {
                 return McpToolResult.Error($"Tool call blocked by guardrail: {requestVerdict.Reason ?? "policy violation"}");
             }
+        }
 
-            try
+        try
+        {
+            var result = await send();
+            var content = ExtractTextContent(result);
+            string? replacement = null;
+            if (inspection is not null)
             {
-                var result = await wrapper.Client.CallToolAsync(
-                    toolName,
-                    args,
-                    progress: null,
-                    cancellationToken: cancellationToken);
-
-                var content = ExtractTextContent(result);
-
                 ToolResultVerdict resultVerdict;
                 try
                 {
-                    resultVerdict = await _guard.CheckResultAsync(inspection, content, cancellationToken);
+                    resultVerdict = await _guard!.CheckResultAsync(inspection, content, cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
@@ -476,44 +491,21 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                     return McpToolResult.Error($"Tool result blocked by guardrail: {resultVerdict.Reason ?? "policy violation"}");
                 }
 
-                return new McpToolResult
-                {
-                    Content = resultVerdict.Replacement ?? content,
-                    // A replacement stands for the whole result; the images it was judged with do not survive it.
-                    Images = resultVerdict.Replacement is null ? ExtractImages(result) : [],
-                    IsError = result.IsError ?? false,
-                    StructuredContent = result.StructuredContent
-                };
+                replacement = resultVerdict.Replacement;
             }
-            catch (McpInputDeferredException deferred)
-            {
-                return AwaitingResult(pluginName, toolName, args, deferred, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-            {
-                return McpToolResult.Error($"Tool call failed: {ex.Message}");
-            }
-        }
-
-        try
-        {
-            var result = await wrapper.Client.CallToolAsync(
-                toolName,
-                args,
-                progress: null,
-                cancellationToken: cancellationToken);
 
             return new McpToolResult
             {
-                Content = ExtractTextContent(result),
-                Images = ExtractImages(result),
+                Content = replacement ?? content,
+                // A replacement stands for the whole result; the images it was judged with do not survive it.
+                Images = replacement is null ? ExtractImages(result) : [],
                 IsError = result.IsError ?? false,
                 StructuredContent = result.StructuredContent
             };
         }
         catch (McpInputDeferredException deferred)
         {
-            return AwaitingResult(pluginName, toolName, args, deferred, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId);
+            return AwaitingResult(pluginName, toolName, args, deferred, callId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -657,7 +649,8 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         var invocation = FunctionInvokingChatClient.CurrentContext;
         return TrackCall(pluginName, new McpCallInfo(toolName, invocation?.CallContent?.CallId)
         {
-            ModelProposal = await ReadProposalAsync(invocation, cancellationToken)
+            ModelProposal = await ReadProposalAsync(invocation, cancellationToken),
+            TapMark = TapMark(pluginName)
         });
     }
 
@@ -690,6 +683,9 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
 
     private readonly Lock _inFlightLock = new();
     private readonly Dictionary<string, List<McpCallInfo>> _inFlight = new(StringComparer.Ordinal);
+
+    // Where the plugin's tap stood when a call started: only results captured after that can be this call's question.
+    private long TapMark(string pluginName) => _clients.TryGetValue(pluginName, out var wrapper) ? wrapper.Tap?.Sequence ?? 0 : 0;
 
     private CallScope TrackCall(string pluginName, McpCallInfo call)
     {
@@ -808,10 +804,16 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         return result;
     }
 
-    // Asks the handler; with DeferAfter, a request that came with a tools/call and is the one call the plugin is running is
-    // released when the wait gets longer than that - the SDK's retry loop ends with McpInputDeferredException and the caller of
-    // the call builds the awaiting entry. A request no call waits on (server-initiated), or one that cannot be told from other
-    // calls' (several in flight: the state could be put on the wrong call), keeps waiting as it always did.
+    // The longest DeferAfter taken at face value (Task.Delay cannot wait longer than about 49 days), and how long a handler that
+    // ignored its cancelled token gets to hand in an answer before the call is released anyway.
+    private static readonly TimeSpan MaxDeferAfter = TimeSpan.FromDays(30);
+    private static readonly TimeSpan ReleaseGrace = TimeSpan.FromSeconds(2);
+
+    // Asks the handler; with DeferAfter, a request that came with a tools/call and is the one call the plugin runs is released
+    // when the wait gets longer than that - the SDK's retry loop ends with McpInputDeferredException and the caller of the
+    // call builds the awaiting entry. A request no call waits on (server-initiated: no result of this call's own asked it), one
+    // that cannot be told from other calls' (several in flight: the state could be put on the wrong call), or one the entry
+    // cannot represent (not an elicitation) keeps waiting as it always did.
     private async ValueTask<ElicitResult> AskOrDeferAsync(
         IMcpElicitationHandler elicitation, string name, ElicitRequestParams request, McpInputRequiredTap? tap, CancellationToken cancellationToken)
     {
@@ -823,44 +825,37 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
 
         using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var ask = elicitation.ElicitAsync(name, call, request, wait.Token).AsTask();
-        using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var timeout = Task.Delay(after, _time, timer.Token);
-        if (await Task.WhenAny(ask, timeout) == ask)
+        // Not linked to the caller's token: a cancelled caller is not a deadline.
+        using var timer = new CancellationTokenSource();
+        var timeout = Task.Delay(after > MaxDeferAfter ? MaxDeferAfter : after, _time, timer.Token);
+        var first = await Task.WhenAny(ask, timeout);
+        if (first == ask || cancellationToken.IsCancellationRequested)
         {
             await timer.CancelAsync();
             return await ask;
         }
 
         // Another call may have started while the person was thinking: the state then cannot be told apart, so keep waiting.
-        if (SoleCallInFlight(name) is null || tap.Find(request) is null)
+        if (SoleCallInFlight(name) is not { } sole
+            || tap.Find(request, sole.TapMark) is not { } captured
+            || captured.InputRequests.Values.Any(input => input.ElicitationParams is null))
         {
             return await ask;
         }
 
         await wait.CancelAsync();
-        try
+        // An answer that comes in the last moment wins; a handler that ignores its token gets a short grace, then is let go.
+        var finished = await Task.WhenAny(ask, Task.Delay(ReleaseGrace, _time, CancellationToken.None));
+        if (finished == ask && ask.IsCompletedSuccessfully)
         {
-            await ask;
-        }
-        catch (OperationCanceledException)
-        {
-            // The handler honoured the token: the question is no longer pending there.
+            return ask.Result;
         }
 
-        throw new McpInputDeferredException(request);
+        _ = ask.ContinueWith(static task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        throw new McpInputDeferredException(request, captured);
     }
 
-    /// <summary>
-    /// Sends a released call (<see cref="McpToolResult.AwaitingInput"/>) again with the person's answers: the call's own
-    /// arguments and the server's <c>requestState</c>, exactly as kept, plus one answer per request the server asked. The
-    /// server judges the answer and the state; what it replies - a result, or a refusal of a state it no longer honours - is the
-    /// call's result. The call is sent once.
-    /// </summary>
-    /// <param name="awaiting">The entry of the released call; it may come from an earlier session or manager, the plugin only
-    /// has to be connected under the same name.</param>
-    /// <param name="answers">The person's answer to each request, by the key the entry's <see cref="McpAwaitingInput.Requests"/>
-    /// names. A request without an answer is sent as <c>cancel</c>.</param>
-    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <inheritdoc />
     public async Task<McpToolResult> ReissueAsync(
         McpAwaitingInput awaiting, IReadOnlyDictionary<string, ElicitResult> answers, CancellationToken cancellationToken = default)
     {
@@ -874,60 +869,65 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         }
 
         var inputResponses = new Dictionary<string, InputResponse>(StringComparer.Ordinal);
-        foreach (var key in awaiting.Requests.Keys)
+        foreach (var (key, asked) in awaiting.Requests)
         {
-            inputResponses[key] = InputResponse.FromElicitResult(
-                answers.TryGetValue(key, out var answer) ? answer : new ElicitResult { Action = "cancel" });
+            var answer = answers.TryGetValue(key, out var given) ? given : new ElicitResult { Action = "cancel" };
+            if (answer.Action == "accept" && ElicitationFormContent.Validate(asked, answer.Content) is { } problem)
+            {
+                // The same rule as for a live answer: one that breaks the request's schema is not forwarded as an answer.
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+                _logger?.LogWarning("The answer to a re-issued request from plugin '{PluginName}' does not satisfy its schema ({Problem}) - the server reads cancel", awaiting.PluginName, problem);
+#pragma warning restore CA1848
+                answer = new ElicitResult { Action = "cancel" };
+            }
+
+            inputResponses[key] = InputResponse.FromElicitResult(answer);
         }
 
-        using var inFlight = TrackCall(awaiting.PluginName, new McpCallInfo(awaiting.ToolName, awaiting.CallId));
-        try
-        {
-            var result = await wrapper.Client.CallToolAsync(
+        var arguments = awaiting.Arguments?.ToDictionary(
+            pair => pair.Key,
+            pair => JsonSerializer.SerializeToElement(pair.Value, ModelContextProtocol.McpJsonUtilities.DefaultOptions),
+            StringComparer.Ordinal);
+        using var inFlight = TrackCall(awaiting.PluginName, new McpCallInfo(awaiting.ToolName, awaiting.CallId) { TapMark = TapMark(awaiting.PluginName) });
+        return await DispatchAsync(
+            awaiting.PluginName, awaiting.ToolName, awaiting.Arguments, awaiting.CallId,
+            () => wrapper.Client.CallToolAsync(
                 new CallToolRequestParams
                 {
                     Name = awaiting.ToolName,
-                    Arguments = awaiting.Arguments?.ToDictionary(
-                        pair => pair.Key, pair => pair.Value is null ? default : JsonSerializer.SerializeToElement(pair.Value, ModelContextProtocol.McpJsonUtilities.DefaultOptions), StringComparer.Ordinal),
+                    Arguments = arguments,
                     RequestState = awaiting.RequestState,
                     InputResponses = inputResponses,
                 },
-                cancellationToken);
-
-            return new McpToolResult
-            {
-                Content = ExtractTextContent(result),
-                Images = ExtractImages(result),
-                IsError = result.IsError ?? false,
-                StructuredContent = result.StructuredContent
-            };
-        }
-        catch (McpInputDeferredException deferred)
-        {
-            // The server asked again (a state it no longer honours, or a second question): the call waits for the person again.
-            return AwaitingResult(awaiting.PluginName, awaiting.ToolName, awaiting.Arguments, deferred, awaiting.CallId);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-        {
-            return McpToolResult.Error($"Tool call failed: {ex.Message}");
-        }
+                cancellationToken).AsTask(),
+            cancellationToken);
     }
 
     /// <summary>Raised when a call is released to wait for a person's answer (see <see cref="IMcpElicitationHandler.DeferAfter"/>).</summary>
     public event EventHandler<McpAwaitingInputEventArgs>? CallAwaitingInput;
 
-    // The awaiting entry of a released call: its identity from the caller, the server's state from the tap.
+    // The awaiting entry of a released call: its identity from the caller, the server's state from the result that asked.
     private McpToolResult AwaitingResult(
         string pluginName, string toolName, IReadOnlyDictionary<string, object?>? arguments, McpInputDeferredException deferred, string? callId)
     {
-        var captured = _clients.TryGetValue(pluginName, out var wrapper) ? wrapper.Tap?.Find(deferred.Request) : null;
-        var requests = captured is null
-            ? new Dictionary<string, ElicitRequestParams> { ["request"] = deferred.Request }
-            : captured.InputRequests
-                .Where(pair => pair.Value.ElicitationParams is not null)
-                .ToDictionary(pair => pair.Key, pair => pair.Value.ElicitationParams!, StringComparer.Ordinal);
-        var awaiting = new McpAwaitingInput(pluginName, toolName, arguments, captured?.RequestState, requests, callId);
-        CallAwaitingInput?.Invoke(this, new McpAwaitingInputEventArgs(awaiting));
+        var requests = deferred.Captured.InputRequests
+            .Where(pair => pair.Value.ElicitationParams is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.ElicitationParams!, StringComparer.Ordinal);
+        var awaiting = new McpAwaitingInput(
+            pluginName, toolName, arguments is null ? null : new Dictionary<string, object?>(arguments, StringComparer.Ordinal),
+            deferred.Captured.RequestState, requests, callId);
+        try
+        {
+            CallAwaitingInput?.Invoke(this, new McpAwaitingInputEventArgs(awaiting));
+        }
+        catch (Exception ex)
+        {
+            // A subscriber's fault must not lose the entry: the result below still carries it.
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance-critical paths
+            _logger?.LogWarning(ex, "A CallAwaitingInput subscriber threw for '{Plugin}.{Tool}'", pluginName, toolName);
+#pragma warning restore CA1848
+        }
+
         return McpToolResult.Awaiting(awaiting);
     }
 

@@ -132,6 +132,29 @@ public interface IMcpPluginManager : IAsyncDisposable
     /// Event raised when tools list changes on a plugin.
     /// </summary>
     event EventHandler<McpPluginEventArgs>? ToolsChanged;
+
+    /// <summary>
+    /// Raised when a call is released to wait for a person's answer (<see cref="IMcpElicitationHandler.DeferAfter"/>): the entry
+    /// is what <see cref="ReissueAsync"/> needs. A manager that never releases a call does not raise it.
+    /// </summary>
+    event EventHandler<McpAwaitingInputEventArgs>? CallAwaitingInput
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
+    /// Sends a released call again with the person's answers: the stored arguments and the server's <c>requestState</c>, plus one
+    /// answer per request the server asked (<c>cancel</c> for one without an answer). The server judges the answer and the state;
+    /// its reply, or a refusal of a state it no longer honours, is the result; a second question ends as awaiting again. The same
+    /// guard as for <see cref="CallToolAsync"/> applies.
+    /// </summary>
+    /// <param name="awaiting">The entry of the released call, possibly from an earlier session.</param>
+    /// <param name="answers">The answers by the keys of <see cref="McpAwaitingInput.Requests"/>.</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task<McpToolResult> ReissueAsync(
+        McpAwaitingInput awaiting, IReadOnlyDictionary<string, ModelContextProtocol.Protocol.ElicitResult> answers, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("This plugin manager does not release calls to wait for a person.");
 }
 
 /// <summary>
@@ -255,7 +278,9 @@ public record McpToolResult
     /// <summary>
     /// Set when the call did not finish because the server asked a person something and the handler released the call instead
     /// of waiting for the answer (<see cref="IMcpElicitationHandler.DeferAfter"/>): the call is <em>awaiting</em>, not failed.
-    /// Everything needed to send it again once the person has answered is in the entry.
+    /// Everything needed to send it again once the person has answered is in the entry. <see cref="IsError"/> is <c>false</c> and
+    /// <see cref="Content"/> is a placeholder for the model: a host that opts in checks this member <em>before</em> reading
+    /// <see cref="Content"/> as the tool's output.
     /// </summary>
     public McpAwaitingInput? AwaitingInput { get; init; }
 

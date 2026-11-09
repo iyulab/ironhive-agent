@@ -28,10 +28,14 @@ public sealed record McpAwaitingInput(
 /// Thrown from inside the SDK's own retry of an <c>input_required</c> call to end it: the handler stopped waiting for the person.
 /// The SDK passes a handler's exception through unwrapped, so <see cref="McpPluginManager"/> can catch it where the call was made.
 /// </summary>
-internal sealed class McpInputDeferredException(ElicitRequestParams request) : Exception("The call was released to wait for the person's answer.")
+internal sealed class McpInputDeferredException(ElicitRequestParams request, CapturedInputRequired captured)
+    : Exception("The call was released to wait for the person's answer.")
 {
     /// <summary>The request the person was asked.</summary>
     public ElicitRequestParams Request { get; } = request;
+
+    /// <summary>The server's result that asked it, found once when the call was released (so the entry cannot take another's state).</summary>
+    public CapturedInputRequired Captured { get; } = captured;
 }
 
 /// <summary>Event data of <see cref="McpPluginManager.CallAwaitingInput"/>.</summary>

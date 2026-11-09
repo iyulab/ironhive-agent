@@ -47,7 +47,11 @@ public interface IMcpElicitationHandler
     /// (<see cref="McpToolResult.AwaitingInput"/>) with what is needed to send it again, and the turn can go on. The wait on the
     /// question itself is cancelled through the token, so the handler stops showing it as pending - the person can still be
     /// asked later with the entry. <see langword="null"/> (the default) never releases: the call waits as it always did.
-    /// A request the server sent on its own (no call waiting on it) is never released.
+    /// A request the server sent on its own (no call waiting on it) is never released, and neither is any request while the
+    /// plugin runs more than one call (the server's state could be put on the wrong call). The time counts from the moment the
+    /// handler is asked, not from the start of the call. The value is read when the plugin connects (it decides whether the
+    /// manager reads the server's state) and again at each request; a handler that sets it later reconnects the plugin.
+    /// A handler that answers in the last moment still wins: its answer completes the call instead of releasing it.
     /// </summary>
     TimeSpan? DeferAfter => null;
 
@@ -88,4 +92,7 @@ public sealed record McpCallInfo(string ToolName, string? CallId)
     /// what the plugin itself says, and never as a reason to answer <c>accept</c>.
     /// </summary>
     public Mode.ModelAuthoredProposal? ModelProposal { get; init; }
+
+    // Where the plugin's tap stood when the call started (see McpPluginManager): results captured before it are not this call's.
+    internal long TapMark { get; init; }
 }
