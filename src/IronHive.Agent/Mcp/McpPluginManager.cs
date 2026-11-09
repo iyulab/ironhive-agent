@@ -236,9 +236,11 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             throw new ArgumentException($"'{name}' is reserved for questions the model asks the person (AskUserTool.AskerName); name the plugin differently.", nameof(name));
         }
 
-        var client = await McpClient.CreateAsync(transport, ClientOptions(name), cancellationToken: cancellationToken);
+        // A handler that releases waiting calls needs the server's state, which the SDK keeps to itself: read it on the way.
+        var tap = _elicitation?.DeferAfter is { } after && after > TimeSpan.Zero ? new McpInputRequiredTap(transport) : null;
+        var client = await McpClient.CreateAsync(tap ?? transport, ClientOptions(name, tap), cancellationToken: cancellationToken);
 
-        var wrapper = new McpClientWrapper(name, client, config);
+        var wrapper = new McpClientWrapper(name, client, config) { Tap = tap };
         if (!_clients.TryAdd(name, wrapper))
         {
             await client.DisposeAsync();
@@ -482,6 +484,10 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                     StructuredContent = result.StructuredContent
                 };
             }
+            catch (McpInputDeferredException deferred)
+            {
+                return AwaitingResult(pluginName, toolName, args, deferred, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId);
+            }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 return McpToolResult.Error($"Tool call failed: {ex.Message}");
@@ -503,6 +509,10 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                 IsError = result.IsError ?? false,
                 StructuredContent = result.StructuredContent
             };
+        }
+        catch (McpInputDeferredException deferred)
+        {
+            return AwaitingResult(pluginName, toolName, args, deferred, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -664,7 +674,16 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
         {
             using var inFlight = await owner.TrackCurrentCallAsync(pluginName, toolName, cancellationToken);
-            return await base.InvokeCoreAsync(arguments, cancellationToken);
+            try
+            {
+                return await base.InvokeCoreAsync(arguments, cancellationToken);
+            }
+            catch (McpInputDeferredException deferred)
+            {
+                // The model's own call was released: it reads that the call waits for the person, and the host gets the entry.
+                var args = arguments.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                return owner.AwaitingResult(pluginName, toolName, args, deferred, FunctionInvokingChatClient.CurrentContext?.CallContent?.CallId).Content;
+            }
         }
     }
 
@@ -714,7 +733,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
     /// With an <see cref="IMcpElicitationHandler"/>: URL-mode elicitation advertised and routed to it. Without: the SDK's
     /// defaults (no elicitation capability).
     /// </summary>
-    private McpClientOptions? ClientOptions(string name)
+    private McpClientOptions? ClientOptions(string name, McpInputRequiredTap? tap)
     {
         if (_elicitation is not { } elicitation)
         {
@@ -739,8 +758,8 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
                 ElicitationHandler = (request, ct) => request is null
                     ? ValueTask.FromResult(new ElicitResult { Action = "cancel" })
                     : IsForm(request)
-                        ? AskAsync(elicitation, name, request, ct)
-                        : waits.RunAsync(request, token => AskAsync(elicitation, name, request, token), ct),
+                        ? AskAsync(elicitation, name, request, tap, ct)
+                        : waits.RunAsync(request, token => AskAsync(elicitation, name, request, tap, token), ct),
                 NotificationHandlers =
                 [
                     new KeyValuePair<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>(
@@ -760,7 +779,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         !string.Equals(request.Mode, "url", StringComparison.Ordinal) && request.Url is null;
 
     private async ValueTask<ElicitResult> AskAsync(
-        IMcpElicitationHandler elicitation, string name, ElicitRequestParams request, CancellationToken cancellationToken)
+        IMcpElicitationHandler elicitation, string name, ElicitRequestParams request, McpInputRequiredTap? tap, CancellationToken cancellationToken)
     {
         var form = IsForm(request);
         if (form && (!elicitation.SupportsForms || request.RequestedSchema is null))
@@ -770,7 +789,7 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
             return new ElicitResult { Action = "decline" };
         }
 
-        var result = await elicitation.ElicitAsync(name, SoleCallInFlight(name), request, cancellationToken);
+        var result = await AskOrDeferAsync(elicitation, name, request, tap, cancellationToken);
         if (!form || result.Action != "accept")
         {
             return result;
@@ -786,6 +805,65 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
         }
 
         return result;
+    }
+
+    // Asks the handler; with DeferAfter, a request that came with a tools/call and is the one call the plugin is running is
+    // released when the wait gets longer than that - the SDK's retry loop ends with McpInputDeferredException and the caller of
+    // the call builds the awaiting entry. A request no call waits on (server-initiated), or one that cannot be told from other
+    // calls' (several in flight: the state could be put on the wrong call), keeps waiting as it always did.
+    private async ValueTask<ElicitResult> AskOrDeferAsync(
+        IMcpElicitationHandler elicitation, string name, ElicitRequestParams request, McpInputRequiredTap? tap, CancellationToken cancellationToken)
+    {
+        var call = SoleCallInFlight(name);
+        if (tap is null || elicitation.DeferAfter is not { } after || after <= TimeSpan.Zero)
+        {
+            return await elicitation.ElicitAsync(name, call, request, cancellationToken);
+        }
+
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var ask = elicitation.ElicitAsync(name, call, request, wait.Token).AsTask();
+        using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeout = Task.Delay(after, _time, timer.Token);
+        if (await Task.WhenAny(ask, timeout) == ask)
+        {
+            await timer.CancelAsync();
+            return await ask;
+        }
+
+        if (call is null || tap.Find(request) is null)
+        {
+            return await ask;
+        }
+
+        await wait.CancelAsync();
+        try
+        {
+            await ask;
+        }
+        catch (OperationCanceledException)
+        {
+            // The handler honoured the token: the question is no longer pending there.
+        }
+
+        throw new McpInputDeferredException(request);
+    }
+
+    /// <summary>Raised when a call is released to wait for a person's answer (see <see cref="IMcpElicitationHandler.DeferAfter"/>).</summary>
+    public event EventHandler<McpAwaitingInputEventArgs>? CallAwaitingInput;
+
+    // The awaiting entry of a released call: its identity from the caller, the server's state from the tap.
+    private McpToolResult AwaitingResult(
+        string pluginName, string toolName, IReadOnlyDictionary<string, object?>? arguments, McpInputDeferredException deferred, string? callId)
+    {
+        var captured = _clients.TryGetValue(pluginName, out var wrapper) ? wrapper.Tap?.Find(deferred.Request) : null;
+        var requests = captured is null
+            ? new Dictionary<string, ElicitRequestParams> { ["request"] = deferred.Request }
+            : captured.InputRequests
+                .Where(pair => pair.Value.ElicitationParams is not null)
+                .ToDictionary(pair => pair.Key, pair => pair.Value.ElicitationParams!, StringComparer.Ordinal);
+        var awaiting = new McpAwaitingInput(pluginName, toolName, arguments, captured?.RequestState, requests, callId);
+        CallAwaitingInput?.Invoke(this, new McpAwaitingInputEventArgs(awaiting));
+        return McpToolResult.Awaiting(awaiting);
     }
 
     private static IClientTransport CreateTransport(string name, McpPluginConfig config)
@@ -870,6 +948,9 @@ public class McpPluginManager : IMcpPluginManager, IDisposable
 
     private sealed record McpClientWrapper(string Name, McpClient Client, McpPluginConfig Config)
     {
+        // Reads the state of the input_required results a server answers with; set only when the handler releases waiting calls.
+        public McpInputRequiredTap? Tap { get; init; }
+
         // The names this plugin's last listing returned; replaced whole on each listing, read by IsMcpTool.
         public volatile HashSet<string> ToolNames = new(StringComparer.Ordinal);
 

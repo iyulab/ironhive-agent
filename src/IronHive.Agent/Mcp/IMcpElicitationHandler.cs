@@ -41,6 +41,16 @@ public interface IMcpElicitationHandler
     /// </summary>
     bool SupportsForms => false;
 
+    /// <summary>
+    /// How long a tool call may wait for the person before it is released: when the wait on a request that came with a
+    /// <c>tools/call</c> (<c>input_required</c>) is longer than this, the call ends as <em>awaiting</em>
+    /// (<see cref="McpToolResult.AwaitingInput"/>) with what is needed to send it again, and the turn can go on. The wait on the
+    /// question itself is cancelled through the token, so the handler stops showing it as pending - the person can still be
+    /// asked later with the entry. <see langword="null"/> (the default) never releases: the call waits as it always did.
+    /// A request the server sent on its own (no call waiting on it) is never released.
+    /// </summary>
+    TimeSpan? DeferAfter => null;
+
     /// <summary>Puts a server's elicitation request in front of a person and returns their answer.</summary>
     /// <param name="pluginName">The plugin (server) asking.</param>
     /// <param name="request">The request: <see cref="ElicitRequestParams.Mode"/> <c>url</c>, its message, URL and id.</param>

@@ -253,6 +253,23 @@ public record McpToolResult
     public object? StructuredContent { get; init; }
 
     /// <summary>
+    /// Set when the call did not finish because the server asked a person something and the handler released the call instead
+    /// of waiting for the answer (<see cref="IMcpElicitationHandler.DeferAfter"/>): the call is <em>awaiting</em>, not failed.
+    /// Everything needed to send it again once the person has answered is in the entry.
+    /// </summary>
+    public McpAwaitingInput? AwaitingInput { get; init; }
+
+    /// <summary>
+    /// Creates the result of a call that is waiting for a person's answer.
+    /// </summary>
+    public static McpToolResult Awaiting(McpAwaitingInput awaiting) => new()
+    {
+        Content = $"The call to '{awaiting.ToolName}' is waiting for the person's answer and has not run yet (awaiting_input).",
+        IsError = false,
+        AwaitingInput = awaiting
+    };
+
+    /// <summary>
     /// Creates a successful result.
     /// </summary>
     public static McpToolResult Success(string content, object? structuredContent = null) => new()
