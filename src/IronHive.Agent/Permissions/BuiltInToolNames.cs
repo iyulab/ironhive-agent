@@ -27,6 +27,7 @@ internal static class BuiltInToolNames
         "advisor",
         "retrieve_tool_result",
         "propose_for_approval",
+        "ask_user",
     ];
 
     /// <summary>

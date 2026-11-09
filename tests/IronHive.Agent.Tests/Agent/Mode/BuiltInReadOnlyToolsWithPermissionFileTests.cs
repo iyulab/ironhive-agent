@@ -53,6 +53,7 @@ public class BuiltInReadOnlyToolsWithPermissionFileTests
     [InlineData("propose_for_approval")]
     [InlineData("advisor")]
     [InlineData("retrieve_tool_result")]
+    [InlineData("ask_user")]
     public async Task A_file_that_lists_only_mcp_tools_still_lets_the_built_in_read_only_tools_through_without_asking(string tool)
     {
         var approver = new Approver();
