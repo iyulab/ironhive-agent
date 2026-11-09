@@ -825,6 +825,10 @@ and always null in a loop without the tool). Read it as the model's *claim*:
   same step as each WriteFile call, also call propose_for_approval with tool set to WriteFile, the alternatives you weighed and
   your recommendation"), and for none when they only said approval *may* be needed, or said nothing. The order of the two calls
   within the step does not matter - a model that writes first and proposes after is read the same.
+- **With a permission file, `propose_for_approval` needs no rule.** A file that writes rules for other sections only (say `mcp_tools`)
+  does not make the engine ask a person about the proposal tool - nor about `advisor` or `retrieve_tool_result`, the other built-in
+  tools that touch no path: with no `tools` rule about them they are allowed where the default action would only ask. A `tools` rule
+  on the name (`allow`, `ask` or `deny`) and `default_action: deny` still win.
 - **When the approval is an MCP server's question, not the engine's `Ask`** (the tool is allowed by the policy and the server answers
   the call with an `input_required` URL-mode elicitation, e.g. an external approval gate): the same proposal is on
   `McpCallInfo.ModelProposal`, the call-aware argument of `IMcpElicitationHandler.ElicitAsync(pluginName, call, request, ct)`.

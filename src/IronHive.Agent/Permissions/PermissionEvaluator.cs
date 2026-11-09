@@ -129,7 +129,25 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// <inheritdoc />
     public PermissionResult EvaluateTool(string toolName)
     {
-        return EvaluateRules(_config.Tools, toolName);
+        var result = EvaluateRules(_config.Tools, toolName);
+
+        // A permission file writes its own Tools rules and cannot know the built-in tools that touch no path and only return
+        // or carry text (propose_for_approval, advisor, retrieve_tool_result): with no rule about them the default action
+        // decided, and an Ask default made the approval-proposal tool wait for its own approval. So such a tool that no rule
+        // speaks about is allowed when the default would only ask - a rule (allow, ask or deny) wins, and so does a default of
+        // Deny, as for a trusted read-only MCP tool. The tools that look at files are not lifted: their path rules decide.
+        if (result.MatchedRule is null
+            && result.Action == PermissionAction.Ask
+            && BuiltInToolNames.PathFreeReadOnlyPatterns.Any(pattern => MatchesPattern(toolName, pattern)))
+        {
+            return new PermissionResult
+            {
+                Action = PermissionAction.Allow,
+                Reason = "Built-in read-only tool"
+            };
+        }
+
+        return result;
     }
 
     /// <inheritdoc />
