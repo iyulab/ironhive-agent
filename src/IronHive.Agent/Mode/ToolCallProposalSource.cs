@@ -55,8 +55,11 @@ public sealed class ToolCallProposalSource : IApprovalProposalSource
         var proposals = new List<ModelAuthoredProposal>();
         foreach (var call in calls.Where(c => string.Equals(c.Name, ApprovalProposalTool.ToolName, StringComparison.OrdinalIgnoreCase)))
         {
+            // The model only ever saw an aliased name for a tool whose own name a provider refuses (ToolNameAliasChatClient),
+            // so a proposal for it names the alias; the gate above that step knows the real name.
             if (TryRead(call, out var tool, out var proposal)
-                && string.Equals(tool, gated, StringComparison.OrdinalIgnoreCase))
+                && (string.Equals(tool, gated, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(tool, Invocation.ToolNameAliasChatClient.AliasFor(gated), StringComparison.OrdinalIgnoreCase)))
             {
                 proposals.Add(proposal!);
             }

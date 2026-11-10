@@ -72,7 +72,9 @@ public class ChatClientFrameworkAdapter : ILLMFrameworkAdapter
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var chatClient = _clientFactory(config.Model);
+        // This adapter runs its own tool loop on the client it is given: a tool whose name the provider refuses (an MCP
+        // server's dotted name) is offered under an alias there, and the call comes back under the real name.
+        var chatClient = new ToolNameAliasChatClient(_clientFactory(config.Model));
         var agent = new ChatClientAgent(config, chatClient);
 
         return Task.FromResult<IAgent>(agent);

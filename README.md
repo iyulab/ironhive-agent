@@ -371,6 +371,17 @@ var loop = new AgentLoop(chatClient, new AgentOptions { Tools = tools });
   after an in-process tool returns (inside every invocation step), and, when a loop continues, each result a host
   supplied for a tool it runs itself (`context.IsHostResult`; see [Tools the host runs](#tools-the-host-runs)). A
   registered `IToolResultGuard` is applied as one of them.
+- **A tool whose name the provider refuses** (an MCP server's `message.send` or `fs/read`; OpenAI, its compatible endpoints and
+  Anthropic accept `[a-zA-Z0-9_-]{1,64}` only) makes every model request that offers it fail with HTTP 400. Add
+  `.UseToolNameAlias()` right after `.UseToolInvocationPipeline(…)` and above `.UseTextToolCallRecovery()` (opt-in,
+  `ToolNameAliasChatClient`): a name that already matches passes through untouched (the request is forwarded as the same
+  objects); any other is offered under a stable alias (`message.send` → `message_send_` + ten hex characters of a hash of the
+  name, `ToolNameAliasChatClient.AliasFor`) in the tool list, in a required-tool choice and in the earlier calls of the
+  history, and the model's call comes back under the real name (a streamed call's first argument fragment too), so the loop,
+  the approval gate, `propose_for_approval` pairing and a host's events see the real name. What sits below the step
+  (per-round compaction, token budget, retry, telemetry) sees the alias. Two tools of one request that would share an alias
+  fail the request with `InvalidOperationException` naming both, before anything is sent. `DefaultPlanExecutor` and the
+  Ironbees adapter's own tool loop apply it themselves.
 - **A call the model wrote as text** (open models behind an OpenAI-compatible server whose parser missed it: Hermes /
   Qwen `<tool_call>{"name": …, "arguments": …}</tool_call>`, Qwen3-Coder `<function=Name><parameter=x>…`) ends the turn as
   a «finished» answer unless something turns it back into a call. Add `.UseTextToolCallRecovery()` right after

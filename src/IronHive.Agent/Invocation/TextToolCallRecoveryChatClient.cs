@@ -43,7 +43,8 @@ namespace IronHive.Agent.Invocation;
 /// held to the end of the response, then sent as the recovered calls or, if no call is recovered, as it was.
 /// </para>
 /// <para>
-/// <b>Placement:</b> directly inside the function-invoking client, so the calls it produces are the ones that client runs:
+/// <b>Placement:</b> inside the function-invoking client (below <see cref="ToolNameAliasChatClient"/>, when that is used, so it reads
+/// the names the model was shown), so the calls it produces are the ones that client runs:
 /// <c>builder.UseToolInvocationPipeline(…).UseTextToolCallRecovery()</c>.
 /// </para>
 /// <para>

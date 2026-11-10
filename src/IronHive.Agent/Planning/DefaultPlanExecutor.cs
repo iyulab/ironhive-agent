@@ -32,6 +32,7 @@ public class DefaultPlanExecutor : IPlanExecutor, IDisposable
         {
             _chatClient = new ChatClientBuilder(chatClient)
                 .UseToolInvocationPipeline(toolInvocationPipeline ?? ToolInvocationPipeline.CreateDefault())
+                .UseToolNameAlias()
                 .Build();
             _tools = tools;
             _ownsClient = true;

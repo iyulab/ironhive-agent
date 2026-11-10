@@ -8,7 +8,8 @@ public static class TextToolCallRecoveryChatClientBuilderExtensions
     /// <summary>
     /// Adds <see cref="TextToolCallRecoveryChatClient"/>: a tool call the model wrote as text (Hermes / Qwen
     /// <c>&lt;tool_call&gt;</c> markup, Qwen3-Coder <c>&lt;function=…&gt;</c>) becomes the structured call it meant. Place
-    /// it directly after the function invocation, so that client runs the recovered calls:
+    /// it directly after the function invocation (and after <see cref="ToolNameAliasChatClientBuilderExtensions.UseToolNameAlias"/>
+    /// when that is used), so that client runs the recovered calls:
     /// <c>builder.UseToolInvocationPipeline(…).UseTextToolCallRecovery()</c>.
     /// </summary>
     /// <param name="builder">The chat client builder.</param>

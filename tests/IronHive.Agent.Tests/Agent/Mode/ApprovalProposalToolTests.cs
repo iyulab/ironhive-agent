@@ -254,4 +254,29 @@ public class ApprovalProposalToolTests
         ToolCallProposalSource.TryRead(call, out _, out var proposal).Should().BeFalse();
         proposal.Should().BeNull();
     }
+
+    [Fact]
+    public async Task A_proposal_that_names_the_alias_of_a_dotted_tool_is_paired_with_that_tool()
+    {
+        // The model only ever saw the alias of a tool whose own name a provider refuses, so that is the name it writes.
+        var alias = ToolNameAliasChatClient.AliasFor("message.send");
+        var function = AIFunctionFactory.Create(() => "ok", "message.send");
+        var gatedCall = new FunctionCallContent("c1", "message.send", new Dictionary<string, object?>());
+        var proposalCall = new FunctionCallContent("c2", ApprovalProposalTool.ToolName, new Dictionary<string, object?>
+        {
+            ["tool"] = alias,
+            ["options"] = new object[] { new Dictionary<string, object?> { ["id"] = "a", ["label"] = "Send it" } },
+        });
+        var context = new FunctionInvocationContext
+        {
+            Function = function,
+            CallContent = gatedCall,
+            Messages = [new ChatMessage(ChatRole.Assistant, [gatedCall, proposalCall])],
+        };
+
+        var proposal = await ToolCallProposalSource.Default.GetProposalAsync(context, TestContext.Current.CancellationToken);
+
+        proposal.Should().NotBeNull("the proposal names the alias, which is the gated tool as the model knew it");
+        proposal!.Options.Single().Id.Should().Be("a");
+    }
 }
