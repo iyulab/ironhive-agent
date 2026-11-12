@@ -19,10 +19,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The organization default for GITHUB_TOKEN is read-only: every permission a job needs is declared here.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    # A job-level block replaces the top-level one, so contents is repeated. checks: the unit-test report step
+    # publishes a check run; pull-requests: its summary comment on a pull request.
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
 
     strategy:
       # A red macOS job must not hide the Linux result (or the other way round).

@@ -22,6 +22,9 @@ on:
       - 'tests/IronHive.Agent.Tests/Agent/Mcp/**/*.cs'
       - '.github/workflows/mcp-e2e.yml'
 
+permissions:
+  contents: read
+
 env:
   DOTNET_VERSION: '10.0.x'
 
