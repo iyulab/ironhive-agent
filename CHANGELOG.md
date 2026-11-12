@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.83.0] - 2026-11-12
 
 ### Added
 - **A tool whose name a provider refuses no longer makes every model request that offers it fail.** An MCP server's tool called `message.send` (or `fs/read`) went to the provider as is, and OpenAI, its compatible endpoints and Anthropic answer HTTP 400 to a function name outside `[a-zA-Z0-9_-]{1,64}` - for the whole request, so no turn could use that connector at all. New opt-in `.UseToolNameAlias()` (`ToolNameAliasChatClient`, directly under function invocation, above `.UseTextToolCallRecovery()`) offers such a tool under a stable alias (`message_send_` and ten hex characters of a hash of the name; `ToolNameAliasChatClient.AliasFor`), maps the model's call - a streamed call's first argument fragment included - back to the real name, and leaves a name that already matches untouched (a request whose names are all safe is forwarded as the same objects, so nothing a working consumer sees changes). Two tools of one request that would share an alias fail the request with an `InvalidOperationException` naming both. The model-written approval proposal (`propose_for_approval`) for an aliased tool is paired with the real tool. `DefaultPlanExecutor` and the Ironbees adapter's own tool loop (`ChatClientFrameworkAdapter`) apply the step themselves; a host that builds its own pipeline adds it. What sits below the step (per-round compaction, token budget, retry, telemetry) sees the alias.
