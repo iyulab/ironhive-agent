@@ -18,7 +18,7 @@ namespace IronHive.Agent.Invocation;
 /// </remarks>
 public sealed class UnknownToolFunction : AIFunction
 {
-    private static readonly JsonElement EmptySchema = JsonDocument.Parse("""{"type":"object","properties":{}}""").RootElement.Clone();
+    private static readonly JsonElement EmptySchema = JsonElement.Parse("""{"type":"object","properties":{}}""");
 
     /// <summary>Creates the stand-in for <paramref name="name"/>.</summary>
     /// <param name="name">The name the model called.</param>
