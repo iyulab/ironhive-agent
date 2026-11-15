@@ -36,6 +36,36 @@ internal static class BuiltInToolNames
     /// </summary>
     internal static readonly IReadOnlyList<string> ReadOnlyPatterns = [.. FileReadOnlyPatterns, .. PathFreeReadOnlyPatterns];
 
+    /// <summary>The built-in file tools whose verdict is decided by the path they are given (read, write, edit, delete, move).</summary>
+    internal static bool IsPathTool(string toolName) => Normalize(toolName) is "read_file" or "write_file" or "edit_file" or "delete_file" or "move_file";
+
+    /// <summary>The names a built-in tool has shipped under - what a rule that names it may be written in. A name that is no built-in is its own only spelling.</summary>
+    internal static IEnumerable<string> Spellings(string toolName)
+    {
+        yield return toolName;
+
+        var normalized = Normalize(toolName);
+        if (!string.Equals(normalized, toolName, StringComparison.Ordinal))
+        {
+            yield return normalized;
+            yield break;
+        }
+
+        var pascal = toolName switch
+        {
+            "read_file" => "ReadFile",
+            "write_file" => "WriteFile",
+            "edit_file" => "EditFile",
+            "delete_file" => "DeleteFile",
+            "move_file" => "MoveFile",
+            _ => null
+        };
+        if (pascal is not null)
+        {
+            yield return pascal;
+        }
+    }
+
     /// <summary>Maps the PascalCase built-in names to the snake_case ones the rules are written for.</summary>
     internal static string Normalize(string toolName) => toolName switch
     {

@@ -163,6 +163,14 @@ public sealed class ToolCallPolicy : IToolCallPolicy
     public RiskAssessment Evaluate(string toolName, IDictionary<string, object?>? arguments)
     {
         ArgumentNullException.ThrowIfNull(toolName);
+
+        // A rule in the tools section that names a file tool and denies it ends the question: the path rules below only decide
+        // where a tool the host allows may go.
+        if (BuiltInToolNames.IsPathTool(toolName) && DeniedByName(toolName) is { } denied)
+        {
+            return denied;
+        }
+
         return BuiltInToolNames.Normalize(toolName) switch
         {
             "read_file" => AssessRead(arguments),
@@ -175,6 +183,22 @@ public sealed class ToolCallPolicy : IToolCallPolicy
                 => AssessMcpTool(toolName),
             _ => AssessTool(toolName)
         };
+    }
+
+    // Only a rule counts - a default action of Deny is not a statement about this tool, and the path rules keep deciding for it.
+    // The rule may be written in either spelling the built-in names have shipped under, whichever the call arrives in.
+    private RiskAssessment? DeniedByName(string toolName)
+    {
+        foreach (var spelling in BuiltInToolNames.Spellings(toolName))
+        {
+            var result = _evaluator.EvaluateTool(spelling);
+            if (result.MatchedRule is not null && result.Action == PermissionAction.Deny)
+            {
+                return ToRiskAssessment(result, $"Tool: {toolName}");
+            }
+        }
+
+        return null;
     }
 
     private RiskAssessment AssessMcpTool(string toolName)

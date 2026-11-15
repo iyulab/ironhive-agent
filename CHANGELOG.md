@@ -6,6 +6,14 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ## [Unreleased]
 
+### Added
+- **A host can keep a folder out of what the directory tools list and search.** New `FileToolOptions.ReadFilter` (`Func<string, bool>?`, default none: hides nothing) is asked about the absolute path of every file and - with a trailing directory separator - every directory that `ListDirectory`, `GlobFiles` and `GrepFiles` would show; `false` leaves it out, a hidden directory is not entered, and a call pointed straight at one is refused with a reason (`... is not available to this tool`) instead of returning an empty list. `PermissionEvaluatorExtensions.ToReadFilter(evaluator)` is the filter that follows the evaluator's `Read` rules: only `Deny` hides (a listing cannot ask a question per entry; `ReadFile` still asks about an `Ask` path).
+
+### Fixed
+- **A `Read` rule that closes a folder is no longer bypassed by a search that starts above it.** The rules judge a directory tool by the directory it is pointed at, so `read: .config-folder/** deny` said nothing about `.` and `GrepFiles` / `GlobFiles` / `ListDirectory` from `.` returned the denied folder's files and lines. Pass `ReadFilter = permissionEvaluator.ToReadFilter()` in `FileToolOptions` to apply the rules to what the tools return.
+- **A `tools:` denial of a file tool is no longer ignored.** A rule naming `ReadFile`, `WriteFile`, `EditFile`, `DeleteFile` or `MoveFile` (either spelling) with `deny` now refuses the call; before, the tool-name verdict was consulted only for the directory tools and tools with no dedicated category, so `DeleteFile` / `MoveFile` ran under the `Edit` rules and a denied `ReadFile` / `WriteFile` / `EditFile` under the path rules. A `DefaultAction` of `Deny` with no rule about the tool still leaves the path rules in charge, as before.
+- **Breaking by observation:** a configuration that already wrote such a denial (and relied on it being ignored) now gets refused calls; and with `ReadFilter` set, listings, matches and search results omit the denied paths. Migration: remove the `tools:` denial you did not mean, or widen the `read:` rule.
+
 ### Dependencies
 - Re-pinned sibling package(s) `IronProw.Core` 0.19.0 -> 0.20.0.
 

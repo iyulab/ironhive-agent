@@ -81,6 +81,7 @@ public class ToolProvider
 {
     private readonly string _workingDirectory;
     private readonly IFileWriteInterceptor? _writeInterceptor;
+    private readonly Func<string, bool>? _readFilter;
     private readonly string[] _allowedRoots;
     private readonly string[] _removedEnvironmentVariables;
     private const int MaxFileSize = 1024 * 1024; // 1MB
@@ -111,6 +112,7 @@ public class ToolProvider
         _removedEnvironmentVariables = [.. (shellOptions?.RemoveEnvironmentVariables ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))];
         _writeInterceptor = options?.WriteInterceptor;
+        _readFilter = options?.ReadFilter;
         _allowedRoots = [.. (options?.AllowedRoots ?? [])
             .Where(root => !string.IsNullOrWhiteSpace(root))
             .Select(root => Path.TrimEndingDirectorySeparator(
@@ -456,7 +458,7 @@ public class ToolProvider
         [Description("Path to the directory (relative to working directory or absolute)")] string? path = null,
         [Description("If true, list contents recursively")] bool recursive = false)
     {
-        if (!TryResolvePath(path ?? ".", out var fullPath, out var refusal))
+        if (!TryResolveDirectory(path ?? ".", out var fullPath, out var refusal))
         {
             return refusal;
         }
@@ -467,10 +469,7 @@ public class ToolProvider
         }
 
         var sb = new StringBuilder();
-        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-        var dirs = Directory.GetDirectories(fullPath, "*", searchOption);
-        var files = Directory.GetFiles(fullPath, "*", searchOption);
+        var (dirs, files) = EnumerateVisible(fullPath, recursive);
 
         foreach (var dir in dirs.Take(500))
         {
@@ -485,9 +484,9 @@ public class ToolProvider
             sb.AppendLine(CultureInfo.InvariantCulture, $"[FILE] {relativePath} ({FormatSize(size)})");
         }
 
-        if (dirs.Length > 500 || files.Length > 500)
+        if (dirs.Count > 500 || files.Count > 500)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"... (truncated, total: {dirs.Length} dirs, {files.Length} files)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"... (truncated, total: {dirs.Count} dirs, {files.Count} files)");
         }
 
         return sb.ToString();
@@ -503,7 +502,7 @@ public class ToolProvider
         [Description("Glob pattern to match (e.g., '**/*.cs', 'src/**/*.json')")] string pattern,
         [Description("Base directory for the search (optional, defaults to working directory)")] string? path = null)
     {
-        if (!TryResolvePath(path ?? ".", out var basePath, out var refusal))
+        if (!TryResolveDirectory(path ?? ".", out var basePath, out var refusal))
         {
             return refusal;
         }
@@ -519,7 +518,7 @@ public class ToolProvider
         var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
 
         // A pattern such as "../**" climbs out of the base directory; what it finds is held to the boundary too.
-        var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+        var files = VisibleMatches(basePath, result);
 
         if (files.Count == 0)
         {
@@ -556,7 +555,7 @@ public class ToolProvider
         [Description("Base directory for the search (optional)")] string? path = null,
         CancellationToken cancellationToken = default)
     {
-        if (!TryResolvePath(path ?? ".", out var basePath, out var refusal))
+        if (!TryResolveDirectory(path ?? ".", out var basePath, out var refusal))
         {
             return refusal;
         }
@@ -571,7 +570,7 @@ public class ToolProvider
 
         var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
 
-        var files = result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path)))).ToList();
+        var files = VisibleMatches(basePath, result);
 
         if (files.Count == 0)
         {
@@ -745,6 +744,125 @@ public class ToolProvider
         refusal = $"Error: '{path}' is outside the directories this tool may access ({string.Join(", ", _allowedRoots)}). " +
                   "This is a policy boundary, not a transient failure: another spelling of the same path will be refused too.";
         return false;
+    }
+
+    // A directory the host's read filter hides is not listed or searched, and the model is told so rather than shown an empty
+    // folder: an empty answer would be a claim about the disk that is not true.
+    private bool TryResolveDirectory(string path, out string fullPath, out string refusal)
+    {
+        if (!TryResolvePath(path, out fullPath, out refusal))
+        {
+            return false;
+        }
+
+        if (IsHidden(fullPath, isDirectory: true))
+        {
+            refusal = $"Error: '{path}' is not available to this tool. " +
+                      "This is a policy boundary, not a transient failure: another spelling of the same path will be refused too.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsHidden(string fullPath, bool isDirectory)
+    {
+        if (_readFilter is null)
+        {
+            return false;
+        }
+
+        var asked = isDirectory ? Path.TrimEndingDirectorySeparator(fullPath) + Path.DirectorySeparatorChar : fullPath;
+        return !_readFilter(asked);
+    }
+
+    // The files a pattern matched under basePath that the model may see: inside the boundary, not hidden themselves, and not
+    // under a hidden directory. The directories asked about are the ones between the file and the base (or, for a pattern that
+    // climbs out, up to the base's own ancestors - the base itself was judged when it was resolved).
+    private List<FilePatternMatch> VisibleMatches(string basePath, PatternMatchingResult result)
+    {
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var verdictByDirectory = new Dictionary<string, bool>(comparer);
+        var trimmedBase = Path.TrimEndingDirectorySeparator(basePath);
+
+        bool DirectoryHidden(string directory)
+        {
+            if (!verdictByDirectory.TryGetValue(directory, out var hidden))
+            {
+                hidden = IsHidden(directory, isDirectory: true);
+                verdictByDirectory[directory] = hidden;
+            }
+
+            return hidden;
+        }
+
+        bool UnderHiddenDirectory(string fullFile)
+        {
+            var directory = Path.GetDirectoryName(fullFile);
+            while (!string.IsNullOrEmpty(directory))
+            {
+                var trimmed = Path.TrimEndingDirectorySeparator(directory);
+                if (trimmed.Equals(trimmedBase, comparison)
+                    || (trimmedBase + Path.DirectorySeparatorChar).StartsWith(trimmed + Path.DirectorySeparatorChar, comparison))
+                {
+                    return false;
+                }
+
+                if (DirectoryHidden(trimmed))
+                {
+                    return true;
+                }
+
+                directory = Path.GetDirectoryName(trimmed);
+            }
+
+            return false;
+        }
+
+        return [.. result.Files.Where(file =>
+        {
+            var full = Path.GetFullPath(Path.Combine(basePath, file.Path));
+            return IsWithinAllowedRoots(full) && !IsHidden(full, isDirectory: false) && !UnderHiddenDirectory(full);
+        })];
+    }
+
+    // The entries of a directory the model may see. Without a filter this is what the file system lists; with one, a hidden
+    // directory is neither listed nor entered, and a hidden file is left out.
+    private (List<string> Dirs, List<string> Files) EnumerateVisible(string root, bool recursive)
+    {
+        if (_readFilter is null)
+        {
+            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            return ([.. Directory.GetDirectories(root, "*", searchOption)], [.. Directory.GetFiles(root, "*", searchOption)]);
+        }
+
+        var dirs = new List<string>();
+        var files = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(root);
+
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            foreach (var dir in Directory.GetDirectories(current))
+            {
+                if (IsHidden(dir, isDirectory: true))
+                {
+                    continue;
+                }
+
+                dirs.Add(dir);
+                if (recursive)
+                {
+                    pending.Push(dir);
+                }
+            }
+
+            files.AddRange(Directory.GetFiles(current).Where(file => !IsHidden(file, isDirectory: false)));
+        }
+
+        return (dirs, files);
     }
 
     private bool IsWithinAllowedRoots(string fullPath)
