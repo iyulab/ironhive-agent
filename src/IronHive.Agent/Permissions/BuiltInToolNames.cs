@@ -39,30 +39,42 @@ internal static class BuiltInToolNames
     /// <summary>The built-in file tools whose verdict is decided by the path they are given (read, write, edit, delete, move).</summary>
     internal static bool IsPathTool(string toolName) => Normalize(toolName) is "read_file" or "write_file" or "edit_file" or "delete_file" or "move_file";
 
+    // The built-in tools with a verdict of their own besides the tool-name rules - the file tools (decided by path), the directory
+    // tools (path rules for the folder they are pointed at) and the shell (decided by command) - each with every name it has
+    // shipped under. A rule that names one of them may be written in any of these spellings.
+    private static readonly string[][] ToolNameFamilies =
+    [
+        ["ReadFile", "read_file"],
+        ["WriteFile", "write_file"],
+        ["EditFile", "edit_file"],
+        ["DeleteFile", "delete_file"],
+        ["MoveFile", "move_file"],
+        ["ListDirectory", "list_directory"],
+        ["GlobFiles", "glob_files"],
+        ["GrepFiles", "grep_files"],
+        ["ExecuteCommand", "execute_command", "shell"],
+    ];
+
+    /// <summary>Whether the tool has a verdict of its own (path, folder or command) besides the tool-name rules - the tools a tool-name denial has to be applied to explicitly.</summary>
+    internal static bool HasOwnCategory(string toolName) => ToolNameFamilies.Any(family => family.Contains(toolName, StringComparer.Ordinal));
+
     /// <summary>The names a built-in tool has shipped under - what a rule that names it may be written in. A name that is no built-in is its own only spelling.</summary>
     internal static IEnumerable<string> Spellings(string toolName)
     {
         yield return toolName;
 
-        var normalized = Normalize(toolName);
-        if (!string.Equals(normalized, toolName, StringComparison.Ordinal))
+        var family = ToolNameFamilies.FirstOrDefault(f => f.Contains(toolName, StringComparer.Ordinal));
+        if (family is null)
         {
-            yield return normalized;
             yield break;
         }
 
-        var pascal = toolName switch
+        foreach (var spelling in family)
         {
-            "read_file" => "ReadFile",
-            "write_file" => "WriteFile",
-            "edit_file" => "EditFile",
-            "delete_file" => "DeleteFile",
-            "move_file" => "MoveFile",
-            _ => null
-        };
-        if (pascal is not null)
-        {
-            yield return pascal;
+            if (!string.Equals(spelling, toolName, StringComparison.Ordinal))
+            {
+                yield return spelling;
+            }
         }
     }
 

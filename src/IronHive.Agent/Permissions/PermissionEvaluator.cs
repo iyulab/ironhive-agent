@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace IronHive.Agent.Permissions;
@@ -8,7 +9,7 @@ namespace IronHive.Agent.Permissions;
 public class PermissionEvaluator : IPermissionEvaluator
 {
     private readonly PermissionConfig _config;
-    private readonly Dictionary<string, Regex> _patternCache = new();
+    private readonly ConcurrentDictionary<string, Regex> _patternCache = new();
 
     public PermissionEvaluator(PermissionConfig? config = null)
     {
@@ -225,15 +226,8 @@ public class PermissionEvaluator : IPermissionEvaluator
 
     private Regex GetOrCreatePatternRegex(string pattern)
     {
-        if (_patternCache.TryGetValue(pattern, out var cached))
-        {
-            return cached;
-        }
-
-        var regexPattern = GlobToRegex(pattern);
-        var regex = new Regex(regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        _patternCache[pattern] = regex;
-        return regex;
+        // The evaluator is asked from the tools' own bodies now (a read filter), possibly from several calls at once.
+        return _patternCache.GetOrAdd(pattern, static p => new Regex(GlobToRegex(p), RegexOptions.IgnoreCase | RegexOptions.Compiled));
     }
 
     /// <summary>

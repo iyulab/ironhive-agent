@@ -164,9 +164,9 @@ public sealed class ToolCallPolicy : IToolCallPolicy
     {
         ArgumentNullException.ThrowIfNull(toolName);
 
-        // A rule in the tools section that names a file tool and denies it ends the question: the path rules below only decide
-        // where a tool the host allows may go.
-        if (BuiltInToolNames.IsPathTool(toolName) && DeniedByName(toolName) is { } denied)
+        // A rule in the tools section that names a file tool or the shell and denies it ends the question: the path rules (or the
+        // Bash rules) below only decide where a tool the host allows may go.
+        if (BuiltInToolNames.HasOwnCategory(toolName) && DeniedByName(toolName) is { } denied)
         {
             return denied;
         }
@@ -186,19 +186,29 @@ public sealed class ToolCallPolicy : IToolCallPolicy
     }
 
     // Only a rule counts - a default action of Deny is not a statement about this tool, and the path rules keep deciding for it.
-    // The rule may be written in either spelling the built-in names have shipped under, whichever the call arrives in.
+    // The rule may be written in either spelling the built-in names have shipped under, whichever the call arrives in, so the
+    // spellings are read as one question: the matched rule with the highest priority in any spelling decides, as it would if the
+    // tool had one name, and two rules of equal priority that disagree fail closed (a deny).
     private RiskAssessment? DeniedByName(string toolName)
     {
+        PermissionResult? decisive = null;
         foreach (var spelling in BuiltInToolNames.Spellings(toolName))
         {
             var result = _evaluator.EvaluateTool(spelling);
-            if (result.MatchedRule is not null && result.Action == PermissionAction.Deny)
+            if (result.MatchedRule is null)
             {
-                return ToRiskAssessment(result, $"Tool: {toolName}");
+                continue;
+            }
+
+            if (decisive is null
+                || result.MatchedRule.Priority > decisive.MatchedRule!.Priority
+                || (result.MatchedRule.Priority == decisive.MatchedRule.Priority && result.Action == PermissionAction.Deny))
+            {
+                decisive = result;
             }
         }
 
-        return null;
+        return decisive is { Action: PermissionAction.Deny } ? ToRiskAssessment(decisive, $"Tool: {toolName}") : null;
     }
 
     private RiskAssessment AssessMcpTool(string toolName)

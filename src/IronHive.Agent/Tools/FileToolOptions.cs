@@ -46,6 +46,11 @@ public sealed class FileToolOptions
     /// <c>MoveFile</c> take a path from the model and are judged on it by the permission rules before they run, so they do not
     /// use this filter.
     /// </para>
+    /// <para>
+    /// The filter judges the text of a path, as <see cref="AllowedRoots"/> does and as the permission rules do for
+    /// <c>ReadFile</c>: a file reached through a link is judged by the link's path. When a filter is set a recursive
+    /// <c>ListDirectory</c> lists a link to a directory but does not enter it (a link back up the tree would never end).
+    /// </para>
     /// </remarks>
     public Func<string, bool>? ReadFilter { get; init; }
 

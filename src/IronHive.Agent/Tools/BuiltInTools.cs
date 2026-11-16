@@ -781,10 +781,19 @@ public class ToolProvider
     // climbs out, up to the base's own ancestors - the base itself was judged when it was resolved).
     private List<FilePatternMatch> VisibleMatches(string basePath, PatternMatchingResult result)
     {
+        if (_readFilter is null)
+        {
+            return [.. result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path))))];
+        }
+
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var verdictByDirectory = new Dictionary<string, bool>(comparer);
         var trimmedBase = Path.TrimEndingDirectorySeparator(basePath);
+
+        // A filesystem root ("C:\\", "/") keeps its separator when trimmed, so adding one blindly would double it.
+        static string WithSeparator(string directory) =>
+            directory.EndsWith(Path.DirectorySeparatorChar) ? directory : directory + Path.DirectorySeparatorChar;
 
         bool DirectoryHidden(string directory)
         {
@@ -803,8 +812,7 @@ public class ToolProvider
             while (!string.IsNullOrEmpty(directory))
             {
                 var trimmed = Path.TrimEndingDirectorySeparator(directory);
-                if (trimmed.Equals(trimmedBase, comparison)
-                    || (trimmedBase + Path.DirectorySeparatorChar).StartsWith(trimmed + Path.DirectorySeparatorChar, comparison))
+                if (trimmed.Equals(trimmedBase, comparison) || WithSeparator(trimmedBase).StartsWith(WithSeparator(trimmed), comparison))
                 {
                     return false;
                 }
@@ -853,7 +861,10 @@ public class ToolProvider
                 }
 
                 dirs.Add(dir);
-                if (recursive)
+
+                // A link to a directory (a symbolic link or a junction - not every reparse point is one: a cloud placeholder
+                // folder is a plain directory) is listed and not entered: a link back up the tree makes the walk endless.
+                if (recursive && new DirectoryInfo(dir).LinkTarget is null)
                 {
                     pending.Push(dir);
                 }
