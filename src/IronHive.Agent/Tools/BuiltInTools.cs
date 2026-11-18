@@ -469,12 +469,13 @@ public class ToolProvider
         }
 
         var sb = new StringBuilder();
-        var (dirs, files) = EnumerateVisible(fullPath, recursive);
+        var (dirs, files, links) = EnumerateVisible(fullPath, recursive);
 
         foreach (var dir in dirs.Take(500))
         {
             var relativePath = Path.GetRelativePath(fullPath, dir);
-            sb.AppendLine(CultureInfo.InvariantCulture, $"[DIR]  {relativePath}/");
+            var note = links.Contains(dir) ? " (directory link, not listed here - list its own path to see inside)" : string.Empty;
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[DIR]  {relativePath}/{note}");
         }
 
         foreach (var file in files.Take(500))
@@ -515,14 +516,16 @@ public class ToolProvider
         var matcher = new Matcher();
         matcher.AddInclude(pattern);
 
-        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
+        var skippedLinks = new List<string>();
+        var result = matcher.Execute(new LinkSkippingDirectoryInfo(new DirectoryInfo(basePath), skippedLinks));
+        var linkNote = SkippedLinksNote(basePath, skippedLinks);
 
         // A pattern such as "../**" climbs out of the base directory; what it finds is held to the boundary too.
         var files = VisibleMatches(basePath, result);
 
         if (files.Count == 0)
         {
-            return $"No files found matching pattern: {pattern}";
+            return $"No files found matching pattern: {pattern}{linkNote}";
         }
 
         var sb = new StringBuilder();
@@ -538,7 +541,7 @@ public class ToolProvider
             sb.AppendLine(CultureInfo.InvariantCulture, $"  ... (truncated, total: {files.Count} files)");
         }
 
-        return sb.ToString();
+        return sb.Append(linkNote).ToString();
     }
 
     /// <summary>
@@ -568,13 +571,15 @@ public class ToolProvider
         var matcher = new Matcher();
         matcher.AddInclude(filePattern);
 
-        var result = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(basePath)));
+        var skippedLinks = new List<string>();
+        var result = matcher.Execute(new LinkSkippingDirectoryInfo(new DirectoryInfo(basePath), skippedLinks));
+        var linkNote = SkippedLinksNote(basePath, skippedLinks);
 
         var files = VisibleMatches(basePath, result);
 
         if (files.Count == 0)
         {
-            return $"No files found matching pattern: {filePattern}";
+            return $"No files found matching pattern: {filePattern}{linkNote}";
         }
 
         var sb = new StringBuilder();
@@ -608,7 +613,7 @@ public class ToolProvider
                         if (matchCount >= 100)
                         {
                             sb.AppendLine("\n... (truncated at 100 matches)");
-                            return sb.ToString();
+                            return sb.Append(linkNote).ToString();
                         }
                     }
                 }
@@ -621,11 +626,11 @@ public class ToolProvider
 
         if (matchCount == 0)
         {
-            return $"No matches found for '{pattern}' in files matching '{filePattern}'";
+            return $"No matches found for '{pattern}' in files matching '{filePattern}'{linkNote}";
         }
 
         sb.Insert(0, $"Found {matchCount} matches in {fileCount} files:\n");
-        return sb.ToString();
+        return sb.Append(linkNote).ToString();
     }
 
     /// <summary>
@@ -791,10 +796,6 @@ public class ToolProvider
         var verdictByDirectory = new Dictionary<string, bool>(comparer);
         var trimmedBase = Path.TrimEndingDirectorySeparator(basePath);
 
-        // A filesystem root ("C:\\", "/") keeps its separator when trimmed, so adding one blindly would double it.
-        static string WithSeparator(string directory) =>
-            directory.EndsWith(Path.DirectorySeparatorChar) ? directory : directory + Path.DirectorySeparatorChar;
-
         bool DirectoryHidden(string directory)
         {
             if (!verdictByDirectory.TryGetValue(directory, out var hidden))
@@ -812,7 +813,7 @@ public class ToolProvider
             while (!string.IsNullOrEmpty(directory))
             {
                 var trimmed = Path.TrimEndingDirectorySeparator(directory);
-                if (trimmed.Equals(trimmedBase, comparison) || WithSeparator(trimmedBase).StartsWith(WithSeparator(trimmed), comparison))
+                if (trimmed.Equals(trimmedBase, comparison) || EndWithSeparator(trimmedBase).StartsWith(EndWithSeparator(trimmed), comparison))
                 {
                     return false;
                 }
@@ -835,24 +836,23 @@ public class ToolProvider
         })];
     }
 
-    // The entries of a directory the model may see. Without a filter this is what the file system lists; with one, a hidden
-    // directory is neither listed nor entered, and a hidden file is left out.
-    private (List<string> Dirs, List<string> Files) EnumerateVisible(string root, bool recursive)
+    // The entries of a directory the model may see: with a read filter set, a hidden directory is neither listed nor entered and
+    // a hidden file is left out. A recursive walk lists a link to a directory (a symbolic link or a junction - not every reparse
+    // point is one: a cloud placeholder folder is a plain directory) and does not enter it: a link back up the tree makes the walk
+    // endless, and the framework's own recursive enumeration follows it until it runs out of memory. The links left out are
+    // returned so the listing can say so.
+    private (List<string> Dirs, List<string> Files, HashSet<string> Links) EnumerateVisible(string root, bool recursive)
     {
-        if (_readFilter is null)
-        {
-            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            return ([.. Directory.GetDirectories(root, "*", searchOption)], [.. Directory.GetFiles(root, "*", searchOption)]);
-        }
-
         var dirs = new List<string>();
         var files = new List<string>();
-        var pending = new Stack<string>();
-        pending.Push(root);
+        var links = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        // First in, first out: the order of the framework's own recursive enumeration (a folder's entries before its subfolders').
+        var pending = new Queue<string>();
+        pending.Enqueue(root);
 
         while (pending.Count > 0)
         {
-            var current = pending.Pop();
+            var current = pending.Dequeue();
             foreach (var dir in Directory.GetDirectories(current))
             {
                 if (IsHidden(dir, isDirectory: true))
@@ -862,18 +862,79 @@ public class ToolProvider
 
                 dirs.Add(dir);
 
-                // A link to a directory (a symbolic link or a junction - not every reparse point is one: a cloud placeholder
-                // folder is a plain directory) is listed and not entered: a link back up the tree makes the walk endless.
-                if (recursive && new DirectoryInfo(dir).LinkTarget is null)
+                if (!recursive)
                 {
-                    pending.Push(dir);
+                    continue;
+                }
+
+                if (LinkSkippingDirectoryInfo.IsDirectoryLink(new DirectoryInfo(dir)))
+                {
+                    links.Add(dir);
+                }
+                else
+                {
+                    pending.Enqueue(dir);
                 }
             }
 
             files.AddRange(Directory.GetFiles(current).Where(file => !IsHidden(file, isDirectory: false)));
         }
 
-        return (dirs, files);
+        return (dirs, files, links);
+    }
+
+    // A filesystem root ("C:\\", "/") keeps its separator when trimmed, so adding one blindly would double it.
+    private static string EndWithSeparator(string directory) =>
+        directory.EndsWith(Path.DirectorySeparatorChar) ? directory : directory + Path.DirectorySeparatorChar;
+
+    // Whether a link the walk met may be named to the model: inside the boundary and not in (or under) a directory the filter
+    // hides. The walk of a glob looks at everything below the base; only what the model may see is told about.
+    private bool IsLinkVisible(string basePath, string link)
+    {
+        if (!IsWithinAllowedRoots(link))
+        {
+            return false;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var trimmedBase = Path.TrimEndingDirectorySeparator(basePath);
+        var directory = link;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var trimmed = Path.TrimEndingDirectorySeparator(directory);
+            if (trimmed.Equals(trimmedBase, comparison) || EndWithSeparator(trimmedBase).StartsWith(EndWithSeparator(trimmed), comparison))
+            {
+                return true;
+            }
+
+            if (IsHidden(trimmed, isDirectory: true))
+            {
+                return false;
+            }
+
+            directory = Path.GetDirectoryName(trimmed);
+        }
+
+        return true;
+    }
+
+    // What a glob or a search leaves unsaid: directory links below the base folder were not entered.
+    private string SkippedLinksNote(string basePath, List<string> skippedLinks)
+    {
+        var names = skippedLinks
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .Where(link => IsLinkVisible(basePath, link))
+            .Select(link => Path.GetRelativePath(basePath, link).Replace('\\', '/') + "/")
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        if (names.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var shown = string.Join(", ", names.Take(5)) + (names.Count > 5 ? $", ... ({names.Count} in all)" : string.Empty);
+        return $"\nNote: directory links were not entered: {shown}. Pass a link as the base directory to look inside it.";
     }
 
     private bool IsWithinAllowedRoots(string fullPath)
