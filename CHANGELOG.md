@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.84.0] - 2026-11-23
 
 ### Added
 - **A host can keep a folder out of what the directory tools list and search.** New `FileToolOptions.ReadFilter` (`Func<string, bool>?`, default none: hides nothing) is asked about the absolute path of every file and - with a trailing directory separator - every directory that `ListDirectory`, `GlobFiles` and `GrepFiles` would show; `false` leaves it out, a hidden directory is not entered, and a call pointed straight at one is refused with a reason (`... is not available to this tool`) instead of returning an empty list. `PermissionEvaluatorExtensions.ToReadFilter(evaluator)` is the filter that follows the evaluator's `Read` rules: only `Deny` hides (a listing cannot ask a question per entry; `ReadFile` still asks about an `Ask` path).
