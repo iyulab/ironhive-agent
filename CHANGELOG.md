@@ -17,6 +17,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `IronProw.Core` 0.19.0 -> 0.20.0.
+- Re-pinned sibling package(s) `FluxCurator.Core` 0.19.0 -> 0.20.0, `Ironbees.Autonomous` 0.31.0 -> 0.32.0, `Ironbees.Core` 0.31.0 -> 0.32.0, `IronHive.Abstractions` 0.76.0 -> 0.79.0, `IronHive.Extensions.AI` 0.76.0 -> 0.79.0, `IronProw.Core` 0.20.0 -> 0.21.0, `TokenMeter` 0.16.0 -> 0.17.0, `WebFlux` 0.29.0 -> 0.30.0.
 
 ## [0.83.0] - 2026-11-12
 
