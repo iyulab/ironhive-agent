@@ -88,6 +88,15 @@ public record ApprovalResult
     public bool AlwaysApprove { get; init; }
 
     /// <summary>
+    /// The approval covers this one call and nothing else: an approver that judges one act at a time (a classifier or judge
+    /// model answering for a person) sets it so that a policy wrapped around the approval service does not widen the yes to
+    /// the calls that follow - the next one is put to the approver again. Default <see langword="false"/>: what the approval
+    /// covers is the approver's own policy, exactly as before this property existed. It has no meaning on a result that is
+    /// not <see cref="Approved"/>; when set together with <see cref="AlwaysApprove"/> the stricter reading holds, this call only.
+    /// </summary>
+    public bool ThisCallOnly { get; init; }
+
+    /// <summary>
     /// Optional modified arguments (if user edited them).
     /// </summary>
     public IDictionary<string, object?>? ModifiedArguments { get; init; }
@@ -111,6 +120,15 @@ public record ApprovalResult
     {
         Approved = true,
         AlwaysApprove = alwaysApprove
+    };
+
+    /// <summary>
+    /// Creates an approved result that covers this call only (<see cref="ThisCallOnly"/>).
+    /// </summary>
+    public static ApprovalResult ApproveThisCallOnly() => new()
+    {
+        Approved = true,
+        ThisCallOnly = true
     };
 
     /// <summary>
