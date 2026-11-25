@@ -9,7 +9,7 @@ namespace IronHive.Agent.Permissions;
 public class PermissionEvaluator : IPermissionEvaluator
 {
     private readonly PermissionConfig _config;
-    private readonly ConcurrentDictionary<(string Pattern, bool ForPaths), Regex> _patternCache = new();
+    private readonly ConcurrentDictionary<(string Pattern, PatternSyntax Syntax), Regex> _patternCache = new();
 
     public PermissionEvaluator(PermissionConfig? config = null)
     {
@@ -58,7 +58,7 @@ public class PermissionEvaluator : IPermissionEvaluator
         }
 
         var line = command.Trim();
-        var verdict = EvaluateRules(_config.Bash, line);
+        var verdict = EvaluateRules(_config.Bash, line, PatternSyntax.Command);
         if (verdict.Action != PermissionAction.Allow || verdict.MatchedRule is not { } rule
             || CoversWhatAShellMakesOfIt(rule.Pattern) || !CanRunMoreThanItsCommand(line))
         {
@@ -68,7 +68,8 @@ public class PermissionEvaluator : IPermissionEvaluator
         // A rule that is this very line is the way to keep allowing it, also where a broader rule of the same priority
         // matched first. One below the deciding priority does not change the question.
         var asWritten = _config.Bash.FirstOrDefault(other => other.Action == PermissionAction.Allow
-            && other.Priority == rule.Priority && CoversWhatAShellMakesOfIt(other.Pattern) && MatchesPattern(line, other.Pattern));
+            && other.Priority == rule.Priority && CoversWhatAShellMakesOfIt(other.Pattern)
+            && MatchesPattern(line, other.Pattern, PatternSyntax.Command));
         if (asWritten is not null)
         {
             return new PermissionResult { Action = PermissionAction.Allow, MatchedRule = asWritten, Reason = asWritten.Reason };
@@ -103,7 +104,7 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// <inheritdoc />
     public PermissionResult EvaluateExternalDirectory(string directoryPath)
     {
-        return EvaluateRules(_config.ExternalDirectory, ResolvePath(directoryPath).AbsolutePath, forPaths: true);
+        return EvaluateRules(_config.ExternalDirectory, ResolvePath(directoryPath).AbsolutePath, PatternSyntax.Path);
     }
 
     // A path rule judges the path the tool will open. The file tools resolve their argument with
@@ -114,16 +115,16 @@ public class PermissionEvaluator : IPermissionEvaluator
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return EvaluateRules(rules, string.Empty, forPaths: true);
+            return EvaluateRules(rules, string.Empty, PatternSyntax.Path);
         }
 
         var resolved = ResolvePath(path);
         if (!resolved.IsExternal)
         {
-            return EvaluateRules(rules, resolved.RelativePath, forPaths: true);
+            return EvaluateRules(rules, resolved.RelativePath, PatternSyntax.Path);
         }
 
-        var external = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath, forPaths: true);
+        var external = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath, PatternSyntax.Path);
         if (external.MatchedRule is not null)
         {
             return external with { OutsideWorkingDirectory = true };
@@ -281,7 +282,7 @@ public class PermissionEvaluator : IPermissionEvaluator
         };
     }
 
-    private PermissionResult EvaluateRules(List<PermissionRule> rules, string target, bool forPaths = false)
+    private PermissionResult EvaluateRules(List<PermissionRule> rules, string target, PatternSyntax syntax = PatternSyntax.Name)
     {
         // Handle empty/null targets
         if (string.IsNullOrWhiteSpace(target))
@@ -304,7 +305,7 @@ public class PermissionEvaluator : IPermissionEvaluator
 
         // Find all matching rules, sorted by priority (highest first)
         var matchingRules = rules
-            .Where(r => MatchesPattern(target, r.Pattern, forPaths))
+            .Where(r => MatchesPattern(target, r.Pattern, syntax))
             .OrderByDescending(r => r.Priority)
             .ToList();
 
@@ -327,17 +328,33 @@ public class PermissionEvaluator : IPermissionEvaluator
         };
     }
 
-    private bool MatchesPattern(string input, string pattern, bool forPaths = false)
+    private bool MatchesPattern(string input, string pattern, PatternSyntax syntax = PatternSyntax.Name)
     {
-        var regex = GetOrCreatePatternRegex(pattern, forPaths);
+        var regex = GetOrCreatePatternRegex(pattern, syntax);
         return regex.IsMatch(input);
     }
 
-    private Regex GetOrCreatePatternRegex(string pattern, bool forPaths)
+    private Regex GetOrCreatePatternRegex(string pattern, PatternSyntax syntax)
     {
         // The evaluator is asked from the tools' own bodies now (a read filter), possibly from several calls at once.
-        return _patternCache.GetOrAdd((pattern, forPaths), static key =>
-            new Regex(GlobToRegex(key.Pattern, key.ForPaths), RegexOptions.IgnoreCase | RegexOptions.Compiled));
+        return _patternCache.GetOrAdd((pattern, syntax), static key => new Regex(
+            GlobToRegex(key.Pattern, key.Syntax),
+            // A command's wildcard crosses line breaks too, so a rule still speaks about a command of several lines.
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+                | (key.Syntax == PatternSyntax.Command ? RegexOptions.Singleline : RegexOptions.None)));
+    }
+
+    // What a rule's pattern is matched against, which decides what its wildcards stand for.
+    private enum PatternSyntax
+    {
+        // a file or directory path: "*" and "?" stay inside one name
+        Path,
+
+        // a tool name: as a path, except that "**/" is any text
+        Name,
+
+        // a shell command line: it has no folders, so "*" and "?" are any text, separators and line breaks included
+        Command,
     }
 
     /// <summary>
@@ -345,12 +362,15 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// Supports: *, **, ?
     /// </summary>
     /// <param name="pattern">The glob.</param>
-    /// <param name="forPaths">
+    /// <param name="syntax">
     /// A path pattern reads "**/" as whole folders. A command or a tool name has no folders - a space separates its words - so
-    /// there "**/" is any text, and a deny written with it keeps reaching across them.
+    /// there "**/" is any text, and a deny written with it keeps reaching across them. In a command a single "*" and "?" are
+    /// any text as well.
     /// </param>
-    private static string GlobToRegex(string pattern, bool forPaths)
+    private static string GlobToRegex(string pattern, PatternSyntax syntax)
     {
+        var forPaths = syntax == PatternSyntax.Path;
+        var anyText = syntax == PatternSyntax.Command;
         var result = new System.Text.StringBuilder("^");
 
         for (var i = 0; i < pattern.Length; i++)
@@ -379,14 +399,14 @@ public class PermissionEvaluator : IPermissionEvaluator
                     }
                     else
                     {
-                        // * matches anything except path separators
-                        result.Append("[^/\\\\]*");
+                        // * matches anything except path separators; in a command, anything
+                        result.Append(anyText ? ".*" : "[^/\\\\]*");
                     }
                     break;
 
                 case '?':
-                    // ? matches any single character except path separator
-                    result.Append("[^/\\\\]");
+                    // ? matches any single character except path separator; in a command, any single character
+                    result.Append(anyText ? "." : "[^/\\\\]");
                     break;
 
                 case '.':
@@ -412,7 +432,8 @@ public class PermissionEvaluator : IPermissionEvaluator
             }
         }
 
-        result.Append('$');
+        // \z, not $: $ also matches before a final line break.
+        result.Append(@"\z");
         return result.ToString();
     }
 
