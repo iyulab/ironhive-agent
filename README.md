@@ -700,7 +700,8 @@ sealed class TracingRetriever(IToolRetriever inner, ILogger log) : IToolRetrieve
 
 When several rules of a section match, the highest `priority` decides; among rules of that priority the stricter action
 wins - `deny`, then `ask`, then `allow` - whatever order they are listed in. So a `deny` you add to the built-in rules
-holds at their priority, and an exception to a `deny` needs a higher priority than the `deny`.
+holds against every rule of its own or a lower priority (the built-in `ask` rules use 5 and 10), and an exception to a
+`deny` needs a higher priority than the `deny`.
 
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:
 
@@ -730,7 +731,7 @@ from its arguments. To allow more, add a rule per command you accept, knowing wh
 
 An allow rule covers one command as written. A line that either shell the tool runs (`cmd.exe`, `bash`) could read as more
 than that - `;`, `&`, `|`, `<`, `>`, a line break, a backtick, `$(`, `${` or `$[` - is asked about, even inside quotes (the
-line is not parsed). Two rules are taken at their word: one that is the exact line, also beside a broader rule of the same
+line is not parsed). Two rules are taken at their word: one that is the exact line, also beside a broader `allow` rule of the same
 priority, and one made only of `*`. A `deny` still reads the whole line. What the program itself then does is not judged:
 `git -c alias.x=!cmd x` runs another program and `git log --output=file` writes one.
 `Bash` rules are matched against text; they do not confine what an allowed program does. `git show HEAD:.env`,
@@ -738,7 +739,7 @@ priority, and one made only of `*`. A `deny` still reads the whole line. What th
 `FileToolOptions.ReadRules` govern the **file tools only**. Where a file must stay unreadable to the model, do not offer the
 shell, or deny `ExecuteCommand` under `Tools`.
 
-Before any `Bash` rule, a few commands are refused outright and no rule can allow them: `rm -rf /` (or `/*`), a pipe into `sh`/`bash`, `dd` or `>` onto a disk device, `mkfs`, `fdisk`, `format X:`, `chmod 777 /` and the fork bomb. They match the command itself — `rm -rf /tmp/build` or `| sha256sum` are judged by the rules.
+Before any `Bash` rule, a few commands are refused outright and no rule can allow them: `rm -rf /` (or `/*`), a pipe straight into `sh`, `bash`, `zsh` or `dash`, `dd` or `>` onto a disk device, `mkfs`, `fdisk`, `format X:`, `chmod 777 /` and the fork bomb. They match the command itself — `rm -rf /tmp/build`, `| sha256sum` or `| sudo bash` are judged by the rules. Of the built-in rules, `curl * | *sh*` denies a pipe from `curl` into anything with `sh` in its name, `| sudo bash` and `| sha256sum` alike.
 
 **McpTools** — Allow tools matching `*_help`, `*_get`, `*_list`. MCP tools keep the names their servers give them, so
 these rules reach a tool the policy knows to be an MCP tool: one a connected plugin listed
