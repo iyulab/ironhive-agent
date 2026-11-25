@@ -594,9 +594,10 @@ public class ToolProvider
         // Decided before anything is read: even "this file has a match" would be content of a file that is not to be read
         var (searchable, withheld) = SplitByContent(basePath, files);
         var unreadable = new List<string>();
+        var binary = 0;
         string Notes(bool wentThroughAll) =>
             (wentThroughAll ? UnreadNote(searchable.Count) : string.Empty)
-            + NotSearchedNote(withheld) + UnreadableNote(unreadable) + linkNote;
+            + NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
 
         var sb = new StringBuilder();
         var matchCount = 0;
@@ -609,6 +610,12 @@ public class ToolProvider
 
             try
             {
+                if (await LooksBinaryAsync(fullFilePath, cancellationToken))
+                {
+                    binary++;
+                    continue;
+                }
+
                 var fileHasMatch = false;
                 var lineNumber = 0;
 
@@ -996,6 +1003,23 @@ public class ToolProvider
         searchable <= MaxSearchedFiles
             ? string.Empty
             : string.Create(CultureInfo.InvariantCulture, $"\nNote: only the first {MaxSearchedFiles} of {searchable} files were searched. Narrow filePattern or path to search the rest.");
+
+    // A zero byte near the start marks a binary file, as grep and ripgrep read it. UTF-16 and UTF-32 text is full of zero
+    // bytes and says what it is with a byte order mark.
+    private static async Task<bool> LooksBinaryAsync(string path, CancellationToken cancellationToken)
+    {
+        var head = new byte[8000];
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 1, useAsync: true);
+        var read = await stream.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, cancellationToken);
+        ReadOnlySpan<byte> start = head.AsSpan(0, read);
+
+        var utf16 = start.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) || start.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]);
+        var utf32 = start.StartsWith((ReadOnlySpan<byte>)[0x00, 0x00, 0xFE, 0xFF]);
+        return !utf16 && !utf32 && start.Contains((byte)0);
+    }
+
+    private static string BinaryNote(int binary) =>
+        binary == 0 ? string.Empty : string.Create(CultureInfo.InvariantCulture, $"\nNote: {binary} binary file(s) were not searched.");
 
     private static string UnreadableNote(List<string> unreadable) =>
         unreadable.Count == 0 ? string.Empty : $"\nNote: could not be read: {FewOf(unreadable)}.";

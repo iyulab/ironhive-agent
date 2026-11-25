@@ -78,6 +78,28 @@ public sealed class GrepSearchReachTests : IDisposable
     }
 
     [Fact]
+    public async Task A_binary_file_is_not_read_through_and_the_result_says_so()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(Needle).Concat(new byte[] { 0, 1, 2, 0 }).ToArray();
+        File.WriteAllBytes(Path.Combine(_root, "blob.txt"), bytes);
+
+        var found = await Search();
+
+        found.Should().StartWith("No matches found").And.Contain("1 binary file(s) were not searched");
+    }
+
+    // UTF-16 text is full of zero bytes; its byte order mark says it is text.
+    [Fact]
+    public async Task A_utf16_file_is_text()
+    {
+        File.WriteAllText(Path.Combine(_root, "wide.txt"), Needle, System.Text.Encoding.Unicode);
+
+        var found = await Search();
+
+        found.Should().Contain("wide.txt").And.NotContain("binary");
+    }
+
+    [Fact]
     public async Task A_search_that_read_everything_says_nothing_about_a_limit()
     {
         Fill(2000);

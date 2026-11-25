@@ -213,6 +213,25 @@ public sealed class ReadRulesReachContentAndMoveTests : IDisposable
         verdict.OutsideWorkingDirectory.Should().BeFalse();
     }
 
+    // The gate and the tools together: the call is refused, and a search of the folder by that spelling is refused too.
+    [Theory]
+    [InlineData(@"\\?\")]
+    [InlineData(@"\\.\")]
+    public async Task A_device_spelling_opens_nothing_the_rules_deny_through_the_gate_and_the_tools(string prefix)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows device namespace");
+        var config = Default();
+        var file = prefix + Path.Combine(_root, "secrets", "key.txt");
+
+        var read = Judge(config, "ReadFile", At(file));
+        var searched = await Search(ToolsUnder(config), prefix + Path.Combine(_root, "secrets"));
+        var fromRoot = await Search(ToolsUnder(config), prefix + _root);
+
+        read.Verdict.Should().Be(PermissionAction.Deny);
+        searched.Should().NotContain($"key {Needle}").And.Contain("not available");
+        fromRoot.Should().NotContain($"key {Needle}").And.NotContain(Secret);
+    }
+
     [Theory]
     [InlineData("EditFile", RiskLevel.Medium)]
     [InlineData("MoveFile", RiskLevel.High)]
