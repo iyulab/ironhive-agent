@@ -85,6 +85,7 @@ public class ToolProvider
     private readonly string[] _allowedRoots;
     private readonly string[] _removedEnvironmentVariables;
     private const int MaxFileSize = 1024 * 1024; // 1MB
+    private const int MaxSearchedFiles = 2000; // files one GrepFiles call reads
     private const int MaxOutputLength = 50000; // Characters
 
     // A command's output is capped at MaxOutputLength per stream, kept as its beginning plus its end: the end is where a
@@ -591,25 +592,27 @@ public class ToolProvider
 
         // Decided before anything is read: even "this file has a match" would be content of a file that is not to be read
         var (searchable, withheld) = SplitByContent(basePath, files);
-        var notes = NotSearchedNote(withheld) + linkNote;
+        var notes = UnreadNote(searchable.Count) + NotSearchedNote(withheld) + linkNote;
 
         var sb = new StringBuilder();
         var matchCount = 0;
         var fileCount = 0;
 
-        foreach (var file in searchable.Take(50))
+        foreach (var file in searchable.Take(MaxSearchedFiles))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var fullFilePath = Path.Combine(basePath, file.Path);
 
             try
             {
-                var lines = await File.ReadAllLinesAsync(fullFilePath, cancellationToken);
                 var fileHasMatch = false;
+                var lineNumber = 0;
 
-                for (var i = 0; i < lines.Length; i++)
+                // Line by line: a search reads many files, and none of them has to fit in memory at once
+                await foreach (var line in File.ReadLinesAsync(fullFilePath, cancellationToken))
                 {
-                    if (lines[i].Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                    lineNumber++;
+                    if (line.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                     {
                         if (!fileHasMatch)
                         {
@@ -618,7 +621,7 @@ public class ToolProvider
                             fileCount++;
                         }
 
-                        sb.AppendLine(CultureInfo.InvariantCulture, $"  {i + 1}: {TruncateLine(lines[i], 200)}");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"  {lineNumber}: {TruncateLine(line, 200)}");
                         matchCount++;
 
                         if (matchCount >= 100)
@@ -982,6 +985,11 @@ public class ToolProvider
         withheld.Sort(StringComparer.Ordinal);
         return (searchable, withheld);
     }
+
+    private static string UnreadNote(int searchable) =>
+        searchable <= MaxSearchedFiles
+            ? string.Empty
+            : string.Create(CultureInfo.InvariantCulture, $"\nNote: only the first {MaxSearchedFiles} of {searchable} files were searched. Narrow filePattern or path to search the rest.");
 
     // Said whether or not anything matched: "no matches" is not a claim about a file the search did not read.
     private static string NotSearchedNote(List<string> withheld) =>
