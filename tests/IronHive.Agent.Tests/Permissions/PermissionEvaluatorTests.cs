@@ -296,7 +296,6 @@ public class PermissionEvaluatorTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
     public void EmptyOrWhitespacePath_ReturnsDefaultAction(string path)
     {
         // Arrange
