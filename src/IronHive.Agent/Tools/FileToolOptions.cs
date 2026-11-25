@@ -19,8 +19,9 @@ public sealed class FileToolOptions
     /// confined to it lists it here.
     /// </para>
     /// <para>
-    /// The check is on the resolved path text. It does not follow symbolic links or junctions, so a link
-    /// inside a root that points outside it is followed; and <c>ExecuteCommand</c> is a shell, which no
+    /// The check is on the resolved path text. It does not follow symbolic links or junctions, so a call whose
+    /// path goes through a link inside a root reaches wherever the link points (a recursive listing or search does
+    /// not enter such a link on its own); and <c>ExecuteCommand</c> is a shell, which no
     /// path check confines. A host that needs those closed has to withhold the shell tool and control
     /// what the roots contain.
     /// </para>
@@ -48,8 +49,9 @@ public sealed class FileToolOptions
     /// </para>
     /// <para>
     /// The filter judges the text of a path, as <see cref="AllowedRoots"/> does and as the permission rules do for
-    /// <c>ReadFile</c>: a file reached through a link is judged by the link's path. When a filter is set a recursive
-    /// <c>ListDirectory</c> lists a link to a directory but does not enter it (a link back up the tree would never end).
+    /// <c>ReadFile</c>: a file reached through a link is judged by the link's path. With or without a filter, a recursive
+    /// <c>ListDirectory</c>, a <c>GlobFiles</c> and a <c>GrepFiles</c> do not enter a link to a directory below the folder
+    /// they start in (a link back up the tree would never end).
     /// </para>
     /// </remarks>
     public Func<string, bool>? ReadFilter { get; init; }

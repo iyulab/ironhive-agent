@@ -474,7 +474,7 @@ public class ToolProvider
         foreach (var dir in dirs.Take(500))
         {
             var relativePath = Path.GetRelativePath(fullPath, dir);
-            var note = links.Contains(dir) ? " (directory link, not listed here - list its own path to see inside)" : string.Empty;
+            var note = links.Contains(dir) ? $" (directory link, not listed here - list '{AsPathArgument(dir)}' to see inside)" : string.Empty;
             sb.AppendLine(CultureInfo.InvariantCulture, $"[DIR]  {relativePath}/{note}");
         }
 
@@ -488,6 +488,13 @@ public class ToolProvider
         if (dirs.Count > 500 || files.Count > 500)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"... (truncated, total: {dirs.Count} dirs, {files.Count} files)");
+        }
+
+        // A link past the rows shown would otherwise be neither listed nor entered, and nothing would say so
+        var unshown = dirs.Skip(500).Where(links.Contains).Select(AsPathArgument).ToList();
+        if (unshown.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Note: directory links not shown above were not entered either: {FewOf(unshown)}.");
         }
 
         return sb.ToString();
@@ -853,7 +860,19 @@ public class ToolProvider
         while (pending.Count > 0)
         {
             var current = pending.Dequeue();
-            foreach (var dir in Directory.GetDirectories(current))
+            string[] subdirectories, entries;
+            try
+            {
+                subdirectories = Directory.GetDirectories(current);
+                entries = Directory.GetFiles(current);
+            }
+            catch (DirectoryNotFoundException) when (!string.Equals(current, root, StringComparison.Ordinal))
+            {
+                // Removed while the walk ran (a build, a checkout): the rest of the tree is still listed
+                continue;
+            }
+
+            foreach (var dir in subdirectories)
             {
                 if (IsHidden(dir, isDirectory: true))
                 {
@@ -877,7 +896,7 @@ public class ToolProvider
                 }
             }
 
-            files.AddRange(Directory.GetFiles(current).Where(file => !IsHidden(file, isDirectory: false)));
+            files.AddRange(entries.Where(file => !IsHidden(file, isDirectory: false)));
         }
 
         return (dirs, files, links);
@@ -924,18 +943,22 @@ public class ToolProvider
         var names = skippedLinks
             .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
             .Where(link => IsLinkVisible(basePath, link))
-            .Select(link => Path.GetRelativePath(basePath, link).Replace('\\', '/') + "/")
+            .Select(AsPathArgument)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToList();
 
-        if (names.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var shown = string.Join(", ", names.Take(5)) + (names.Count > 5 ? $", ... ({names.Count} in all)" : string.Empty);
-        return $"\nNote: directory links were not entered: {shown}. Pass a link as the base directory to look inside it.";
+        return names.Count == 0
+            ? string.Empty
+            : $"\nNote: directory links were not entered: {FewOf(names)}. Pass a link as the base directory to look inside it.";
     }
+
+    // A directory as the model would pass it back: a path argument is resolved against the working directory, not against the
+    // folder a search started in
+    private string AsPathArgument(string directory) =>
+        Path.GetRelativePath(_workingDirectory, directory).Replace(Path.DirectorySeparatorChar, '/') + "/";
+
+    private static string FewOf(List<string> names) =>
+        string.Join(", ", names.Take(5)) + (names.Count > 5 ? $", ... ({names.Count} in all)" : string.Empty);
 
     private bool IsWithinAllowedRoots(string fullPath)
     {

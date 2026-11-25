@@ -143,7 +143,7 @@ public class ReadFilterTests : IDisposable
     {
         var everything = new ToolProvider(_root, new FileToolOptions { ReadFilter = _ => true });
 
-        // The two walk the folder in different orders, so the lines are compared as a set.
+        // Compared as a set: the claim is the same entries (the order is pinned by DirectoryLinkWalkTests).
         static string[] Lines(string text) => [.. text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order()];
 
         Lines(everything.ListDirectory(".", true)).Should().Equal(Lines(_unfiltered.ListDirectory(".", true)));

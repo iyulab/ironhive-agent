@@ -5,7 +5,9 @@ namespace IronHive.Agent.Tools;
 /// <summary>
 /// The directory view a glob walks: the same as <see cref="DirectoryInfoWrapper"/> except that a link to a directory (a symbolic
 /// link or a junction) below the starting folder is not entered. A link back up the tree would make the walk endless, and a
-/// link out of the tree is not part of the folder the model asked about. The links left out are collected so the tool can say so.
+/// link out of the tree is not part of the folder the model asked about. A link the pattern would have gone into is collected so
+/// the tool can say so; one the pattern never reaches is not. A folder that vanishes while the walk runs reads as empty, as it
+/// does for <see cref="DirectoryInfoWrapper"/>.
 /// </summary>
 internal sealed class LinkSkippingDirectoryInfo : DirectoryInfoBase
 {
@@ -47,17 +49,22 @@ internal sealed class LinkSkippingDirectoryInfo : DirectoryInfoBase
             yield break;
         }
 
-        foreach (var entry in _directory.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly))
+        IEnumerable<FileSystemInfo> entries;
+        try
+        {
+            entries = _directory.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Removed since its parent was read (Exists above answers from what was read then)
+            yield break;
+        }
+
+        foreach (var entry in entries)
         {
             if (entry is DirectoryInfo directory)
             {
-                if (IsDirectoryLink(directory))
-                {
-                    _skippedLinks.Add(directory.FullName);
-                    continue;
-                }
-
-                yield return new LinkSkippingDirectoryInfo(directory, _skippedLinks);
+                yield return Wrap(directory);
             }
             else if (entry is FileInfo file)
             {
@@ -84,15 +91,35 @@ internal sealed class LinkSkippingDirectoryInfo : DirectoryInfoBase
             throw new InvalidOperationException($"More than one sub directory is found under {_directory.FullName} with name {path}.");
         }
 
-        if (IsDirectoryLink(matches[0]))
-        {
-            _skippedLinks.Add(matches[0].FullName);
-            return null;
-        }
-
-        return new LinkSkippingDirectoryInfo(matches[0], _skippedLinks);
+        return Wrap(matches[0]);
     }
 
     public override FileInfoBase? GetFile(string path) =>
         new FileInfoWrapper(new FileInfo(Path.Combine(_directory.FullName, path)));
+
+    private DirectoryInfoBase Wrap(DirectoryInfo directory) =>
+        IsDirectoryLink(directory)
+            ? new NotEnteredLink(directory, this, _skippedLinks)
+            : new LinkSkippingDirectoryInfo(directory, _skippedLinks);
+
+    // A link as the walk sees it: a directory with nothing in it. The matcher asks a directory for its entries only when the
+    // pattern goes into it, so only then is the link recorded as left out.
+    private sealed class NotEnteredLink(DirectoryInfo link, DirectoryInfoBase parent, List<string> skippedLinks) : DirectoryInfoBase
+    {
+        public override string Name => link.Name;
+
+        public override string FullName => link.FullName;
+
+        public override DirectoryInfoBase? ParentDirectory => parent;
+
+        public override IEnumerable<FileSystemInfoBase> EnumerateFileSystemInfos()
+        {
+            skippedLinks.Add(link.FullName);
+            return [];
+        }
+
+        public override DirectoryInfoBase? GetDirectory(string path) => null;
+
+        public override FileInfoBase? GetFile(string path) => null;
+    }
 }

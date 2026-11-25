@@ -36,6 +36,7 @@ public class DirectoryLinkWalkTests : IDisposable
         {
             if (Directory.Exists(directory))
             {
+                RemoveLinks(directory);
                 Directory.Delete(directory, true);
             }
         }
@@ -43,6 +44,24 @@ public class DirectoryLinkWalkTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    // Each link is removed by itself first: the recursive delete fails on a junction ("The parameter is incorrect")
+    private static void RemoveLinks(string directory)
+    {
+        foreach (var child in new DirectoryInfo(directory).GetDirectories())
+        {
+            if (child.LinkTarget is not null)
+            {
+                child.Delete();
+            }
+            else
+            {
+                RemoveLinks(child.FullName);
+            }
+        }
+    }
+
+    // A directory symbolic link, or on Windows - where an account without the privilege cannot make one - a junction, which
+    // needs none: the facts then run instead of being skipped
     private static void Link(string link, string target)
     {
         try
@@ -51,8 +70,137 @@ public class DirectoryLinkWalkTests : IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
-            Assert.Skip("This account cannot create a directory symbolic link: " + ex.GetType().Name);
+            if (!OperatingSystem.IsWindows() || !Junction(link, target))
+            {
+                Assert.Skip("This account cannot create a directory link: " + ex.GetType().Name);
+            }
         }
+    }
+
+    private static bool Junction(string link, string target)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"))
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var argument in new[] { "/c", "mklink", "/J", link, target })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var process = System.Diagnostics.Process.Start(start)!;
+        process.WaitForExit();
+        return process.ExitCode == 0 && Directory.Exists(link);
+    }
+
+    [Fact]
+    public async Task A_junction_back_to_the_root_is_not_entered_by_any_of_the_three_tools()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Junctions exist on Windows only");
+        Junction(Path.Combine(_root, "src", "loop"), _root).Should().BeTrue("a junction needs no privilege");
+
+        var listing = _tools.ListDirectory(".", true);
+        var globbed = _tools.GlobFiles("**/*.txt", ".");
+        var grepped = await _tools.GrepFiles(Needle, "**/*.txt", ".", TestContext.Current.CancellationToken);
+
+        listing.Should().Contain("directory link, not listed here");
+        listing.Split('\n').Count(line => line.Contains("top.txt", StringComparison.Ordinal)).Should().Be(1);
+        globbed.Split('\n').Count(line => line.Contains("top.txt", StringComparison.Ordinal)).Should().Be(1);
+        grepped.Split('\n').Count(line => line.Contains("top.txt:", StringComparison.Ordinal)).Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("*.txt")]
+    [InlineData("src/*.txt")]
+    public void A_pattern_that_never_goes_into_a_link_says_nothing_about_it(string pattern)
+    {
+        Link(Path.Combine(_root, "linked-pkg"), _outside);
+
+        var found = _tools.GlobFiles(pattern, ".");
+
+        found.Should().StartWith("Found 1 files").And.NotContain("were not entered");
+    }
+
+    // The note's paths are what a path argument takes - also when the search started below the working directory
+    [Fact]
+    public void A_link_named_by_a_search_that_started_below_the_working_directory_can_be_passed_back_as_named()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "docs"));
+        File.WriteAllText(Path.Combine(_root, "docs", "wrong.txt"), "x");
+        Link(Path.Combine(_root, "src", "docs"), _outside);
+
+        var found = _tools.GlobFiles("**/*.txt", "src");
+        var listed = _tools.ListDirectory("src", true);
+
+        found.Should().Contain("directory links were not entered: src/docs/.");
+        listed.Should().Contain("list 'src/docs/' to see inside");
+        _tools.GlobFiles("**/*.txt", "src/docs/").Should().Contain("linked.txt").And.NotContain("wrong.txt");
+    }
+
+    [Fact]
+    public void A_link_outside_the_allowed_roots_is_not_named()
+    {
+        Link(Path.Combine(_root, "linked-pkg"), _outside);
+        var confined = new ToolProvider(_root, new FileToolOptions { AllowedRoots = [Path.Combine(_root, "src")] });
+
+        var found = confined.GlobFiles("../**/*.txt", "src");
+
+        found.Should().Contain("ok.txt").And.NotContain("linked-pkg");
+    }
+
+    [Fact]
+    public void A_link_past_the_rows_a_listing_shows_is_still_said_to_be_left_out()
+    {
+        for (var i = 0; i < 500; i++)
+        {
+            Directory.CreateDirectory(Path.Combine(_root, $"d{i:000}"));
+        }
+
+        Link(Path.Combine(_root, "zz-linked"), _outside);
+
+        var listing = _tools.ListDirectory(".", true);
+
+        listing.Should().Contain("truncated").And.Contain("directory links not shown above were not entered either: zz-linked/.");
+    }
+
+    [Fact]
+    public void A_folder_removed_while_a_listing_walks_does_not_fail_the_listing()
+    {
+        var doomed = Path.Combine(_root, "doomed");
+        Directory.CreateDirectory(doomed);
+        // The filter is asked about the folder while its parent is read; the walk opens it afterwards
+        var removing = new ToolProvider(_root, new FileToolOptions
+        {
+            ReadFilter = path =>
+            {
+                if (path.EndsWith("doomed" + Path.DirectorySeparatorChar, StringComparison.Ordinal) && Directory.Exists(doomed))
+                {
+                    Directory.Delete(doomed, true);
+                }
+
+                return true;
+            },
+        });
+
+        var listing = removing.ListDirectory(".", true);
+
+        listing.Should().Contain("ok.txt");
+    }
+
+    [Fact]
+    public void A_folder_removed_after_the_matcher_saw_it_reads_as_empty()
+    {
+        var gone = new DirectoryInfo(Path.Combine(_root, "gone"));
+        gone.Create();
+        gone.Refresh();
+        gone.Exists.Should().BeTrue("the walk's view of the folder is the one read with its parent");
+        Directory.Delete(gone.FullName);
+
+        var entries = new LinkSkippingDirectoryInfo(gone, []).EnumerateFileSystemInfos().ToList();
+
+        entries.Should().BeEmpty();
     }
 
     [Fact]
@@ -162,7 +310,8 @@ public class DirectoryLinkWalkTests : IDisposable
         Link(Path.Combine(_root, "linked-pkg"), _outside);
         var hidingSecret = new ToolProvider(_root, new FileToolOptions
         {
-            ReadFilter = path => !path.Contains(Path.DirectorySeparatorChar + "secret", StringComparison.Ordinal),
+            // Hides the folder itself and nothing by its spelling: what is under it stays out only because its folder is hidden
+            ReadFilter = path => !path.EndsWith(Path.DirectorySeparatorChar + "secret" + Path.DirectorySeparatorChar, StringComparison.Ordinal),
         });
 
         var found = hidingSecret.GlobFiles("**/*.txt", ".");
