@@ -599,7 +599,7 @@ public class ToolProvider
         var filesRead = 0;
         var notLookedAt = 0;
         string Notes() =>
-            LimitNote(filesRead, notLookedAt) +NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
+            LimitNote(filesRead, notLookedAt) + NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
 
         var sb = new StringBuilder();
         var matchCount = 0;
@@ -620,18 +620,23 @@ public class ToolProvider
 
             try
             {
-                if (await LooksBinaryAsync(fullFilePath, cancellationToken))
+                // Opened once, letting a process that is still writing the file go on: a running log is searched too
+                await using var stream = new FileStream(fullFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                    bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                if (await LooksBinaryAsync(stream, cancellationToken))
                 {
                     binary.Add(AsFileArgument(fullFilePath));
                     continue;
                 }
 
+                stream.Position = 0;
+                using var reader = new StreamReader(stream);
                 filesRead++;
                 var fileHasMatch = false;
                 var lineNumber = 0;
 
                 // Line by line: a search reads many files, and none of them has to fit in memory at once
-                await foreach (var line in File.ReadLinesAsync(fullFilePath, cancellationToken))
+                while (await reader.ReadLineAsync(cancellationToken) is { } line)
                 {
                     lineNumber++;
                     if (line.Contains(pattern, StringComparison.OrdinalIgnoreCase))
@@ -1023,10 +1028,9 @@ public class ToolProvider
 
     // A zero byte near the start marks a binary file, as grep and ripgrep read it. UTF-16 and UTF-32 text is full of zero
     // bytes and says what it is with a byte order mark.
-    private static async Task<bool> LooksBinaryAsync(string path, CancellationToken cancellationToken)
+    private static async Task<bool> LooksBinaryAsync(Stream stream, CancellationToken cancellationToken)
     {
         var head = new byte[8000];
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 1, useAsync: true);
         var read = await stream.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, cancellationToken);
         ReadOnlySpan<byte> start = head.AsSpan(0, read);
 

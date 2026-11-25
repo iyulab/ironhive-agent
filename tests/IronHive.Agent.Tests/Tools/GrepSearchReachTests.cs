@@ -77,6 +77,19 @@ public sealed class GrepSearchReachTests : IDisposable
         found.Should().StartWith("No matches found").And.Contain("could not be read: locked.txt");
     }
 
+    // A log another process is still writing lets others read it; the search reads it like any other file.
+    [Fact]
+    public async Task A_file_another_process_is_writing_is_searched()
+    {
+        var path = Path.Combine(_root, "running.log.txt");
+        File.WriteAllText(path, Needle);
+        using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+
+        var found = await Search();
+
+        found.Should().Contain("running.log.txt").And.NotContain("could not be read");
+    }
+
     [Fact]
     public async Task A_binary_file_is_not_read_through_and_the_result_says_so()
     {
