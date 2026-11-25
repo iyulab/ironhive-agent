@@ -55,6 +55,29 @@ public sealed class GrepSearchReachTests : IDisposable
     }
 
     [Fact]
+    public async Task A_search_that_stops_at_the_match_limit_does_not_claim_how_far_it_read()
+    {
+        Fill(2001);
+        File.WriteAllLines(Path.Combine(_root, "a-first.txt"), Enumerable.Repeat(Needle, 150));
+
+        var found = await Search();
+
+        found.Should().Contain("truncated at 100 matches").And.NotContain("files were searched");
+    }
+
+    [Fact]
+    public async Task A_file_the_search_could_not_read_is_counted()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "an exclusive handle only keeps readers out on Windows");
+        File.WriteAllText(Path.Combine(_root, "locked.txt"), Needle);
+        using var held = new FileStream(Path.Combine(_root, "locked.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var found = await Search();
+
+        found.Should().StartWith("No matches found").And.Contain("could not be read: locked.txt");
+    }
+
+    [Fact]
     public async Task A_search_that_read_everything_says_nothing_about_a_limit()
     {
         Fill(2000);

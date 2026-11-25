@@ -593,7 +593,10 @@ public class ToolProvider
 
         // Decided before anything is read: even "this file has a match" would be content of a file that is not to be read
         var (searchable, withheld) = SplitByContent(basePath, files);
-        var notes = UnreadNote(searchable.Count) + NotSearchedNote(withheld) + linkNote;
+        var unreadable = new List<string>();
+        string Notes(bool wentThroughAll) =>
+            (wentThroughAll ? UnreadNote(searchable.Count) : string.Empty)
+            + NotSearchedNote(withheld) + UnreadableNote(unreadable) + linkNote;
 
         var sb = new StringBuilder();
         var matchCount = 0;
@@ -628,17 +631,19 @@ public class ToolProvider
                         if (matchCount >= 100)
                         {
                             sb.AppendLine("\n... (truncated at 100 matches)");
-                            return sb.Append(notes).ToString();
+                            return sb.Append(Notes(wentThroughAll: false)).ToString();
                         }
                     }
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Skip files that can't be read
+                // The rest is still searched; the result says which files it could not look into
+                unreadable.Add(AsFileArgument(fullFilePath));
             }
         }
 
+        var notes = Notes(wentThroughAll: true);
         if (matchCount == 0)
         {
             return $"No matches found for '{pattern}' in files matching '{filePattern}'{notes}";
@@ -991,6 +996,9 @@ public class ToolProvider
         searchable <= MaxSearchedFiles
             ? string.Empty
             : string.Create(CultureInfo.InvariantCulture, $"\nNote: only the first {MaxSearchedFiles} of {searchable} files were searched. Narrow filePattern or path to search the rest.");
+
+    private static string UnreadableNote(List<string> unreadable) =>
+        unreadable.Count == 0 ? string.Empty : $"\nNote: could not be read: {FewOf(unreadable)}.";
 
     // Said whether or not anything matched: "no matches" is not a claim about a file the search did not read.
     private static string NotSearchedNote(List<string> withheld) =>
