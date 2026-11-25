@@ -7,6 +7,11 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 ## [Unreleased]
 
 ### Added
+- **An approver can say its yes covers this one call only.** New `ApprovalResult.ThisCallOnly` (default `false`: what an approval covers stays the approver's own policy) and `ApprovalResult.ApproveThisCallOnly()`. An approver that judges one act at a time - a classifier or judge model answering for a person - sets it so that a policy wrapped around `IHumanApprovalService` (for example "one yes covers the rest of this request's writes") does not widen the yes to calls the approver never saw; the next call is put to the approver again. `ApprovalGate` itself never remembers an approval, so it behaves as before.
+
+## [0.84.0] - 2026-11-23
+
+### Added
 - **A host can keep a folder out of what the directory tools list and search.** New `FileToolOptions.ReadFilter` (`Func<string, bool>?`, default none: hides nothing) is asked about the absolute path of every file and - with a trailing directory separator - every directory that `ListDirectory`, `GlobFiles` and `GrepFiles` would show; `false` leaves it out, a hidden directory is not entered, and a call pointed straight at one is refused with a reason (`... is not available to this tool`) instead of returning an empty list. `PermissionEvaluatorExtensions.ToReadFilter(evaluator)` is the filter that follows the evaluator's `Read` rules: only `Deny` hides (a listing cannot ask a question per entry; `ReadFile` still asks about an `Ask` path).
 - **A tool call that waits for a person can be released after a time and sent again with the answer, if the host's handler opts in.** `IMcpElicitationHandler.DeferAfter` (a default interface member answering `null`, so existing handlers are unchanged): when a server answers a `tools/call` with `input_required` and the person has not answered within that time, the call ends as *awaiting* - `McpToolResult.AwaitingInput` (`McpAwaitingInput`: plugin, tool, the call's exact arguments, the server's `requestState`, what was asked, the model's call id; `IsError` is `false` and `Content` is a placeholder, so a host that opts in checks the member before reading `Content`), `IMcpPluginManager.CallAwaitingInput` is raised with the same entry, and the model's own call reads `awaiting_input` - so the turn can go on. `IMcpPluginManager.ReissueAsync(entry, answers)` sends the call again with the stored arguments and state and one answer per request (`cancel` for one without an answer; answers are checked against their form schema); the server judges the state, a refusal is the result, a second question ends as awaiting again, and the host's guard checks the re-issued call like any other. Only a call that is the plugin's only one in flight is released (a second call could take the wrong state), and a request the server sent on its own is never released; a handler that answers in the last moment completes the call instead. Without `DeferAfter` a call waits for the person as before.
 
@@ -18,6 +23,7 @@ breaking changes, and each one is marked **Breaking** with a migration note.
 
 ### Dependencies
 - Re-pinned sibling package(s) `IronProw.Core` 0.19.0 -> 0.20.0.
+- Re-pinned sibling package(s) `FluxCurator.Core` 0.19.0 -> 0.20.0, `Ironbees.Autonomous` 0.31.0 -> 0.32.0, `Ironbees.Core` 0.31.0 -> 0.32.0, `IronHive.Abstractions` 0.76.0 -> 0.79.0, `IronHive.Extensions.AI` 0.76.0 -> 0.79.0, `IronProw.Core` 0.20.0 -> 0.21.0, `TokenMeter` 0.16.0 -> 0.17.0, `WebFlux` 0.29.0 -> 0.30.0.
 
 ## [0.83.0] - 2026-11-12
 

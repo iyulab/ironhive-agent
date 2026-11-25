@@ -804,7 +804,7 @@ A refusal is always a tool *result*, never an exception, so the model can read i
 An `Ask` verdict with **no approval service registered is refused**, not passed through — a gate that
 lets "ask" through when nobody can be asked is a silent no-op. Either register an
 `IHumanApprovalService`, set the rule (or `DefaultAction`) to `Allow`, or leave the gate out. Remembering an
-`ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time. `ApprovalRequest.CallId` carries the
+`ApprovalResult.AlwaysApprove` answer is the service's job; the gate asks every time. An approver that judges one act at a time (a classifier or judge model answering for a person) returns `ApprovalResult.ApproveThisCallOnly()` (`ApprovalResult.ThisCallOnly`): its yes covers that call only, and a policy wrapped around the service must not widen it to the calls that follow. `ApprovalRequest.CallId` carries the
 call's id, so an approver on a wire can pair its request with the call's start and end events. `ApprovalRequest.DelegatedBy`
 names the delegated agent that asked when the call comes from a delegated run (`DelegationTools` enters
 `DelegationScope.Enter(agentName)` around the run; nested delegation reports the innermost agent), and is null for the
