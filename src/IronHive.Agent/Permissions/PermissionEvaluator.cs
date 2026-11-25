@@ -247,14 +247,18 @@ public class PermissionEvaluator : IPermissionEvaluator
                     // Check for **
                     if (i + 1 < pattern.Length && pattern[i + 1] == '*')
                     {
-                        // ** matches anything including path separators
-                        result.Append(".*");
                         i++; // Skip next *
 
-                        // Skip following path separator if present
                         if (i + 1 < pattern.Length && (pattern[i + 1] == '/' || pattern[i + 1] == '\\'))
                         {
+                            // "**/" is any number of whole folders, none included: what follows starts a name
+                            result.Append("(?:.*[/\\\\])?");
                             i++;
+                        }
+                        else
+                        {
+                            // ** matches anything including path separators
+                            result.Append(".*");
                         }
                     }
                     else

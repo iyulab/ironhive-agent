@@ -86,8 +86,7 @@ public class PermissionConfig
         Read =
         [
             new() { Pattern = "**/*", Action = PermissionAction.Allow, Priority = 0 },
-            new() { Pattern = "*.env", Action = PermissionAction.Ask, Priority = 10, Reason = "May contain secrets" },
-            new() { Pattern = ".env*", Action = PermissionAction.Ask, Priority = 10, Reason = "May contain secrets" },
+            new() { Pattern = "**/*.env", Action = PermissionAction.Ask, Priority = 10, Reason = "May contain secrets" },
             new() { Pattern = "**/.env*", Action = PermissionAction.Ask, Priority = 10, Reason = "May contain secrets" },
             new() { Pattern = "**/secrets/**", Action = PermissionAction.Deny, Priority = 20, Reason = "Protected directory" }
         ],
