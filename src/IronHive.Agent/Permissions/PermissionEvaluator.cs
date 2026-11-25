@@ -97,7 +97,8 @@ public class PermissionEvaluator : IPermissionEvaluator
     private (string RelativePath, string AbsolutePath, bool IsExternal) ResolvePath(string path)
     {
         var root = Path.TrimEndingDirectorySeparator(
-            Path.GetFullPath(_config.WorkingDirectory ?? Directory.GetCurrentDirectory()));
+            Path.GetFullPath(WithoutDevicePrefix(_config.WorkingDirectory ?? Directory.GetCurrentDirectory())));
+        path = WithoutDevicePrefix(path);
 
         string full;
         try
@@ -119,6 +120,31 @@ public class PermissionEvaluator : IPermissionEvaluator
             || Path.IsPathRooted(relative);
 
         return (relative.Replace('\\', '/'), full.Replace('\\', '/'), isExternal);
+    }
+
+    // "\\?\C:\x" and "\\.\C:\x" open the same file as "C:\x" ("\\?\UNC\server\share" as "\\server\share"). Judged as
+    // written they are on another root, so no Read or Edit rule would speak about a file inside the working directory.
+    private static string WithoutDevicePrefix(string path)
+    {
+        if (!OperatingSystem.IsWindows() || path.Length < 4)
+        {
+            return path;
+        }
+
+        var spelled = path.Replace('/', '\\');
+        if (!spelled.StartsWith(@"\\?\", StringComparison.Ordinal) && !spelled.StartsWith(@"\\.\", StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        var rest = spelled[4..];
+        if (rest.Length >= 3 && char.IsAsciiLetter(rest[0]) && rest[1] == ':' && rest[2] == '\\')
+        {
+            return rest;
+        }
+
+        // Any other device (a volume, a pipe) has no ordinary spelling and stays what it is: outside the working directory
+        return rest.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase) ? @"\\" + rest[4..] : path;
     }
 
     /// <inheritdoc />

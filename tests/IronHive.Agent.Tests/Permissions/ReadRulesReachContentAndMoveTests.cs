@@ -201,6 +201,19 @@ public sealed class ReadRulesReachContentAndMoveTests : IDisposable
     }
 
     [Theory]
+    [InlineData(@"\\?\")]
+    [InlineData(@"\\.\")]
+    public void A_device_spelling_of_a_path_answers_to_the_rules_of_the_path(string prefix)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows device namespace");
+
+        var verdict = new PermissionEvaluator(Default()).EvaluateRead(prefix + Path.Combine(_root, "secrets", "key.txt"));
+
+        verdict.Action.Should().Be(PermissionAction.Deny);
+        verdict.OutsideWorkingDirectory.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData("EditFile", RiskLevel.Medium)]
     [InlineData("MoveFile", RiskLevel.High)]
     public void Under_the_default_rules_the_question_about_an_environment_file_says_why(string tool, RiskLevel level)
