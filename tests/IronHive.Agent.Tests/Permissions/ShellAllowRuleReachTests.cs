@@ -9,7 +9,17 @@ namespace IronHive.Agent.Tests.Permissions;
 /// </summary>
 public sealed class ShellAllowRuleReachTests
 {
-    private static PermissionEvaluator Default() => new(PermissionConfig.CreateDefault());
+    // The built-in rules with the wildcard allows a consumer writes: what these facts are about is how far such a rule
+    // reaches, not which commands the built-in list happens to allow.
+    private static PermissionConfig WithWildcardAllows()
+    {
+        var config = PermissionConfig.CreateDefault();
+        config.Bash.Add(new PermissionRule { Pattern = "git *", Action = PermissionAction.Allow });
+        config.Bash.Add(new PermissionRule { Pattern = "dotnet *", Action = PermissionAction.Allow });
+        return config;
+    }
+
+    private static PermissionEvaluator Default() => new(WithWildcardAllows());
 
     private static PermissionEvaluator Allowing(string pattern, PermissionAction otherwise = PermissionAction.Ask) => new(new PermissionConfig
     {
@@ -63,7 +73,7 @@ public sealed class ShellAllowRuleReachTests
     [Fact]
     public void An_exact_rule_added_beside_the_default_rules_allows_its_line()
     {
-        var config = PermissionConfig.CreateDefault();
+        var config = WithWildcardAllows();
         config.Bash.Add(new PermissionRule { Pattern = "git log; echo done", Action = PermissionAction.Allow });
 
         var verdict = new PermissionEvaluator(config).EvaluateBash("git log; echo done");

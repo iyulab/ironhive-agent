@@ -254,8 +254,8 @@ public class HITLScenarioTests
         var config = PermissionConfig.CreateDefault();
         var policy = new ToolCallPolicy(config);
 
-        // These commands are allowed by default config (git *, dotnet *, npm *)
-        var safeCommands = new[] { "git status", "dotnet build", "npm install" };
+        // What the default config allows by name. A wildcard allow is covered by RiskAssessment_AllowedCommand_SkipsApproval.
+        var safeCommands = new[] { "git status" };
 
         foreach (var cmd in safeCommands)
         {
