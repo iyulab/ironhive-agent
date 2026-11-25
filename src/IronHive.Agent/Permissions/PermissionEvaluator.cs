@@ -112,7 +112,9 @@ public class PermissionEvaluator : IPermissionEvaluator
     // outside, Read/Edit do not apply at all and the ExternalDirectory rules decide.
     private PermissionResult EvaluatePathRules(List<PermissionRule> rules, string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        // Only no text at all is "no path". Blanks are a name as far as the tool is concerned - on Windows they resolve to the
+        // folder they are written in - so they are resolved and judged like any other path.
+        if (string.IsNullOrEmpty(path))
         {
             return EvaluateRules(rules, string.Empty, forPaths: true);
         }
@@ -283,8 +285,8 @@ public class PermissionEvaluator : IPermissionEvaluator
 
     private PermissionResult EvaluateRules(List<PermissionRule> rules, string target, bool forPaths = false)
     {
-        // Handle empty/null targets
-        if (string.IsNullOrWhiteSpace(target))
+        // Handle empty/null targets. A name made of blanks is still a name the rules can match.
+        if (string.IsNullOrEmpty(target))
         {
             return new PermissionResult
             {
