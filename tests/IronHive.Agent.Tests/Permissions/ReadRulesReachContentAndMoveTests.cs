@@ -247,6 +247,17 @@ public sealed class ReadRulesReachContentAndMoveTests : IDisposable
     }
 
     [Fact]
+    public void A_move_question_says_why_the_destination_and_the_source_each_need_asking()
+    {
+        var ordinary = Judge(Default(), "MoveFile", Move("src/ok.txt", "config.json"));
+        var environment = Judge(Default(), "MoveFile", Move(".env", "config.json"));
+
+        ordinary.Reason.Should().Contain("Configuration file").And.Contain("File deletion");
+        environment.Reason.Should().Contain("May contain secrets").And.Contain("Configuration file");
+        environment.Reason!.Split("May contain secrets").Should().HaveCount(2, "each reason is said once");
+    }
+
+    [Fact]
     public void When_the_tool_itself_is_asked_about_the_question_still_names_the_folder_that_needs_asking()
     {
         var config = new PermissionConfig { WorkingDirectory = _root, DefaultAction = PermissionAction.Ask };

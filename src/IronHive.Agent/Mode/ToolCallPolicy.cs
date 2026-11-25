@@ -267,7 +267,7 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         var assessment = ToRiskAssessment(byPath, $"Search directory: {TruncatePath(path ?? ".")}");
         // When both the tool and the folder are asked about, one question is put and it has to say both: the approval
         // also covers what the search reads under that folder.
-        return byName.IsRisky && assessment.Verdict != PermissionAction.Deny ? AlsoSaying(byName, assessment) : assessment;
+        return byName.IsRisky && assessment.Verdict != PermissionAction.Deny ? SayingEveryReason(byName, assessment, byName) : assessment;
     }
 
     private RiskAssessment AssessWrite(IDictionary<string, object?>? arguments)
@@ -304,8 +304,9 @@ public sealed class ToolCallPolicy : IToolCallPolicy
     // is: the file answers to the Read rules as well as to the Edit rules, and the stricter verdict wins.
     private RiskAssessment AssessInPlaceEdit(IDictionary<string, object?>? arguments)
     {
+        var written = AssessWrite(arguments);
         var read = AssessRead(arguments);
-        return AlsoSaying(Stricter(AssessWrite(arguments), read), read);
+        return SayingEveryReason(Stricter(written, read), read, written);
     }
 
     // A move deletes its source and writes its destination, and it takes the source's content to a path the rules may read
@@ -321,21 +322,30 @@ public sealed class ToolCallPolicy : IToolCallPolicy
 
         var from = new Dictionary<string, object?> { ["path"] = source };
         var written = AssessWrite(new Dictionary<string, object?> { ["path"] = destination });
+        var removed = AssessDelete(from);
         var read = AssessRead(from);
-        return AlsoSaying(Stricter(Stricter(AssessDelete(from), written), read), read);
+        return SayingEveryReason(Stricter(Stricter(removed, written), read), read, written, removed);
     }
 
-    // One question is put for the call, the one of the higher risk. Where it and another verdict both ask, the person has
-    // to see the other's reason too: "this file may contain secrets" must not give way to "delete this file?".
-    private static RiskAssessment AlsoSaying(RiskAssessment put, RiskAssessment other)
+    // One question is put for the call, the one of the higher risk. Where other verdicts ask too, the person has to see
+    // their reasons: "this file may contain secrets" must not give way to "delete this file?".
+    private static RiskAssessment SayingEveryReason(RiskAssessment put, params ReadOnlySpan<RiskAssessment> verdicts)
     {
-        if (put.Verdict != PermissionAction.Ask || other.Verdict != PermissionAction.Ask
-            || string.IsNullOrEmpty(other.Reason) || string.Equals(put.Reason, other.Reason, StringComparison.Ordinal))
+        if (put.Verdict != PermissionAction.Ask)
         {
             return put;
         }
 
-        return put with { Reason = string.IsNullOrEmpty(put.Reason) ? other.Reason : $"{other.Reason}; {put.Reason}" };
+        var reasons = new List<string>();
+        foreach (var verdict in verdicts)
+        {
+            if (verdict.Verdict == PermissionAction.Ask && !string.IsNullOrEmpty(verdict.Reason) && !reasons.Contains(verdict.Reason))
+            {
+                reasons.Add(verdict.Reason);
+            }
+        }
+
+        return reasons.Count == 0 ? put : put with { Reason = string.Join("; ", reasons) };
     }
 
     private static RiskAssessment Stricter(RiskAssessment a, RiskAssessment b)
