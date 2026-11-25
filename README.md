@@ -733,8 +733,9 @@ tools then show and read is left to `FileToolOptions.ReadRules`; pass the rules 
 `new FileToolOptions { ReadRules = new PermissionEvaluator(permissions).ToReadRules() }`. A denied folder is then neither
 listed nor searched. A path the rules only ask about stays visible, but `GrepFiles` does not return its lines - `ReadFile`
 would ask first - and its result names the files it did not search. The exception is a search that was itself asked about
-(a folder outside the working directory, or one a rule asks about): files asked about on the same terms are covered by that
-answer. `EditFile` and the source of `MoveFile` answer to the `Read` rules as well as to the `Edit` rules, because an edit's
+(a folder outside the working directory, or one a rule asks about): files under that folder asked about on the same terms are
+covered by that answer, so keep the approval gate in front of the tools. A `tools:` denial of `ReadFile` refuses that call
+and is not a `Read` rule - deny `GrepFiles` too where no content may be returned. `EditFile` and the source of `MoveFile` answer to the `Read` rules as well as to the `Edit` rules, because an edit's
 answer tells what a file holds and a move takes it to a path that may be read freely. A rule in `Tools` that names a file tool
 (`ReadFile`, `WriteFile`, `EditFile`, `DeleteFile`, `MoveFile`, either spelling) and denies it refuses the call whatever the path
 rules say; a `DefaultAction` of `Deny` is not such a rule - the path rules still decide for those five.

@@ -265,7 +265,9 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         }
 
         var assessment = ToRiskAssessment(byPath, $"Search directory: {TruncatePath(path ?? ".")}");
-        return byName.IsRisky && assessment.Verdict != PermissionAction.Deny ? byName : assessment;
+        // When both the tool and the folder are asked about, one question is put and it has to say both: the approval
+        // also covers what the search reads under that folder.
+        return byName.IsRisky && assessment.Verdict != PermissionAction.Deny ? AlsoSaying(byName, assessment) : assessment;
     }
 
     private RiskAssessment AssessWrite(IDictionary<string, object?>? arguments)
@@ -300,12 +302,14 @@ public sealed class ToolCallPolicy : IToolCallPolicy
 
     // An edit changes the file's own content, and its answer ("the text occurs 3 times", "not found") tells what that content
     // is: the file answers to the Read rules as well as to the Edit rules, and the stricter verdict wins.
-    private RiskAssessment AssessInPlaceEdit(IDictionary<string, object?>? arguments) =>
-        Stricter(AssessWrite(arguments), AssessRead(arguments));
+    private RiskAssessment AssessInPlaceEdit(IDictionary<string, object?>? arguments)
+    {
+        var read = AssessRead(arguments);
+        return AlsoSaying(Stricter(AssessWrite(arguments), read), read);
+    }
 
     // A move deletes its source and writes its destination, and it takes the source's content to a path the rules may read
-    // freely: each answers to its own rules, and the stricter verdict wins. The read verdict is compared first, so that of two
-    // equal questions the person sees the one about the content.
+    // freely: each answers to its own rules, and the stricter verdict wins.
     private RiskAssessment AssessMove(IDictionary<string, object?>? arguments)
     {
         var source = GetStringArgument(arguments, "source");
@@ -317,7 +321,21 @@ public sealed class ToolCallPolicy : IToolCallPolicy
 
         var from = new Dictionary<string, object?> { ["path"] = source };
         var written = AssessWrite(new Dictionary<string, object?> { ["path"] = destination });
-        return Stricter(Stricter(AssessRead(from), AssessDelete(from)), written);
+        var read = AssessRead(from);
+        return AlsoSaying(Stricter(Stricter(AssessDelete(from), written), read), read);
+    }
+
+    // One question is put for the call, the one of the higher risk. Where it and another verdict both ask, the person has
+    // to see the other's reason too: "this file may contain secrets" must not give way to "delete this file?".
+    private static RiskAssessment AlsoSaying(RiskAssessment put, RiskAssessment other)
+    {
+        if (put.Verdict != PermissionAction.Ask || other.Verdict != PermissionAction.Ask
+            || string.IsNullOrEmpty(other.Reason) || string.Equals(put.Reason, other.Reason, StringComparison.Ordinal))
+        {
+            return put;
+        }
+
+        return put with { Reason = string.IsNullOrEmpty(put.Reason) ? other.Reason : $"{other.Reason}; {put.Reason}" };
     }
 
     private static RiskAssessment Stricter(RiskAssessment a, RiskAssessment b)

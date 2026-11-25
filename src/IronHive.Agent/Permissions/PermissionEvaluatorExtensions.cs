@@ -23,8 +23,9 @@ public static class PermissionEvaluatorExtensions
     /// <para>
     /// <b>Whose content a search returns.</b> Lines of a file the rules allow. A file they would ask about - by a rule or by a
     /// default of <c>Ask</c> - is not read, because <c>ReadFile</c> would put that question to a person first. The one
-    /// exception: when the search directory itself had to be asked about, files that are asked about on the same terms - by
-    /// the same rule, or, outside the working directory, by the same lack of one - are covered by that answer.
+    /// exception: when the search directory itself had to be asked about, files under it that are asked about on the same
+    /// terms - by the same rule, or, outside the working directory, by the same lack of one - are covered by that answer.
+    /// The exception takes it that the search was put to the approval gate first, as <see cref="Mode.ToolCallPolicy"/> does.
     /// </para>
     /// </remarks>
     /// <param name="evaluator">The evaluator whose <see cref="IPermissionEvaluator.EvaluateRead"/> decides.</param>
@@ -39,7 +40,9 @@ public static class PermissionEvaluatorExtensions
             {
                 var verdict = evaluator.EvaluateRead(file);
                 return verdict.Action == PermissionAction.Allow
-                    || (verdict.Action == PermissionAction.Ask && AskedWithTheSearch(evaluator.EvaluateRead(searchDirectory), verdict));
+                    || (verdict.Action == PermissionAction.Ask
+                        && IsUnder(searchDirectory, file)
+                        && AskedWithTheSearch(evaluator.EvaluateRead(searchDirectory), verdict));
             },
         };
     }
@@ -54,6 +57,15 @@ public static class PermissionEvaluatorExtensions
 
         var isDirectory = path.EndsWith(Path.DirectorySeparatorChar) || path.EndsWith(Path.AltDirectorySeparatorChar);
         return isDirectory && result.MatchedRule is null && !result.OutsideWorkingDirectory;
+    }
+
+    // A pattern such as "../*" climbs out of the folder the search was pointed at; what was asked about is that folder.
+    private static bool IsUnder(string directory, string file)
+    {
+        var relative = Path.GetRelativePath(directory, file);
+        return !Path.IsPathRooted(relative)
+            && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     // Whether the question a person answered for the search directory is the question ReadFile would put about the file. The

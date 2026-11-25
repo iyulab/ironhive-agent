@@ -233,7 +233,7 @@ public class ToolProvider
     /// occurrence is the failure this contract exists to stop. Line endings in <paramref name="oldText"/> and
     /// <paramref name="newText"/> are taken as the file's own, so a model that sends <c>\n</c> can edit a CRLF file and
     /// the file keeps CRLF. A write: <see cref="FileToolOptions.WriteInterceptor"/> wraps it, and the default tool-call
-    /// policy judges it as an edit (<c>edit_file</c>).
+    /// policy judges it as an edit (<c>edit_file</c>) of a file it also has to be allowed to read.
     /// </para>
     /// </remarks>
     /// <param name="path">Relative or absolute path to the file to edit.</param>
@@ -404,7 +404,8 @@ public class ToolProvider
     /// </summary>
     /// <remarks>
     /// Not a write: <see cref="FileToolOptions.WriteInterceptor"/> does not run here. The default tool-call policy judges
-    /// the source as a delete and the destination as an edit (<c>move_file</c>), and takes the stricter verdict.
+    /// the source as a delete and as a read, and the destination as an edit (<c>move_file</c>), and takes the strictest
+    /// verdict.
     /// </remarks>
     /// <param name="source">Relative or absolute path of the file to move.</param>
     /// <param name="destination">Relative or absolute path the file moves to, including its file name.</param>

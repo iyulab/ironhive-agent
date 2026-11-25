@@ -178,6 +178,54 @@ public sealed class ReadRulesReachContentAndMoveTests : IDisposable
     }
 
     [Fact]
+    public async Task An_approved_search_does_not_cover_files_a_climbing_pattern_reaches_outside_its_folder()
+    {
+        Write(_outside, "logs/app.log", $"log {Needle}");
+        Write(_outside, "keys/id_key", $"{Needle} {Secret}");
+        var tools = ToolsUnder(Default());
+
+        var found = await tools.GrepFiles(Needle, "../keys/*", Path.Combine(_outside, "logs"), TestContext.Current.CancellationToken);
+
+        found.Should().NotContain(Secret, "only the logs folder was asked about").And.Contain("id_key");
+    }
+
+    [Fact]
+    public async Task A_search_of_a_folder_a_rule_asked_about_does_not_cover_what_a_climbing_pattern_reaches()
+    {
+        Write(_root, "src/a.env/x.txt", $"inside {Needle}");
+
+        var found = await ToolsUnder(Default())
+            .GrepFiles(Needle, "../../.env", "src/a.env", TestContext.Current.CancellationToken);
+
+        found.Should().NotContain(Secret);
+    }
+
+    [Theory]
+    [InlineData("EditFile", RiskLevel.Medium)]
+    [InlineData("MoveFile", RiskLevel.High)]
+    public void Under_the_default_rules_the_question_about_an_environment_file_says_why(string tool, RiskLevel level)
+    {
+        var arguments = tool == "MoveFile" ? Move(".env", "src/env.txt") : At(".env");
+
+        var judged = Judge(Default(), tool, arguments);
+
+        judged.Verdict.Should().Be(PermissionAction.Ask);
+        judged.Reason.Should().Contain("May contain secrets");
+        judged.Level.Should().Be(level, "adding the reason does not lower the risk the other rules gave");
+    }
+
+    [Fact]
+    public void When_the_tool_itself_is_asked_about_the_question_still_names_the_folder_that_needs_asking()
+    {
+        var config = new PermissionConfig { WorkingDirectory = _root, DefaultAction = PermissionAction.Ask };
+
+        var judged = Judge(config, "GrepFiles", new() { ["path"] = _outside });
+
+        judged.Verdict.Should().Be(PermissionAction.Ask);
+        judged.Reason.Should().Contain("outside the working directory");
+    }
+
+    [Fact]
     public async Task A_search_of_a_folder_a_rule_asked_about_returns_the_files_the_same_rule_asks_about()
     {
         Write(_root, "drafts/plan.txt", $"draft {Needle}");
