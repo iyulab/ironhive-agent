@@ -133,9 +133,8 @@ public class PermissionConfig
         Edit = [],
         Bash =
         [
-            new() { Pattern = "git status", Action = PermissionAction.Allow, Priority = 0 },
-            new() { Pattern = "git diff*", Action = PermissionAction.Allow, Priority = 0 },
-            new() { Pattern = "git log*", Action = PermissionAction.Allow, Priority = 0 }
+            // Whole lines only: "git diff*" also names "git difftool -x <program>", and "git log*" an --output file.
+            new() { Pattern = "git status", Action = PermissionAction.Allow, Priority = 0 }
         ],
         Tools = ReadOnlyToolRules(),
         DefaultAction = PermissionAction.Ask
