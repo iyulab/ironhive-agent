@@ -51,7 +51,7 @@ public sealed class GrepSearchReachTests : IDisposable
 
         var found = await Search();
 
-        found.Should().StartWith("No matches found").And.Contain("only the first 2000 of 2001 files were searched");
+        found.Should().StartWith("No matches found").And.Contain("stopped after reading 2000 files; 1 more matched file(s) were not looked at");
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class GrepSearchReachTests : IDisposable
 
         var found = await Search();
 
-        found.Should().Contain("truncated at 100 matches").And.NotContain("files were searched");
+        found.Should().Contain("truncated at 100 matches").And.NotContain("not looked at");
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class GrepSearchReachTests : IDisposable
 
         var found = await Search();
 
-        found.Should().StartWith("No matches found").And.Contain("1 binary file(s) were not searched");
+        found.Should().StartWith("No matches found").And.Contain("not searched, binary: blob.txt");
     }
 
     // UTF-16 text is full of zero bytes; its byte order mark says it is text.
@@ -99,6 +99,22 @@ public sealed class GrepSearchReachTests : IDisposable
         found.Should().Contain("wide.txt").And.NotContain("binary");
     }
 
+    // The limit is on the files a search reads as text; a binary it leaves out does not take a place.
+    [Fact]
+    public async Task Binary_files_do_not_use_up_the_files_a_search_reads()
+    {
+        for (var i = 0; i < 2001; i++)
+        {
+            File.WriteAllBytes(Path.Combine(_root, $"b{i:D5}.txt"), [0, 1]);
+        }
+
+        File.WriteAllText(Path.Combine(_root, "z-last.txt"), Needle);
+
+        var found = await Search();
+
+        found.Should().Contain("z-last.txt").And.NotContain("not looked at").And.Contain("(2001 in all)");
+    }
+
     [Fact]
     public async Task A_search_that_read_everything_says_nothing_about_a_limit()
     {
@@ -106,6 +122,6 @@ public sealed class GrepSearchReachTests : IDisposable
 
         var found = await Search();
 
-        found.Should().StartWith("No matches found").And.NotContain("were searched");
+        found.Should().StartWith("No matches found").And.NotContain("not looked at");
     }
 }

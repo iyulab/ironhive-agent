@@ -594,17 +594,25 @@ public class ToolProvider
         // Decided before anything is read: even "this file has a match" would be content of a file that is not to be read
         var (searchable, withheld) = SplitByContent(basePath, files);
         var unreadable = new List<string>();
-        var binary = 0;
-        string Notes(bool wentThroughAll) =>
-            (wentThroughAll ? UnreadNote(searchable.Count) : string.Empty)
-            + NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
+        var binary = new List<string>();
+        var filesRead = 0;
+        var notLookedAt = 0;
+        string Notes() =>
+            LimitNote(notLookedAt) + NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
 
         var sb = new StringBuilder();
         var matchCount = 0;
         var fileCount = 0;
 
-        foreach (var file in searchable.Take(MaxSearchedFiles))
+        for (var index = 0; index < searchable.Count; index++)
         {
+            if (filesRead == MaxSearchedFiles)
+            {
+                notLookedAt = searchable.Count - index;
+                break;
+            }
+
+            var file = searchable[index];
             cancellationToken.ThrowIfCancellationRequested();
             var fullFilePath = Path.Combine(basePath, file.Path);
 
@@ -612,10 +620,11 @@ public class ToolProvider
             {
                 if (await LooksBinaryAsync(fullFilePath, cancellationToken))
                 {
-                    binary++;
+                    binary.Add(AsFileArgument(fullFilePath));
                     continue;
                 }
 
+                filesRead++;
                 var fileHasMatch = false;
                 var lineNumber = 0;
 
@@ -638,7 +647,7 @@ public class ToolProvider
                         if (matchCount >= 100)
                         {
                             sb.AppendLine("\n... (truncated at 100 matches)");
-                            return sb.Append(Notes(wentThroughAll: false)).ToString();
+                            return sb.Append(Notes()).ToString();
                         }
                     }
                 }
@@ -650,7 +659,7 @@ public class ToolProvider
             }
         }
 
-        var notes = Notes(wentThroughAll: true);
+        var notes = Notes();
         if (matchCount == 0)
         {
             return $"No matches found for '{pattern}' in files matching '{filePattern}'{notes}";
@@ -999,10 +1008,10 @@ public class ToolProvider
         return (searchable, withheld);
     }
 
-    private static string UnreadNote(int searchable) =>
-        searchable <= MaxSearchedFiles
+    private static string LimitNote(int notLookedAt) =>
+        notLookedAt == 0
             ? string.Empty
-            : string.Create(CultureInfo.InvariantCulture, $"\nNote: only the first {MaxSearchedFiles} of {searchable} files were searched. Narrow filePattern or path to search the rest.");
+            : string.Create(CultureInfo.InvariantCulture, $"\nNote: stopped after reading {MaxSearchedFiles} files; {notLookedAt} more matched file(s) were not looked at. Narrow filePattern or path to search the rest.");
 
     // A zero byte near the start marks a binary file, as grep and ripgrep read it. UTF-16 and UTF-32 text is full of zero
     // bytes and says what it is with a byte order mark.
@@ -1018,8 +1027,8 @@ public class ToolProvider
         return !utf16 && !utf32 && start.Contains((byte)0);
     }
 
-    private static string BinaryNote(int binary) =>
-        binary == 0 ? string.Empty : string.Create(CultureInfo.InvariantCulture, $"\nNote: {binary} binary file(s) were not searched.");
+    private static string BinaryNote(List<string> binary) =>
+        binary.Count == 0 ? string.Empty : $"\nNote: not searched, binary: {FewOf(binary)}.";
 
     private static string UnreadableNote(List<string> unreadable) =>
         unreadable.Count == 0 ? string.Empty : $"\nNote: could not be read: {FewOf(unreadable)}.";
