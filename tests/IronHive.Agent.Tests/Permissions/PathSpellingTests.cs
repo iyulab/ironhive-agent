@@ -61,6 +61,25 @@ public sealed class PathSpellingTests : IDisposable
         verdict.Action.Should().Be(PermissionAction.Deny);
     }
 
+    // The short (8.3) name of a folder, alone and with stream syntax. Skipped where the volume gives no short names; the
+    // spelling is checked to open the file before the rules are asked about it.
+    [Theory]
+    [InlineData(@"CONFIG~1\key.txt")]
+    [InlineData(@"CONFIG~1::$INDEX_ALLOCATION\key.txt")]
+    public void A_short_name_of_a_denied_folder_is_the_folder(string spelling)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "8.3 names");
+        Directory.CreateDirectory(Path.Combine(_root, ".config-folder"));
+        File.WriteAllText(Path.Combine(_root, ".config-folder", "key.txt"), Secret);
+        Assert.SkipUnless(File.Exists(Path.Combine(_root, spelling)), "this volume does not open the folder by that name");
+        var config = OnlyDenies();
+        config.Read.Add(new PermissionRule { Pattern = ".config-folder/**", Action = PermissionAction.Deny, Priority = 5 });
+
+        var verdict = new PermissionEvaluator(config).EvaluateRead(spelling);
+
+        verdict.Action.Should().Be(PermissionAction.Deny);
+    }
+
     // A name with no drive letter behind it cannot be mapped to the file a rule speaks about, so a default of Allow does
     // not stretch to it: a person is asked.
     [Theory]

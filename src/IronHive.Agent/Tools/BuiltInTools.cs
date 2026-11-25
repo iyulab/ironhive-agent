@@ -85,7 +85,8 @@ public class ToolProvider
     private readonly string[] _allowedRoots;
     private readonly string[] _removedEnvironmentVariables;
     private const int MaxFileSize = 1024 * 1024; // 1MB
-    private const int MaxSearchedFiles = 2000; // files one GrepFiles call reads
+    private const int MaxSearchedFiles = 2000; // files one GrepFiles call reads as text
+    private const int MaxOpenedFiles = 5000; // files it opens, the binary and unreadable ones included
     private const int MaxOutputLength = 50000; // Characters
 
     // A command's output is capped at MaxOutputLength per stream, kept as its beginning plus its end: the end is where a
@@ -598,7 +599,7 @@ public class ToolProvider
         var filesRead = 0;
         var notLookedAt = 0;
         string Notes() =>
-            LimitNote(notLookedAt) + NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
+            LimitNote(filesRead, notLookedAt) +NotSearchedNote(withheld) + BinaryNote(binary) + UnreadableNote(unreadable) + linkNote;
 
         var sb = new StringBuilder();
         var matchCount = 0;
@@ -606,7 +607,8 @@ public class ToolProvider
 
         for (var index = 0; index < searchable.Count; index++)
         {
-            if (filesRead == MaxSearchedFiles)
+            // Each earlier file was opened, whether it turned out to be text, binary or unreadable
+            if (filesRead == MaxSearchedFiles || index == MaxOpenedFiles)
             {
                 notLookedAt = searchable.Count - index;
                 break;
@@ -1008,10 +1010,16 @@ public class ToolProvider
         return (searchable, withheld);
     }
 
-    private static string LimitNote(int notLookedAt) =>
-        notLookedAt == 0
-            ? string.Empty
-            : string.Create(CultureInfo.InvariantCulture, $"\nNote: stopped after reading {MaxSearchedFiles} files; {notLookedAt} more matched file(s) were not looked at. Narrow filePattern or path to search the rest.");
+    private static string LimitNote(int filesRead, int notLookedAt)
+    {
+        if (notLookedAt == 0)
+        {
+            return string.Empty;
+        }
+
+        var limit = filesRead == MaxSearchedFiles ? $"reading {MaxSearchedFiles}" : $"opening {MaxOpenedFiles}";
+        return string.Create(CultureInfo.InvariantCulture, $"\nNote: stopped after {limit} files; {notLookedAt} more matched file(s) were not looked at. Narrow filePattern or path to search the rest.");
+    }
 
     // A zero byte near the start marks a binary file, as grep and ripgrep read it. UTF-16 and UTF-32 text is full of zero
     // bytes and says what it is with a byte order mark.

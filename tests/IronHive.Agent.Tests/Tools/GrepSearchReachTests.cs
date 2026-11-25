@@ -115,6 +115,21 @@ public sealed class GrepSearchReachTests : IDisposable
         found.Should().Contain("z-last.txt").And.NotContain("not looked at").And.Contain("(2001 in all)");
     }
 
+    // A tree of build output or version-control objects is mostly binary: the files a search opens are limited too, or it
+    // goes on opening them for minutes.
+    [Fact]
+    public async Task A_search_stops_opening_files_even_when_few_of_them_are_text()
+    {
+        for (var i = 0; i < 5001; i++)
+        {
+            File.WriteAllBytes(Path.Combine(_root, $"b{i:D5}.txt"), [0, 1]);
+        }
+
+        var found = await Search();
+
+        found.Should().Contain("stopped after opening 5000 files; 1 more matched file(s) were not looked at");
+    }
+
     [Fact]
     public async Task A_search_that_read_everything_says_nothing_about_a_limit()
     {
