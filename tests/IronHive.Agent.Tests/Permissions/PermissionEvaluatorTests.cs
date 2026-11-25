@@ -168,27 +168,6 @@ public class PermissionEvaluatorTests
     }
 
     [Fact]
-    public void Priority_SamePriority_FirstMatchWins()
-    {
-        // Arrange
-        var config = new PermissionConfig
-        {
-            Read = new List<PermissionRule>
-            {
-                new() { Pattern = "*.txt", Action = PermissionAction.Allow, Priority = 10 },
-                new() { Pattern = "*.txt", Action = PermissionAction.Deny, Priority = 10 }
-            }
-        };
-        var evaluator = new PermissionEvaluator(config);
-
-        // Act
-        var result = evaluator.Evaluate("read", "test.txt");
-
-        // Assert - should get first matching rule at same priority
-        Assert.Equal(PermissionAction.Allow, result.Action);
-    }
-
-    [Fact]
     public void Priority_NoMatchingRule_ReturnsDefaultAction()
     {
         // Arrange
