@@ -56,6 +56,25 @@ public sealed class ShellWildcardReachTests
         new PermissionEvaluator(PermissionConfig.CreateDefault()).EvaluateBash(command).Action
             .Should().Be(PermissionAction.Deny);
 
+    // A tool name is not a path either: a server may name a tool "fs/read".
+    [Theory]
+    [InlineData("*", "fs/read")]
+    [InlineData("*", @"fs\read")]
+    [InlineData("*_delete", "fs/items_delete")]
+    [InlineData("fs*", "fs/read")]
+    public void A_tool_name_rule_refuses_a_name_with_a_separator(string pattern, string toolName)
+    {
+        var evaluator = new PermissionEvaluator(new PermissionConfig
+        {
+            Tools = [new PermissionRule { Pattern = pattern, Action = PermissionAction.Deny }],
+            McpTools = [new PermissionRule { Pattern = pattern, Action = PermissionAction.Deny }],
+            DefaultAction = PermissionAction.Allow,
+        });
+
+        evaluator.EvaluateTool(toolName).Action.Should().Be(PermissionAction.Deny);
+        evaluator.EvaluateMcpTool(toolName).Action.Should().Be(PermissionAction.Deny);
+    }
+
     [Fact]
     public void A_path_rule_wildcard_still_stays_inside_one_name()
     {

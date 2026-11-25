@@ -705,9 +705,10 @@ sealed class TracingRetriever(IToolRetriever inner, ILogger log) : IToolRetrieve
 
 In a path pattern (`Read`, `Edit`, `ExternalDirectory`) `*` stays inside one name, `**` crosses folders, and `**/` before a
 name stands for whole folders - any number, none included: `**/tests/**` covers `tests/a.txt` and `src/tests/a.txt`, not
-`contests/a.txt`. In `Bash`, tool-name and MCP patterns `**/` is any text. A `Bash` rule is matched against a command
-line, which is not a path: there `*` and `?` stand for any text, `/`, `\` and line breaks included, so `rm *` also refuses
-`rm -rf /tmp/x`. A rule is matched from the start of the line: `rm *` says nothing about `echo done && rm x`.
+`contests/a.txt`. `Bash`, tool-name and MCP patterns are matched against a command line or a name, which is not a path:
+there `*`, `**`, `**/` and `?` stand for any text, `/`, `\` and line breaks included, so `rm *` also refuses
+`rm -rf /tmp/x` and a `*` deny also refuses a tool named `fs/read`. A rule is matched from the start of the text: `rm *`
+says nothing about `echo done && rm x`.
 
 A rule is matched against the file a path opens: `..`, Windows device prefixes (`\\?\C:\`, `\\.\C:\`, `\??\C:\`) and
 NTFS stream names (`dir::$INDEX_ALLOCATION`) are resolved first. Some names cannot be resolved to a drive path - a network
