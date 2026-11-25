@@ -304,10 +304,13 @@ public class PermissionEvaluator : IPermissionEvaluator
             };
         }
 
-        // Find all matching rules, sorted by priority (highest first)
+        // Find all matching rules, highest priority first. Among rules of one priority the stricter action goes first - the
+        // built-in rules are listed before the ones a host adds, so list order must not let an allow override an added deny.
+        // Rules that agree keep their list order.
         var matchingRules = rules
             .Where(r => MatchesPattern(target, r.Pattern, forPaths))
             .OrderByDescending(r => r.Priority)
+            .ThenByDescending(r => Strictness(r.Action))
             .ToList();
 
         if (matchingRules.Count == 0)
@@ -328,6 +331,13 @@ public class PermissionEvaluator : IPermissionEvaluator
             Reason = rule.Reason
         };
     }
+
+    private static int Strictness(PermissionAction action) => action switch
+    {
+        PermissionAction.Deny => 2,
+        PermissionAction.Ask => 1,
+        _ => 0,
+    };
 
     private bool MatchesPattern(string input, string pattern, bool forPaths = false)
     {

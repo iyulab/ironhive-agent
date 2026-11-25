@@ -16,7 +16,8 @@ public record PermissionRule
     public PermissionAction Action { get; init; } = PermissionAction.Ask;
 
     /// <summary>
-    /// Priority of this rule. Higher values take precedence.
+    /// Priority of this rule. Higher values take precedence; among matching rules of one priority the stricter action wins
+    /// (deny, then ask, then allow), whatever order they are listed in.
     /// </summary>
     public int Priority { get; init; }
 

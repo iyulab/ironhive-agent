@@ -698,6 +698,10 @@ sealed class TracingRetriever(IToolRetriever inner, ILogger log) : IToolRetrieve
 
 `PermissionConfigLoader` reads `.ironhive/permissions.yaml` (or `.yml`, `.json`). With no file, the defaults below apply. A file that exists but is not a permission configuration (malformed, no `permissions` section, a misspelled section or key, an action other than `allow`/`deny`/`ask`) throws `PermissionConfigException` rather than falling back to the defaults, which allow more than a restrictive file would.
 
+When several rules of a section match, the highest `priority` decides; among rules of that priority the stricter action
+wins - `deny`, then `ask`, then `allow` - whatever order they are listed in. So a `deny` you add to the built-in rules
+holds at their priority, and an exception to a `deny` needs a higher priority than the `deny`.
+
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:
 
 **Read** — Allow `**/*`; Ask on any file with `.env` in its name (`**/*.env*`); Deny folders whose name ends in `secrets`
