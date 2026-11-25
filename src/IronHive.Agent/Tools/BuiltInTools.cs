@@ -81,7 +81,7 @@ public class ToolProvider
 {
     private readonly string _workingDirectory;
     private readonly IFileWriteInterceptor? _writeInterceptor;
-    private readonly Func<string, bool>? _readFilter;
+    private readonly FileReadRules? _readRules;
     private readonly string[] _allowedRoots;
     private readonly string[] _removedEnvironmentVariables;
     private const int MaxFileSize = 1024 * 1024; // 1MB
@@ -112,7 +112,7 @@ public class ToolProvider
         _removedEnvironmentVariables = [.. (shellOptions?.RemoveEnvironmentVariables ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))];
         _writeInterceptor = options?.WriteInterceptor;
-        _readFilter = options?.ReadFilter;
+        _readRules = options?.ReadRules;
         _allowedRoots = [.. (options?.AllowedRoots ?? [])
             .Where(root => !string.IsNullOrWhiteSpace(root))
             .Select(root => Path.TrimEndingDirectorySeparator(
@@ -589,11 +589,15 @@ public class ToolProvider
             return $"No files found matching pattern: {filePattern}{linkNote}";
         }
 
+        // Decided before anything is read: even "this file has a match" would be content of a file that is not to be read
+        var (searchable, withheld) = SplitByContent(basePath, files);
+        var notes = NotSearchedNote(withheld) + linkNote;
+
         var sb = new StringBuilder();
         var matchCount = 0;
         var fileCount = 0;
 
-        foreach (var file in files.Take(50))
+        foreach (var file in searchable.Take(50))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var fullFilePath = Path.Combine(basePath, file.Path);
@@ -620,7 +624,7 @@ public class ToolProvider
                         if (matchCount >= 100)
                         {
                             sb.AppendLine("\n... (truncated at 100 matches)");
-                            return sb.Append(linkNote).ToString();
+                            return sb.Append(notes).ToString();
                         }
                     }
                 }
@@ -633,11 +637,11 @@ public class ToolProvider
 
         if (matchCount == 0)
         {
-            return $"No matches found for '{pattern}' in files matching '{filePattern}'{linkNote}";
+            return $"No matches found for '{pattern}' in files matching '{filePattern}'{notes}";
         }
 
         sb.Insert(0, $"Found {matchCount} matches in {fileCount} files:\n");
-        return sb.Append(linkNote).ToString();
+        return sb.Append(notes).ToString();
     }
 
     /// <summary>
@@ -779,13 +783,13 @@ public class ToolProvider
 
     private bool IsHidden(string fullPath, bool isDirectory)
     {
-        if (_readFilter is null)
+        if (_readRules is null)
         {
             return false;
         }
 
         var asked = isDirectory ? Path.TrimEndingDirectorySeparator(fullPath) + Path.DirectorySeparatorChar : fullPath;
-        return !_readFilter(asked);
+        return !_readRules.IsVisible(asked);
     }
 
     // The files a pattern matched under basePath that the model may see: inside the boundary, not hidden themselves, and not
@@ -793,7 +797,7 @@ public class ToolProvider
     // climbs out, up to the base's own ancestors - the base itself was judged when it was resolved).
     private List<FilePatternMatch> VisibleMatches(string basePath, PatternMatchingResult result)
     {
-        if (_readFilter is null)
+        if (_readRules is null)
         {
             return [.. result.Files.Where(file => IsWithinAllowedRoots(Path.GetFullPath(Path.Combine(basePath, file.Path))))];
         }
@@ -952,10 +956,45 @@ public class ToolProvider
             : $"\nNote: directory links were not entered: {FewOf(names)}. Pass a link as the base directory to look inside it.";
     }
 
+    // The matched files a search may read, and those whose content the read rules keep from it
+    private (List<FilePatternMatch> Searchable, List<string> Withheld) SplitByContent(string basePath, List<FilePatternMatch> files)
+    {
+        if (_readRules is null)
+        {
+            return (files, []);
+        }
+
+        var searchable = new List<FilePatternMatch>(files.Count);
+        var withheld = new List<string>();
+        foreach (var file in files)
+        {
+            var full = Path.GetFullPath(Path.Combine(basePath, file.Path));
+            if (_readRules.MayReturnContent(basePath, full))
+            {
+                searchable.Add(file);
+            }
+            else
+            {
+                withheld.Add(AsFileArgument(full));
+            }
+        }
+
+        withheld.Sort(StringComparer.Ordinal);
+        return (searchable, withheld);
+    }
+
+    // Said whether or not anything matched: "no matches" is not a claim about a file the search did not read.
+    private static string NotSearchedNote(List<string> withheld) =>
+        withheld.Count == 0
+            ? string.Empty
+            : $"\nNote: not searched, because reading needs its own approval: {FewOf(withheld)}. Read such a file with ReadFile, which asks for it.";
+
     // A directory as the model would pass it back: a path argument is resolved against the working directory, not against the
     // folder a search started in
-    private string AsPathArgument(string directory) =>
-        Path.GetRelativePath(_workingDirectory, directory).Replace(Path.DirectorySeparatorChar, '/') + "/";
+    private string AsPathArgument(string directory) => AsFileArgument(directory) + "/";
+
+    private string AsFileArgument(string path) =>
+        Path.GetRelativePath(_workingDirectory, path).Replace(Path.DirectorySeparatorChar, '/');
 
     private static string FewOf(List<string> names) =>
         string.Join(", ", names.Take(5)) + (names.Count > 5 ? $", ... ({names.Count} in all)" : string.Empty);

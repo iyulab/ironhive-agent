@@ -27,7 +27,7 @@ public class DirectoryLinkWalkTests : IDisposable
         File.WriteAllText(Path.Combine(_outside, "linked.txt"), $"linked {Needle}");
 
         _tools = new ToolProvider(_root);
-        _filtered = new ToolProvider(_root, new FileToolOptions { ReadFilter = _ => true });
+        _filtered = new ToolProvider(_root, new FileToolOptions { ReadRules = ReadRulesFor.Showing(_ => true) });
     }
 
     public void Dispose()
@@ -173,7 +173,7 @@ public class DirectoryLinkWalkTests : IDisposable
         // The filter is asked about the folder while its parent is read; the walk opens it afterwards
         var removing = new ToolProvider(_root, new FileToolOptions
         {
-            ReadFilter = path =>
+            ReadRules = ReadRulesFor.Showing(path =>
             {
                 if (path.EndsWith("doomed" + Path.DirectorySeparatorChar, StringComparison.Ordinal) && Directory.Exists(doomed))
                 {
@@ -181,7 +181,7 @@ public class DirectoryLinkWalkTests : IDisposable
                 }
 
                 return true;
-            },
+            }),
         });
 
         var listing = removing.ListDirectory(".", true);
@@ -311,7 +311,7 @@ public class DirectoryLinkWalkTests : IDisposable
         var hidingSecret = new ToolProvider(_root, new FileToolOptions
         {
             // Hides the folder itself and nothing by its spelling: what is under it stays out only because its folder is hidden
-            ReadFilter = path => !path.EndsWith(Path.DirectorySeparatorChar + "secret" + Path.DirectorySeparatorChar, StringComparison.Ordinal),
+            ReadRules = ReadRulesFor.Showing(path => !path.EndsWith(Path.DirectorySeparatorChar + "secret" + Path.DirectorySeparatorChar, StringComparison.Ordinal)),
         });
 
         var found = hidingSecret.GlobFiles("**/*.txt", ".");

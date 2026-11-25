@@ -101,8 +101,9 @@ public enum RiskLevel
 /// name, all through an <see cref="IPermissionEvaluator"/> (so through one <see cref="PermissionConfig"/>).
 /// </summary>
 /// <remarks>
-/// File reads and edits answer to the <c>Read</c>/<c>Edit</c> path rules, deletes to <see cref="IPermissionEvaluator.EvaluateDelete"/>
-/// (the <c>Edit</c> rules, asked about when <see cref="PermissionConfig.AskBeforeDelete"/>), shell commands to
+/// File reads and writes answer to the <c>Read</c>/<c>Edit</c> path rules, deletes to <see cref="IPermissionEvaluator.EvaluateDelete"/>
+/// (the <c>Edit</c> rules, asked about when <see cref="PermissionConfig.AskBeforeDelete"/>); an in-place edit and the source
+/// of a move answer to the <c>Read</c> rules too. Shell commands go to
 /// <see cref="IPermissionEvaluator.EvaluateBash"/>, MCP tools to <c>McpTools</c> (a name the <c>isMcpTool</c> predicate claims — wire
 /// it to <see cref="Mcp.IMcpPluginManager.IsMcpTool"/>, since MCP tools keep their servers' names — or an <c>mcp__*</c> name), and any
 /// other tool to <c>Tools</c>,
@@ -174,7 +175,8 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         return BuiltInToolNames.Normalize(toolName) switch
         {
             "read_file" => AssessRead(arguments),
-            "write_file" or "edit_file" => AssessWrite(arguments),
+            "write_file" => AssessWrite(arguments),
+            "edit_file" => AssessInPlaceEdit(arguments),
             "delete_file" => AssessDelete(arguments),
             "move_file" => AssessMove(arguments),
             "glob_files" or "grep_files" or "list_directory" => AssessDirectoryRead(toolName, arguments),
@@ -296,7 +298,14 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         return ToRiskAssessment(result, $"Delete file: {TruncatePath(path)}", RiskLevel.High);
     }
 
-    // A move deletes its source and writes its destination: each answers to its own rules, and the stricter verdict wins.
+    // An edit changes the file's own content, and its answer ("the text occurs 3 times", "not found") tells what that content
+    // is: the file answers to the Read rules as well as to the Edit rules, and the stricter verdict wins.
+    private RiskAssessment AssessInPlaceEdit(IDictionary<string, object?>? arguments) =>
+        Stricter(AssessWrite(arguments), AssessRead(arguments));
+
+    // A move deletes its source and writes its destination, and it takes the source's content to a path the rules may read
+    // freely: each answers to its own rules, and the stricter verdict wins. The read verdict is compared first, so that of two
+    // equal questions the person sees the one about the content.
     private RiskAssessment AssessMove(IDictionary<string, object?>? arguments)
     {
         var source = GetStringArgument(arguments, "source");
@@ -306,9 +315,9 @@ public sealed class ToolCallPolicy : IToolCallPolicy
             return RiskAssessment.Risky(RiskLevel.High, "Move operation with unknown path");
         }
 
-        var removed = AssessDelete(new Dictionary<string, object?> { ["path"] = source });
+        var from = new Dictionary<string, object?> { ["path"] = source };
         var written = AssessWrite(new Dictionary<string, object?> { ["path"] = destination });
-        return Stricter(removed, written);
+        return Stricter(Stricter(AssessRead(from), AssessDelete(from)), written);
     }
 
     private static RiskAssessment Stricter(RiskAssessment a, RiskAssessment b)

@@ -6,7 +6,7 @@ namespace IronHive.Agent.Tests.Tools;
 
 /// <summary>
 /// The permission rules judge a directory tool by the directory it is pointed at, so <c>read: .config-folder/** deny</c> let a
-/// search from <c>.</c> walk into the folder it denies. <see cref="FileToolOptions.ReadFilter"/> is what the tools themselves
+/// search from <c>.</c> walk into the folder it denies. <see cref="FileToolOptions.ReadRules"/> is what the tools themselves
 /// leave out. Each fact runs the same request without a filter and with one, on a real folder.
 /// </summary>
 public class ReadFilterTests : IDisposable
@@ -27,7 +27,7 @@ public class ReadFilterTests : IDisposable
         File.WriteAllText(Path.Combine(_root, "top.txt"), $"top {Needle}");
 
         _unfiltered = new ToolProvider(_root);
-        _filtered = new ToolProvider(_root, new FileToolOptions { ReadFilter = HideConfigFolder });
+        _filtered = new ToolProvider(_root, new FileToolOptions { ReadRules = ReadRulesFor.Showing(HideConfigFolder) });
     }
 
     public void Dispose()
@@ -128,7 +128,7 @@ public class ReadFilterTests : IDisposable
         // A rule may close a directory without naming its files; the files under it are not shown either.
         var folderOnly = new ToolProvider(_root, new FileToolOptions
         {
-            ReadFilter = path => !path.EndsWith(Path.DirectorySeparatorChar + ".config-folder" + Path.DirectorySeparatorChar, StringComparison.Ordinal),
+            ReadRules = ReadRulesFor.Showing(path => !path.EndsWith(Path.DirectorySeparatorChar + ".config-folder" + Path.DirectorySeparatorChar, StringComparison.Ordinal)),
         });
 
         var grep = await folderOnly.GrepFiles(Needle, "**/*.txt", ".", TestContext.Current.CancellationToken);
@@ -141,7 +141,7 @@ public class ReadFilterTests : IDisposable
     [Fact]
     public void No_filter_keeps_today_s_results_and_a_filter_that_hides_nothing_changes_none()
     {
-        var everything = new ToolProvider(_root, new FileToolOptions { ReadFilter = _ => true });
+        var everything = new ToolProvider(_root, new FileToolOptions { ReadRules = ReadRulesFor.Showing(_ => true) });
 
         // Compared as a set: the claim is the same entries (the order is pinned by DirectoryLinkWalkTests).
         static string[] Lines(string text) => [.. text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order()];
@@ -151,7 +151,7 @@ public class ReadFilterTests : IDisposable
     }
 
     [Fact]
-    public async Task The_permission_rules_deny_becomes_the_filter_through_ToReadFilter()
+    public async Task The_permission_rules_deny_hides_the_path_through_ToReadRules()
     {
         var evaluator = new PermissionEvaluator(new PermissionConfig
         {
@@ -162,7 +162,7 @@ public class ReadFilterTests : IDisposable
                 new PermissionRule { Pattern = "**", Action = PermissionAction.Allow },
             ],
         });
-        var tools = new ToolProvider(_root, new FileToolOptions { ReadFilter = evaluator.ToReadFilter() });
+        var tools = new ToolProvider(_root, new FileToolOptions { ReadRules = evaluator.ToReadRules() });
 
         var listing = tools.ListDirectory(".", true);
         var grep = await tools.GrepFiles(Needle, "**/*.txt", ".", TestContext.Current.CancellationToken);
@@ -173,7 +173,7 @@ public class ReadFilterTests : IDisposable
     }
 
     [Fact]
-    public void ToReadFilter_leaves_a_path_the_rules_would_only_ask_about_visible()
+    public void ToReadRules_leaves_a_path_the_rules_would_only_ask_about_visible()
     {
         var evaluator = new PermissionEvaluator(new PermissionConfig
         {
@@ -182,13 +182,13 @@ public class ReadFilterTests : IDisposable
             DefaultAction = PermissionAction.Ask,
         });
 
-        var visible = evaluator.ToReadFilter()(Path.Combine(_root, "src", "ok.txt"));
+        var visible = evaluator.ToReadRules().IsVisible(Path.Combine(_root, "src", "ok.txt"));
 
         visible.Should().BeTrue("a listing cannot ask a question per entry - ReadFile does");
     }
 
     [Fact]
-    public async Task ToReadFilter_under_a_default_deny_hides_the_files_no_rule_allows_and_not_the_folders_no_rule_names()
+    public async Task ToReadRules_under_a_default_deny_hides_the_files_no_rule_allows_and_not_the_folders_no_rule_names()
     {
         // The Read rules are written for files: `**/*.txt` allowed and everything else denied by default says nothing about the
         // folder `src/` or the working directory itself. Hiding them would hide the files the same rules allow.
@@ -199,7 +199,7 @@ public class ReadFilterTests : IDisposable
             DefaultAction = PermissionAction.Deny,
         });
         File.WriteAllText(Path.Combine(_root, "src", "notes.md"), $"markdown {Needle}");
-        var tools = new ToolProvider(_root, new FileToolOptions { ReadFilter = evaluator.ToReadFilter() });
+        var tools = new ToolProvider(_root, new FileToolOptions { ReadRules = evaluator.ToReadRules() });
 
         var listing = tools.ListDirectory(".", true);
         var glob = tools.GlobFiles("**/*", ".");
@@ -212,7 +212,7 @@ public class ReadFilterTests : IDisposable
     }
 
     [Fact]
-    public void ToReadFilter_still_hides_a_folder_a_rule_names_and_a_folder_outside_the_working_directory()
+    public void ToReadRules_still_hides_a_folder_a_rule_names_and_a_folder_outside_the_working_directory()
     {
         var evaluator = new PermissionEvaluator(new PermissionConfig
         {
@@ -221,7 +221,7 @@ public class ReadFilterTests : IDisposable
             DefaultAction = PermissionAction.Allow,
             ExternalDirectory = [new PermissionRule { Pattern = "**", Action = PermissionAction.Deny }],
         });
-        var filter = evaluator.ToReadFilter();
+        var filter = evaluator.ToReadRules().IsVisible;
 
         filter(Path.Combine(_root, ".config-folder") + Path.DirectorySeparatorChar).Should().BeFalse("a Read rule names the folder");
         filter(Path.Combine(_root, ".config-folder", "secret.txt")).Should().BeFalse();
@@ -242,7 +242,7 @@ public class ReadFilterTests : IDisposable
         // Hide every file whose number is odd: 260 remain, still more than the 500-entry listing limit only for the unfiltered view.
         var evens = new ToolProvider(_root, new FileToolOptions
         {
-            ReadFilter = path => !(Path.GetFileName(path) is { Length: >= 4 } name && name[0] == 'f' && int.TryParse(name.AsSpan(1, 3), out var n) && n % 2 == 1),
+            ReadRules = ReadRulesFor.Showing(path => !(Path.GetFileName(path) is { Length: >= 4 } name && name[0] == 'f' && int.TryParse(name.AsSpan(1, 3), out var n) && n % 2 == 1)),
         });
 
         var open = _unfiltered.ListDirectory("many");
