@@ -710,7 +710,7 @@ holds at their priority, and an exception to a `deny` needs a higher priority th
 In a path pattern (`Read`, `Edit`, `ExternalDirectory`) `*` stays inside one name, `**` crosses folders, and `**/` before a
 name stands for whole folders - any number, none included: `**/tests/**` covers `tests/a.txt` and `src/tests/a.txt`, not
 `contests/a.txt`. `Bash`, tool-name and MCP patterns are matched against a command line or a name, which is not a path:
-there `*`, `**`, `**/` and `?` stand for any text, `/`, `\` and line breaks included, so `rm *` also refuses
+there `*`, `**` and `**/` stand for any text and `?` for any one character, `/`, `\` and line breaks included, so a `deny` of `rm *` also refuses
 `rm -rf /tmp/x` and a `*` deny also refuses a tool named `fs/read`. A rule is matched from the start of the text: `rm *`
 says nothing about `echo done && rm x`.
 
@@ -723,8 +723,8 @@ drives and mapped drives are judged by the text of the path. Where the model mus
 
 **Edit** — Allow `src/**/*` and `tests/**/*`; Ask on `*.json`, `*.yaml`, `*.yml`
 
-**Bash** — Allow the exact line `git status`; Deny `rm -rf *`, `sudo *`, `curl * | *sh*`. Every other command is asked
-about. `git`, `dotnet`, `npm` and `cargo` are not allowed with any arguments, because each of them starts other programs
+**Bash** — Allow the exact line `git status`; Deny `rm -rf *`, `sudo *`, `curl * | *sh*`. Every other command is asked about unless
+a rule denies it. `git`, `dotnet`, `npm` and `cargo` are not allowed with any arguments, because each of them starts other programs
 from its arguments. To allow more, add a rule per command you accept, knowing what that command can run:
 `permissions.Bash.Add(new PermissionRule { Pattern = "dotnet build", Action = PermissionAction.Allow })`.
 
