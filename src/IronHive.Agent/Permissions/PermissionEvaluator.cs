@@ -9,7 +9,7 @@ namespace IronHive.Agent.Permissions;
 public class PermissionEvaluator : IPermissionEvaluator
 {
     private readonly PermissionConfig _config;
-    private readonly ConcurrentDictionary<string, Regex> _patternCache = new();
+    private readonly ConcurrentDictionary<(string Pattern, bool ForPaths), Regex> _patternCache = new();
 
     public PermissionEvaluator(PermissionConfig? config = null)
     {
@@ -63,7 +63,7 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// <inheritdoc />
     public PermissionResult EvaluateExternalDirectory(string directoryPath)
     {
-        return EvaluateRules(_config.ExternalDirectory, ResolvePath(directoryPath).AbsolutePath);
+        return EvaluateRules(_config.ExternalDirectory, ResolvePath(directoryPath).AbsolutePath, forPaths: true);
     }
 
     // A path rule judges the path the tool will open. The file tools resolve their argument with
@@ -74,16 +74,16 @@ public class PermissionEvaluator : IPermissionEvaluator
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return EvaluateRules(rules, string.Empty);
+            return EvaluateRules(rules, string.Empty, forPaths: true);
         }
 
         var resolved = ResolvePath(path);
         if (!resolved.IsExternal)
         {
-            return EvaluateRules(rules, resolved.RelativePath);
+            return EvaluateRules(rules, resolved.RelativePath, forPaths: true);
         }
 
-        var external = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath);
+        var external = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath, forPaths: true);
         return external.MatchedRule is not null
             ? external with { OutsideWorkingDirectory = true }
             : new PermissionResult
@@ -172,7 +172,7 @@ public class PermissionEvaluator : IPermissionEvaluator
         };
     }
 
-    private PermissionResult EvaluateRules(List<PermissionRule> rules, string target)
+    private PermissionResult EvaluateRules(List<PermissionRule> rules, string target, bool forPaths = false)
     {
         // Handle empty/null targets
         if (string.IsNullOrWhiteSpace(target))
@@ -195,7 +195,7 @@ public class PermissionEvaluator : IPermissionEvaluator
 
         // Find all matching rules, sorted by priority (highest first)
         var matchingRules = rules
-            .Where(r => MatchesPattern(target, r.Pattern))
+            .Where(r => MatchesPattern(target, r.Pattern, forPaths))
             .OrderByDescending(r => r.Priority)
             .ToList();
 
@@ -218,23 +218,29 @@ public class PermissionEvaluator : IPermissionEvaluator
         };
     }
 
-    private bool MatchesPattern(string input, string pattern)
+    private bool MatchesPattern(string input, string pattern, bool forPaths = false)
     {
-        var regex = GetOrCreatePatternRegex(pattern);
+        var regex = GetOrCreatePatternRegex(pattern, forPaths);
         return regex.IsMatch(input);
     }
 
-    private Regex GetOrCreatePatternRegex(string pattern)
+    private Regex GetOrCreatePatternRegex(string pattern, bool forPaths)
     {
         // The evaluator is asked from the tools' own bodies now (a read filter), possibly from several calls at once.
-        return _patternCache.GetOrAdd(pattern, static p => new Regex(GlobToRegex(p), RegexOptions.IgnoreCase | RegexOptions.Compiled));
+        return _patternCache.GetOrAdd((pattern, forPaths), static key =>
+            new Regex(GlobToRegex(key.Pattern, key.ForPaths), RegexOptions.IgnoreCase | RegexOptions.Compiled));
     }
 
     /// <summary>
     /// Converts a glob pattern to a regex pattern.
     /// Supports: *, **, ?
     /// </summary>
-    private static string GlobToRegex(string pattern)
+    /// <param name="pattern">The glob.</param>
+    /// <param name="forPaths">
+    /// A path pattern reads "**/" as whole folders. A command or a tool name has no folders - a space separates its words - so
+    /// there "**/" is any text, and a deny written with it keeps reaching across them.
+    /// </param>
+    private static string GlobToRegex(string pattern, bool forPaths)
     {
         var result = new System.Text.StringBuilder("^");
 
@@ -251,9 +257,10 @@ public class PermissionEvaluator : IPermissionEvaluator
 
                         if (i + 1 < pattern.Length && (pattern[i + 1] == '/' || pattern[i + 1] == '\\'))
                         {
-                            // "**/" is any number of whole folders, none included: what follows starts a name
-                            result.Append("(?:.*[/\\\\])?");
                             i++;
+                            // In a path, "**/" before a name is any number of whole folders, none included: what follows
+                            // starts a name. A pattern that ends in "**/" covers everything under what precedes it.
+                            result.Append(forPaths && i + 1 < pattern.Length ? "(?:.*[/\\\\])?" : ".*");
                         }
                         else
                         {

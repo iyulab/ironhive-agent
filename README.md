@@ -700,10 +700,12 @@ sealed class TracingRetriever(IToolRetriever inner, ILogger log) : IToolRetrieve
 
 `PermissionConfig.CreateDefault()` (the out-of-the-box default) ships the following rules:
 
-**Read** — Allow `**/*`; Ask on `.env*` and `*.env` files in any folder; Deny `**/secrets/**`
+**Read** — Allow `**/*`; Ask on any file with `.env` in its name (`**/*.env*`); Deny folders whose name ends in `secrets`
+(`**/*secrets/**`)
 
-In a path pattern `*` stays inside one name, `**` crosses folders, and `**/` stands for whole folders - any number, none
-included: `**/tests/**` covers `tests/a.txt` and `src/tests/a.txt`, not `contests/a.txt`.
+In a path pattern (`Read`, `Edit`, `ExternalDirectory`) `*` stays inside one name, `**` crosses folders, and `**/` before a
+name stands for whole folders - any number, none included: `**/tests/**` covers `tests/a.txt` and `src/tests/a.txt`, not
+`contests/a.txt`. In `Bash`, tool-name and MCP patterns `**/` is any text.
 
 **Edit** — Allow `src/**/*` and `tests/**/*`; Ask on `*.json`, `*.yaml`, `*.yml`
 

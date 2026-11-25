@@ -29,6 +29,8 @@ public sealed class GlobSegmentTests
     [InlineData("src/**", "src/x/y.txt", true)]
     [InlineData("**/*", ".", true)]
     [InlineData("**", "any/depth/at.all", true)]
+    [InlineData("secrets/**/", "secrets/key.txt", true)]
+    [InlineData("secrets/**/", "secrets/deep/key.txt", true)]
     public void A_double_star_folder_matches_whole_folders_only(string pattern, string path, bool covered)
     {
         var evaluator = new PermissionEvaluator(new PermissionConfig
@@ -40,5 +42,23 @@ public sealed class GlobSegmentTests
         var verdict = evaluator.EvaluateRead(path);
 
         verdict.Action.Should().Be(covered ? PermissionAction.Allow : PermissionAction.Deny);
+    }
+
+    // A command is not a path: its words are separated by spaces, so there is no folder for "**/" to stand for, and a deny
+    // written with it keeps covering what stands between the words.
+    [Theory]
+    [InlineData("cat **/.env*", "cat .env")]
+    [InlineData("cat **/.env*", "cat -n .env")]
+    [InlineData("cat **/.env*", "cat config/.env.local")]
+    [InlineData("**/danger *", "x && danger y")]
+    public void A_command_pattern_reads_a_double_star_as_any_text(string pattern, string command)
+    {
+        var evaluator = new PermissionEvaluator(new PermissionConfig
+        {
+            Bash = [new PermissionRule { Pattern = pattern, Action = PermissionAction.Deny }],
+            DefaultAction = PermissionAction.Allow,
+        });
+
+        evaluator.EvaluateBash(command).Action.Should().Be(PermissionAction.Deny);
     }
 }
