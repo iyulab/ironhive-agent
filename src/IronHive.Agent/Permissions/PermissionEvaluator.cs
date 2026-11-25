@@ -59,33 +59,43 @@ public class PermissionEvaluator : IPermissionEvaluator
 
         var line = command.Trim();
         var verdict = EvaluateRules(_config.Bash, line);
-        if (verdict.Action == PermissionAction.Allow && verdict.MatchedRule is { } rule && ReachesPast(line, rule.Pattern))
+        if (verdict.Action != PermissionAction.Allow || verdict.MatchedRule is not { } rule
+            || CoversWhatAShellMakesOfIt(rule.Pattern) || !CanRunMoreThanItsCommand(line))
         {
-            // The rule allowed one command; this line can run more than that. It stays as the match, as for AskBeforeDelete.
-            return new PermissionResult
-            {
-                Action = PermissionAction.Ask,
-                MatchedRule = rule,
-                Reason = $"The command line can run more than one command or redirect it, which the rule '{rule.Pattern}' does not cover"
-            };
+            return verdict;
         }
 
-        return verdict;
-    }
-
-    // What lets one line do more than the command it starts with, in cmd.exe or in sh: a separator or a pipe, a redirection,
-    // a command substitution. The line is not parsed - the two shells quote differently, and a quoting rule only one of them
-    // follows would let a command through - so a quoted operator counts too. Two kinds of rule are taken at their word: one
-    // that is the exact line, and one that allows every command.
-    private static bool ReachesPast(string line, string pattern)
-    {
-        if (!pattern.AsSpan().ContainsAny('*', '?') || pattern.AsSpan().IndexOfAnyExcept('*') < 0)
+        // A rule that is this very line is the way to keep allowing it, also where a broader rule of the same priority
+        // matched first. One below the deciding priority does not change the question.
+        var asWritten = _config.Bash.FirstOrDefault(other => other.Action == PermissionAction.Allow
+            && other.Priority == rule.Priority && CoversWhatAShellMakesOfIt(other.Pattern) && MatchesPattern(line, other.Pattern));
+        if (asWritten is not null)
         {
-            return false;
+            return new PermissionResult { Action = PermissionAction.Allow, MatchedRule = asWritten, Reason = asWritten.Reason };
         }
 
-        return line.AsSpan().ContainsAny(ShellControlCharacters) || line.Contains("$(", StringComparison.Ordinal);
+        // The rule allowed one command; this line can run more than that. It stays as the match, as for AskBeforeDelete.
+        return new PermissionResult
+        {
+            Action = PermissionAction.Ask,
+            MatchedRule = rule,
+            Reason = $"The command line can run more than one command or redirect it, which the rule '{rule.Pattern}' does not cover"
+        };
     }
+
+    // The two rules taken at their word: one that is the exact line, and one that allows every command.
+    private static bool CoversWhatAShellMakesOfIt(string pattern) =>
+        !pattern.AsSpan().ContainsAny('*', '?') || pattern.AsSpan().IndexOfAnyExcept('*') < 0;
+
+    // What lets one line do more than the command it starts with, in cmd.exe or in bash: a separator or a pipe, a
+    // redirection, a command substitution - and bash's "${" and "$[", through which a value the line builds is evaluated
+    // again and can run a command with none of the others in sight. The line is not parsed - the two shells quote
+    // differently, and a quoting rule only one of them follows would let a command through - so a quoted operator counts.
+    private static bool CanRunMoreThanItsCommand(string line) =>
+        line.AsSpan().ContainsAny(ShellControlCharacters)
+        || line.Contains("$(", StringComparison.Ordinal)
+        || line.Contains("${", StringComparison.Ordinal)
+        || line.Contains("$[", StringComparison.Ordinal);
 
     private static readonly System.Buffers.SearchValues<char> ShellControlCharacters =
         System.Buffers.SearchValues.Create(";&|<>`\r\n");

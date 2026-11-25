@@ -29,6 +29,11 @@ public sealed class ShellAllowRuleReachTests
     [InlineData("git commit -m `whoami`")]
     [InlineData("git log > notes.txt")]
     [InlineData("git apply < change.patch")]
+    // bash runs these without any of the characters above: a value built by ${x:=...} is evaluated again by $[ ] or @P
+    [InlineData("git status ${x:='$'} ${y:='(id)'} ${z:=q[$x$y]} $[z]")]
+    [InlineData("git status ${x:='$'} ${y:='(id)'} ${z:=$x$y} ${z@P}")]
+    [InlineData("git status ${HOME}")]
+    [InlineData("git status $[1+1]")]
     public void An_allow_rule_does_not_reach_past_a_shell_control_operator(string command)
     {
         var verdict = Default().EvaluateBash(command);
@@ -53,6 +58,33 @@ public sealed class ShellAllowRuleReachTests
     [Fact]
     public void A_rule_that_is_the_exact_line_allows_it() =>
         Allowing("make build && make test").EvaluateBash("make build && make test").Action.Should().Be(PermissionAction.Allow);
+
+    // The way to keep allowing one line: add it as it is, beside the broader rule that also matches it.
+    [Fact]
+    public void An_exact_rule_added_beside_the_default_rules_allows_its_line()
+    {
+        var config = PermissionConfig.CreateDefault();
+        config.Bash.Add(new PermissionRule { Pattern = "git log; echo done", Action = PermissionAction.Allow });
+
+        var verdict = new PermissionEvaluator(config).EvaluateBash("git log; echo done");
+
+        verdict.Action.Should().Be(PermissionAction.Allow);
+    }
+
+    [Fact]
+    public void An_exact_rule_below_the_rule_that_decides_does_not_change_the_question()
+    {
+        var evaluator = new PermissionEvaluator(new PermissionConfig
+        {
+            Bash =
+            [
+                new PermissionRule { Pattern = "git *", Action = PermissionAction.Allow, Priority = 5 },
+                new PermissionRule { Pattern = "git log; echo done", Action = PermissionAction.Allow },
+            ],
+        });
+
+        evaluator.EvaluateBash("git log; echo done").Action.Should().Be(PermissionAction.Ask);
+    }
 
     [Theory]
     [InlineData("*")]

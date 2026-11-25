@@ -711,9 +711,11 @@ name stands for whole folders - any number, none included: `**/tests/**` covers 
 
 **Bash** — Allow `git *`, `dotnet *`, `npm *`, `cargo *`; Deny `rm -rf *`, `sudo *`, `curl * | *sh*`
 
-An allow rule covers one command. A line that either shell the tool runs (`cmd.exe`, `sh`) could read as more than that -
-`;`, `&`, `|`, `<`, `>`, a line break, a backtick or `$(` - is asked about, even inside quotes (the line is not parsed). Two
-rules are taken at their word: one that is the exact line, and one made only of `*`. A `deny` still reads the whole line.
+An allow rule covers one command as written. A line that either shell the tool runs (`cmd.exe`, `bash`) could read as more
+than that - `;`, `&`, `|`, `<`, `>`, a line break, a backtick, `$(`, `${` or `$[` - is asked about, even inside quotes (the
+line is not parsed). Two rules are taken at their word: one that is the exact line, also beside a broader rule of the same
+priority, and one made only of `*`. A `deny` still reads the whole line. What the program itself then does is not judged:
+`git -c alias.x=!cmd x` runs another program and `git log --output=file` writes one.
 `Bash` rules are matched against text; they do not confine what an allowed program does. `git show HEAD:.env`,
 `git mv secrets public` or `dotnet run` read and move whatever the process can, and the `Read` and `Edit` rules and
 `FileToolOptions.ReadRules` govern the **file tools only**. Where a file must stay unreadable to the model, do not offer the
