@@ -348,10 +348,10 @@ public class PermissionEvaluator : IPermissionEvaluator
     private Regex GetOrCreatePatternRegex(string pattern, bool forPaths)
     {
         // The evaluator is asked from the tools' own bodies now (a read filter), possibly from several calls at once.
-        // Outside a path the wildcard crosses line breaks too, so a rule still speaks about a command of several lines.
+        // "." crosses line breaks, so a rule still speaks about a command of several lines or a name that holds one.
         return _patternCache.GetOrAdd((pattern, forPaths), static key => new Regex(
             GlobToRegex(key.Pattern, key.ForPaths),
-            RegexOptions.IgnoreCase | RegexOptions.Compiled | (key.ForPaths ? RegexOptions.None : RegexOptions.Singleline)));
+            RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline));
     }
 
     /// <summary>

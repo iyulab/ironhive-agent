@@ -75,6 +75,14 @@ public sealed class ShellWildcardReachTests
         evaluator.EvaluateMcpTool(toolName).Action.Should().Be(PermissionAction.Deny);
     }
 
+    // A file name may hold a line break outside Windows; a deny ending in "**" has to keep covering it.
+    [Theory]
+    [InlineData("secrets/key\n")]
+    [InlineData("secrets/two\nlines.txt")]
+    public void A_path_deny_covers_a_name_with_a_line_break(string path) =>
+        new PermissionEvaluator(PermissionConfig.CreateDefault()).EvaluateRead(path).Action
+            .Should().Be(PermissionAction.Deny);
+
     [Fact]
     public void A_path_rule_wildcard_still_stays_inside_one_name()
     {
