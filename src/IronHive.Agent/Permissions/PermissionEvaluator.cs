@@ -124,28 +124,38 @@ public class PermissionEvaluator : IPermissionEvaluator
         }
 
         var external = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath, forPaths: true);
-        return external.MatchedRule is not null
-            ? external with { OutsideWorkingDirectory = true }
-            : new PermissionResult
-            {
-                Action = _config.DefaultAction,
-                OutsideWorkingDirectory = true,
-                Reason = "Path is outside the working directory and no external-directory rule covers it"
-            };
+        if (external.MatchedRule is not null)
+        {
+            return external with { OutsideWorkingDirectory = true };
+        }
+
+        // A name that cannot be turned into a drive path may be another name of a file a rule speaks about, so a default
+        // of Allow does not stretch to it.
+        var unmapped = _config.DefaultAction == PermissionAction.Allow && IsUnmappedName(resolved.AbsolutePath);
+        return new PermissionResult
+        {
+            Action = unmapped ? PermissionAction.Ask : _config.DefaultAction,
+            OutsideWorkingDirectory = true,
+            Reason = unmapped
+                ? "A network or device name of a path cannot be matched against the rules for local files"
+                : "Path is outside the working directory and no external-directory rule covers it"
+        };
     }
+
+    // A share, a volume or another device, as opposed to a drive path; the path is given with '/' separators.
+    private static bool IsUnmappedName(string absolutePath) =>
+        OperatingSystem.IsWindows()
+        && (absolutePath.StartsWith("//", StringComparison.Ordinal) || absolutePath.StartsWith("/??/", StringComparison.Ordinal));
 
     private (string RelativePath, string AbsolutePath, bool IsExternal) ResolvePath(string path)
     {
         var root = Path.TrimEndingDirectorySeparator(
-            Path.GetFullPath(WithoutDevicePrefix(_config.WorkingDirectory ?? Directory.GetCurrentDirectory())));
-        path = WithoutDevicePrefix(path);
+            AsOpened(_config.WorkingDirectory ?? Directory.GetCurrentDirectory()));
 
         string full;
         try
         {
-            full = Path.IsPathRooted(path)
-                ? Path.GetFullPath(path)
-                : Path.GetFullPath(Path.Combine(root, path));
+            full = AsOpened(Path.IsPathRooted(path) ? path : Path.Combine(root, path));
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
@@ -162,17 +172,35 @@ public class PermissionEvaluator : IPermissionEvaluator
         return (relative.Replace('\\', '/'), full.Replace('\\', '/'), isExternal);
     }
 
-    // "\\?\C:\x" and "\\.\C:\x" open the same file as "C:\x" ("\\?\UNC\server\share" as "\\server\share"). Judged as
-    // written they are on another root, so no Read or Edit rule would speak about a file inside the working directory.
+    // The file a name opens, in one spelling. On Windows one file has many: normalization comes first, because
+    // "\\.\.\C:\x" and "\\.\Z:\..\C:\x" only show their drive once normalized; then the device prefix goes, and what it
+    // kept from being normalized is normalized; then NTFS stream names ("dir::$INDEX_ALLOCATION\x" opens dir\x).
+    private static string AsOpened(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (!OperatingSystem.IsWindows())
+        {
+            return full;
+        }
+
+        var plain = Path.GetFullPath(WithoutDevicePrefix(full));
+        var named = WithoutStreamNames(plain);
+        return ReferenceEquals(named, plain) ? plain : Path.GetFullPath(named);
+    }
+
+    // "\\?\C:\x", "\\.\C:\x" and "\??\C:\x" open the same file as "C:\x" ("\\?\UNC\server\share" as "\\server\share").
+    // Judged as written they are on another root, so no Read or Edit rule would speak about a file inside the working
+    // directory.
     private static string WithoutDevicePrefix(string path)
     {
-        if (!OperatingSystem.IsWindows() || path.Length < 4)
+        if (path.Length < 4)
         {
             return path;
         }
 
         var spelled = path.Replace('/', '\\');
-        if (!spelled.StartsWith(@"\\?\", StringComparison.Ordinal) && !spelled.StartsWith(@"\\.\", StringComparison.Ordinal))
+        if (!spelled.StartsWith(@"\\?\", StringComparison.Ordinal) && !spelled.StartsWith(@"\\.\", StringComparison.Ordinal)
+            && !spelled.StartsWith(@"\??\", StringComparison.Ordinal))
         {
             return path;
         }
@@ -183,8 +211,23 @@ public class PermissionEvaluator : IPermissionEvaluator
             return rest;
         }
 
-        // Any other device (a volume, a pipe) has no ordinary spelling and stays what it is: outside the working directory
+        // Any other device (a volume, a pipe) has no drive spelling and stays what it is: outside the working directory
         return rest.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase) ? @"\\" + rest[4..] : path;
+    }
+
+    // In the names below the root a ':' starts a stream name. The file or folder it belongs to is what the rules speak
+    // about.
+    private static string WithoutStreamNames(string path)
+    {
+        var root = Path.GetPathRoot(path) ?? string.Empty;
+        if (path.AsSpan(root.Length).IndexOf(':') < 0)
+        {
+            return path;
+        }
+
+        var names = path[root.Length..].Split('\\')
+            .Select(name => name.IndexOf(':', StringComparison.Ordinal) is var colon and >= 0 ? name[..colon] : name);
+        return root + string.Join('\\', names);
     }
 
     /// <inheritdoc />

@@ -707,6 +707,13 @@ In a path pattern (`Read`, `Edit`, `ExternalDirectory`) `*` stays inside one nam
 name stands for whole folders - any number, none included: `**/tests/**` covers `tests/a.txt` and `src/tests/a.txt`, not
 `contests/a.txt`. In `Bash`, tool-name and MCP patterns `**/` is any text.
 
+A rule is matched against the file a path opens: `..`, Windows device prefixes (`\\?\C:\`, `\\.\C:\`, `\??\C:\`) and
+NTFS stream names (`dir::$INDEX_ALLOCATION`) are resolved first. Some names cannot be resolved to a drive path - a network
+share of a local folder (`\\localhost\C$`), a volume or `GLOBALROOT` name: no `Read` or `Edit` rule speaks about them, so
+without an `ExternalDirectory` rule they get the default action, and a default of `Allow` becomes a question. Links, `subst`
+drives and mapped drives are judged by the text of the path. Where the model must stay inside certain folders, set
+`FileToolOptions.AllowedRoots`.
+
 **Edit** — Allow `src/**/*` and `tests/**/*`; Ask on `*.json`, `*.yaml`, `*.yml`
 
 **Bash** — Allow `git *`, `dotnet *`, `npm *`, `cargo *`; Deny `rm -rf *`, `sudo *`, `curl * | *sh*`
