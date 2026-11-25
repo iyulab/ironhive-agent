@@ -716,7 +716,10 @@ drives and mapped drives are judged by the text of the path. Where the model mus
 
 **Edit** — Allow `src/**/*` and `tests/**/*`; Ask on `*.json`, `*.yaml`, `*.yml`
 
-**Bash** — Allow `git *`, `dotnet *`, `npm *`, `cargo *`; Deny `rm -rf *`, `sudo *`, `curl * | *sh*`
+**Bash** — Allow the exact line `git status`; Deny `rm -rf *`, `sudo *`, `curl * | *sh*`. Every other command is asked
+about. `git`, `dotnet`, `npm` and `cargo` are not allowed with any arguments, because each of them starts other programs
+from its arguments. To allow more, add a rule per command you accept, knowing what that command can run:
+`permissions.Bash.Add(new PermissionRule { Pattern = "dotnet build", Action = PermissionAction.Allow })`.
 
 An allow rule covers one command as written. A line that either shell the tool runs (`cmd.exe`, `bash`) could read as more
 than that - `;`, `&`, `|`, `<`, `>`, a line break, a backtick, `$(`, `${` or `$[` - is asked about, even inside quotes (the

@@ -40,6 +40,26 @@ public sealed class BuiltInShellRulesTests
         lines.Should().OnlyContain(line => byDefault.EvaluateBash(line).Action == PermissionAction.Allow);
     }
 
+    [Theory]
+    // each of these runs another program, or writes a file, with no shell operator in the line
+    [InlineData("git -c alias.z=!whoami z")]
+    [InlineData("git difftool -y -x whoami HEAD~1")]
+    [InlineData("git log -1 --output=out.txt")]
+    [InlineData("npm exec whoami")]
+    [InlineData("npm install")]
+    [InlineData("dotnet run")]
+    [InlineData("dotnet test")]
+    [InlineData("cargo run")]
+    [InlineData("git log")]
+    public void The_default_rules_ask_before_running_git_dotnet_npm_or_cargo(string command) =>
+        new PermissionEvaluator(PermissionConfig.CreateDefault()).EvaluateBash(command).Action
+            .Should().Be(PermissionAction.Ask);
+
+    [Fact]
+    public void The_default_rules_still_allow_git_status() =>
+        new PermissionEvaluator(PermissionConfig.CreateDefault()).EvaluateBash("git status").Action
+            .Should().Be(PermissionAction.Allow);
+
     private static List<string> AllowedShellPatterns(PermissionConfig config) =>
         [.. config.Bash.Where(rule => rule.Action == PermissionAction.Allow).Select(rule => rule.Pattern)];
 }

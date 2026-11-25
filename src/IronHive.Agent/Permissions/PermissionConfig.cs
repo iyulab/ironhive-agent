@@ -101,10 +101,9 @@ public class PermissionConfig
         ],
         Bash =
         [
-            new() { Pattern = "git *", Action = PermissionAction.Allow, Priority = 0 },
-            new() { Pattern = "dotnet *", Action = PermissionAction.Allow, Priority = 0 },
-            new() { Pattern = "npm *", Action = PermissionAction.Allow, Priority = 0 },
-            new() { Pattern = "cargo *", Action = PermissionAction.Allow, Priority = 0 },
+            // No "program *" allows: git, dotnet, npm and cargo each start other programs from their arguments, and the
+            // Edit rules let a model write the code "dotnet run" would then execute.
+            new() { Pattern = "git status", Action = PermissionAction.Allow, Priority = 0 },
             new() { Pattern = "rm -rf *", Action = PermissionAction.Deny, Priority = 100, Reason = "Destructive command" },
             new() { Pattern = "sudo *", Action = PermissionAction.Deny, Priority = 100, Reason = "Elevated privileges" },
             new() { Pattern = "curl * | *sh*", Action = PermissionAction.Deny, Priority = 100, Reason = "Remote code execution" }
