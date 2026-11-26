@@ -19,7 +19,7 @@ public sealed class ShellWildcardReachTests
     [Theory]
     [InlineData("rm *", "rm x")]
     [InlineData("rm *", "rm -rf /tmp/x")]
-    [InlineData("rm *", @"rm C:\data\x")]
+    [InlineData("rm *", @"rm C:\temp\x")]
     [InlineData("rm *", "rm x\necho done")]
     [InlineData("rm *", "rm x\r\necho done")]
     [InlineData("rm *", "rm -rf /tmp/x\necho done")]
