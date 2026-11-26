@@ -158,11 +158,13 @@ public class DirectoryLinkWalkTests : IDisposable
             Directory.CreateDirectory(Path.Combine(_root, $"d{i:000}"));
         }
 
-        Link(Path.Combine(_root, "zz-linked"), _outside);
+        // A listing puts a folder's own entries before its subfolders', so a link inside one of the 500 folders comes
+        // after all of them on every file system. The order among siblings is the file system's and is not sorted everywhere.
+        Link(Path.Combine(_root, "d250", "zz-linked"), _outside);
 
         var listing = _tools.ListDirectory(".", true);
 
-        listing.Should().Contain("truncated").And.Contain("directory links not shown above were not entered either: zz-linked/.");
+        listing.Should().Contain("truncated").And.Contain("directory links not shown above were not entered either: d250/zz-linked/.");
     }
 
     [Fact]
