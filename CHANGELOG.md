@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.85.0] - 2026-11-26
 
 ### Added
 - **An approver can say its yes covers this one call only.** New `ApprovalResult.ThisCallOnly` (default `false`: what an approval covers stays the approver's own policy) and `ApprovalResult.ApproveThisCallOnly()`. An approver that judges one act at a time - a classifier or judge model answering for a person - sets it so that a policy wrapped around `IHumanApprovalService` (for example "one yes covers the rest of this request's writes") does not widen the yes to calls the approver never saw; the next call is put to the approver again. `ApprovalGate` itself never remembers an approval, so it behaves as before.
