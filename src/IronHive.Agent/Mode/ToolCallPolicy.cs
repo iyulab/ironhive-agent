@@ -259,7 +259,7 @@ public sealed class ToolCallPolicy : IToolCallPolicy
         var path = GetStringArgument(arguments, "path");
         var byPath = _evaluator.EvaluateRead(string.IsNullOrEmpty(path) ? "." : path);
         if (byPath.Action == PermissionAction.Allow
-            || (byPath.MatchedRule is null && !byPath.OutsideWorkingDirectory))
+            || (byPath.MatchedRule is null && !byPath.OutsideWorkingDirectory && !byPath.NameKeptAsWritten))
         {
             return byName;
         }

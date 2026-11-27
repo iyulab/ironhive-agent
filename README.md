@@ -722,7 +722,10 @@ A rule is matched against the file a path opens: `..`, Windows device prefixes (
 NTFS stream names (`dir::$INDEX_ALLOCATION`) are resolved first. Some names cannot be resolved to a drive path - a network
 share of a local folder (`\\localhost\C$`), a volume or `GLOBALROOT` name: no `Read` or `Edit` rule speaks about them, so
 without an `ExternalDirectory` rule they get the default action, and a default of `Allow` becomes a question. Links, `subst`
-drives and mapped drives are judged by the text of the path. Where the model must stay inside certain folders, set
+drives and mapped drives are judged by the text of the path. Behind `\\?\` and `\??\`, and before a stream suffix, Windows
+keeps a name that ends in a dot or a space as written, so it is another file than its ordinary spelling: a rule for that
+spelling cannot allow it (a `deny` for it still holds, and a default of `Allow` becomes a question). Where the model must stay
+inside certain folders, set
 `FileToolOptions.AllowedRoots`.
 
 **Edit** — Allow `src/**/*` and `tests/**/*`; Ask on `*.json`, `*.yaml`, `*.yml`

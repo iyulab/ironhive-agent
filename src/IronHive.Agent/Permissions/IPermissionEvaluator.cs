@@ -22,6 +22,12 @@ public record PermissionResult
     public bool OutsideWorkingDirectory { get; init; }
 
     /// <summary>
+    /// The verdict is about a name Windows keeps as written, which the rules cannot speak about. It is a verdict on that very
+    /// path also where no rule matched, so a directory tool and the read filter do not set it aside for such a folder.
+    /// </summary>
+    internal bool NameKeptAsWritten { get; init; }
+
+    /// <summary>
     /// Reason for the decision.
     /// </summary>
     public string? Reason { get; init; }

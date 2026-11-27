@@ -103,7 +103,9 @@ public class PermissionEvaluator : IPermissionEvaluator
     /// <inheritdoc />
     public PermissionResult EvaluateExternalDirectory(string directoryPath)
     {
-        return EvaluateRules(_config.ExternalDirectory, ResolvePath(directoryPath).AbsolutePath, forPaths: true);
+        var resolved = ResolvePath(directoryPath);
+        var verdict = EvaluateRules(_config.ExternalDirectory, resolved.AbsolutePath, forPaths: true);
+        return resolved.KeptAsWritten ? HeldAsAnUnresolvedName(verdict) : verdict;
     }
 
     // A path rule judges the path the tool will open. The file tools resolve their argument with
@@ -120,6 +122,12 @@ public class PermissionEvaluator : IPermissionEvaluator
         }
 
         var resolved = ResolvePath(path);
+        var verdict = JudgeResolvedPath(rules, resolved);
+        return resolved.KeptAsWritten ? HeldAsAnUnresolvedName(verdict) : verdict;
+    }
+
+    private PermissionResult JudgeResolvedPath(List<PermissionRule> rules, ResolvedPath resolved)
+    {
         if (!resolved.IsExternal)
         {
             return EvaluateRules(rules, resolved.RelativePath, forPaths: true);
@@ -144,26 +152,50 @@ public class PermissionEvaluator : IPermissionEvaluator
         };
     }
 
+    // A name Windows keeps as written is another file than the one its ordinary spelling opens. The rules for that spelling
+    // still bind it - a deny keeps holding - and it gets no more than a name the rules cannot speak about.
+    private PermissionResult HeldAsAnUnresolvedName(PermissionResult verdict)
+    {
+        var unresolved = _config.DefaultAction == PermissionAction.Allow ? PermissionAction.Ask : _config.DefaultAction;
+        return Strictness(unresolved) <= Strictness(verdict.Action)
+            ? verdict with { NameKeptAsWritten = true }
+            : new PermissionResult
+            {
+                Action = unresolved,
+                OutsideWorkingDirectory = verdict.OutsideWorkingDirectory,
+                NameKeptAsWritten = true,
+                Reason = "Windows keeps this name as written, so the rules for its ordinary spelling cannot allow it"
+            };
+    }
+
+    private readonly record struct ResolvedPath(string RelativePath, string AbsolutePath, bool IsExternal, bool KeptAsWritten);
+
     // A share, a volume or another device, as opposed to a drive path; the path is given with '/' separators.
     private static bool IsUnmappedName(string absolutePath) =>
         OperatingSystem.IsWindows()
         && (absolutePath.StartsWith("//", StringComparison.Ordinal) || absolutePath.StartsWith("/??/", StringComparison.Ordinal));
 
-    private (string RelativePath, string AbsolutePath, bool IsExternal) ResolvePath(string path)
+    private ResolvedPath ResolvePath(string path)
     {
         var root = Path.TrimEndingDirectorySeparator(
             AsOpened(_config.WorkingDirectory ?? Directory.GetCurrentDirectory()));
 
         string full;
+        bool keptAsWritten;
         try
         {
             full = AsOpened(Path.IsPathRooted(path) ? path : Path.Combine(root, path));
+            // The file tools join a relative path to the working directory as it is given, a device prefix included. "." is
+            // how a directory tool's missing path is put to the rules, and the tool then uses the working directory itself.
+            keptAsWritten = path != "." && IsKeptAsWritten(Path.IsPathRooted(path)
+                ? path
+                : Path.Combine(_config.WorkingDirectory ?? Directory.GetCurrentDirectory(), path));
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             // A path the runtime cannot resolve is not a path inside the working directory.
             var text = NormalizePath(path);
-            return (text, text, true);
+            return new ResolvedPath(text, text, IsExternal: true, KeptAsWritten: false);
         }
 
         var relative = Path.GetRelativePath(root, full);
@@ -171,8 +203,49 @@ public class PermissionEvaluator : IPermissionEvaluator
             || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             || Path.IsPathRooted(relative);
 
-        return (InRuleSpelling(relative), InRuleSpelling(full), isExternal);
+        return new ResolvedPath(InRuleSpelling(relative), InRuleSpelling(full), isExternal, keptAsWritten);
     }
+
+    // Two spellings make Windows keep a name that ordinary normalization would change. Behind "\\?\" and "\??\" names are
+    // taken as written, so "src." there is a folder of its own beside "src". And a stream suffix hides the end of a name:
+    // "src.::$INDEX_ALLOCATION\x" writes into "src.", while the name left after the suffix is removed would be trimmed to
+    // "src". True when the path has either. ("\\.\" paths are normalized by the first GetFullPath, as the tools do.)
+    private static bool IsKeptAsWritten(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var full = Path.GetFullPath(path);
+        var plain = WithoutDevicePrefix(full);
+        if (!ReferenceEquals(plain, full) && IsChangedByNormalizing(plain))
+        {
+            return true;
+        }
+
+        var normalized = Path.GetFullPath(plain);
+        var named = WithoutStreamNames(normalized);
+        return !ReferenceEquals(named, normalized) && IsChangedByNormalizing(named);
+    }
+
+    // Whether ordinary normalization gives the path other names. Writing a short name out ("PROGRA~1") does not: it is
+    // the same folder.
+    private static bool IsChangedByNormalizing(string path)
+    {
+        var normalized = Path.GetFullPath(path);
+        if (string.Equals(normalized, path, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var given = path.Split('\\');
+        var read = normalized.Split('\\');
+        return given.Length != read.Length
+            || given.Zip(read).Any(name => name.First != name.Second && !IsShortName(name.First));
+    }
+
+    private static bool IsShortName(string name) => name.Contains('~', StringComparison.Ordinal) && name[^1] is not ('.' or ' ');
 
     // Path rules separate names with '/'. Only Windows opens a backslash as a separator; elsewhere it is a character of a
     // name, so "sub\x" is one file next to the folder "sub" and a rule about that folder does not speak about it.

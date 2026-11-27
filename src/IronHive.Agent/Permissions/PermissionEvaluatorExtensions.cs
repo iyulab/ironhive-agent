@@ -56,7 +56,7 @@ public static class PermissionEvaluatorExtensions
         }
 
         var isDirectory = path.EndsWith(Path.DirectorySeparatorChar) || path.EndsWith(Path.AltDirectorySeparatorChar);
-        return isDirectory && result.MatchedRule is null && !result.OutsideWorkingDirectory;
+        return isDirectory && result.MatchedRule is null && !result.OutsideWorkingDirectory && !result.NameKeptAsWritten;
     }
 
     // A pattern such as "../*" climbs out of the folder the search was pointed at; what was asked about is that folder.
@@ -78,9 +78,11 @@ public static class PermissionEvaluatorExtensions
             return false;
         }
 
+        // Two verdicts without a rule are the same question only about ordinary paths: a folder kept as written was asked
+        // about because of its name, which says nothing about the files under it.
         if (directory.MatchedRule is null && file.MatchedRule is null)
         {
-            return directory.OutsideWorkingDirectory;
+            return directory.OutsideWorkingDirectory && !directory.NameKeptAsWritten;
         }
 
         return ReferenceEquals(directory.MatchedRule, file.MatchedRule);
