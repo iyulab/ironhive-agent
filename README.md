@@ -717,6 +717,8 @@ says nothing about `echo done && rm x`.
 
 Write path patterns with `/`; a lone `\` in a path pattern matches no path. On Windows a path may be written with `/` or `\`. On Linux and macOS a `\` is part of a name,
 as it is for the file tools: `sub\x` is one file beside the folder `sub`, so a rule about `sub/**` does not cover it.
+On Linux, where `SRC` and `src` are two names, an `allow` path rule matches letter case exactly; `ask` and `deny` ignore it,
+as every rule does on Windows and macOS (a case-sensitive macOS volume is not detected).
 
 A rule is matched against the file a path opens: `..`, Windows device prefixes (`\\?\C:\`, `\\.\C:\`, `\??\C:\`) and
 NTFS stream names (`dir::$INDEX_ALLOCATION`) are resolved first. Some names cannot be resolved to a drive path - a network

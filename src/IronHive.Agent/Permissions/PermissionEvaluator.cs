@@ -9,7 +9,7 @@ namespace IronHive.Agent.Permissions;
 public class PermissionEvaluator : IPermissionEvaluator
 {
     private readonly PermissionConfig _config;
-    private readonly ConcurrentDictionary<(string Pattern, bool ForPaths), Regex> _patternCache = new();
+    private readonly ConcurrentDictionary<(string Pattern, bool ForPaths, bool IgnoreCase), Regex> _patternCache = new();
 
     public PermissionEvaluator(PermissionConfig? config = null)
     {
@@ -385,7 +385,7 @@ public class PermissionEvaluator : IPermissionEvaluator
         // built-in rules are listed before the ones a host adds, so list order must not let an allow override an added deny.
         // Rules that agree keep their list order.
         var matchingRules = rules
-            .Where(r => MatchesPattern(target, r.Pattern, forPaths))
+            .Where(r => MatchesPattern(target, r.Pattern, forPaths, IgnoresCase(r, forPaths)))
             .OrderByDescending(r => r.Priority)
             .ThenByDescending(r => Strictness(r.Action))
             .ToList();
@@ -416,19 +416,24 @@ public class PermissionEvaluator : IPermissionEvaluator
         _ => 0,
     };
 
-    private bool MatchesPattern(string input, string pattern, bool forPaths = false)
+    private bool MatchesPattern(string input, string pattern, bool forPaths = false, bool ignoreCase = true)
     {
-        var regex = GetOrCreatePatternRegex(pattern, forPaths);
+        var regex = GetOrCreatePatternRegex(pattern, forPaths, ignoreCase);
         return regex.IsMatch(input);
     }
 
-    private Regex GetOrCreatePatternRegex(string pattern, bool forPaths)
+    // Windows and macOS open "SRC" and "src" as one name; elsewhere they are two, and an allow for one is not an allow for
+    // the other. A rule that asks or refuses ignores case everywhere, which can only be the stricter reading.
+    private static bool IgnoresCase(PermissionRule rule, bool forPaths) =>
+        !forPaths || rule.Action != PermissionAction.Allow || OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+
+    private Regex GetOrCreatePatternRegex(string pattern, bool forPaths, bool ignoreCase)
     {
         // The evaluator is asked from the tools' own bodies now (a read filter), possibly from several calls at once.
         // "." crosses line breaks, so a rule still speaks about a command of several lines or a name that holds one.
-        return _patternCache.GetOrAdd((pattern, forPaths), static key => new Regex(
+        return _patternCache.GetOrAdd((pattern, forPaths, ignoreCase), static key => new Regex(
             GlobToRegex(key.Pattern, key.ForPaths),
-            RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline));
+            (key.IgnoreCase ? RegexOptions.IgnoreCase : RegexOptions.None) | RegexOptions.Compiled | RegexOptions.Singleline));
     }
 
     /// <summary>
