@@ -715,6 +715,9 @@ there `*`, `**` and `**/` stand for any text and `?` for any one character, `/`,
 `rm -rf /tmp/x` and a `*` deny also refuses a tool named `fs/read`. A rule is matched from the start of the text: `rm *`
 says nothing about `echo done && rm x`.
 
+Write path patterns with `/`; a lone `\` in a path pattern matches no path. On Windows a path may be written with `/` or `\`. On Linux and macOS a `\` is part of a name,
+as it is for the file tools: `sub\x` is one file beside the folder `sub`, so a rule about `sub/**` does not cover it.
+
 A rule is matched against the file a path opens: `..`, Windows device prefixes (`\\?\C:\`, `\\.\C:\`, `\??\C:\`) and
 NTFS stream names (`dir::$INDEX_ALLOCATION`) are resolved first. Some names cannot be resolved to a drive path - a network
 share of a local folder (`\\localhost\C$`), a volume or `GLOBALROOT` name: no `Read` or `Edit` rule speaks about them, so

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
+## [Unreleased]
+
+### Fixed
+- **Breaking by observation: on Linux and macOS, a `\` in a path is part of a file name for the permission rules, as it is for the file tools.** The rules read `\` as a folder separator on every system, while the tools open it as a character of a name. With an `Edit` rule that allowed `sub/**` and refused the rest, a write to `sub\planted.txt` was allowed and created a file of that name beside the folder `sub`, outside it; reading it was allowed the same way, an `ask` rule on `**/secret*` did not cover a file named `secret\x`, and an `ExternalDirectory` allow admitted such a name outside the folder it allowed. A path is now judged as the file the tool opens, and in a path pattern `*`, `?` and `**/` treat only `/` as the separator, so `sub/*` also covers a file in `sub` whose name holds a `\`. The other side of the same change: a `deny` or `ask` about a folder no longer reaches a file whose name only looks as if it were inside it (a file named `secrets\key` is not in `secrets`). A lone `\` in a path pattern matches no path, as before - write patterns with `/`. Migration: where a path with `\` on Linux or macOS was meant to name a folder, write it with `/`. Windows is unchanged.
+
 ## [0.85.0] - 2026-11-26
 
 ### Added

@@ -171,8 +171,12 @@ public class PermissionEvaluator : IPermissionEvaluator
             || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             || Path.IsPathRooted(relative);
 
-        return (relative.Replace('\\', '/'), full.Replace('\\', '/'), isExternal);
+        return (InRuleSpelling(relative), InRuleSpelling(full), isExternal);
     }
+
+    // Path rules separate names with '/'. Only Windows opens a backslash as a separator; elsewhere it is a character of a
+    // name, so "sub\x" is one file next to the folder "sub" and a rule about that folder does not speak about it.
+    private static string InRuleSpelling(string path) => OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path;
 
     // The file a name opens, in one spelling. On Windows one file has many: normalization comes first, because
     // "\\.\.\C:\x" and "\\.\Z:\..\C:\x" only show their drive once normalized; then the device prefix goes, and what it
@@ -383,7 +387,7 @@ public class PermissionEvaluator : IPermissionEvaluator
                             i++;
                             // In a path, "**/" before a name is any number of whole folders, none included: what follows
                             // starts a name. A pattern that ends in "**/" covers everything under what precedes it.
-                            result.Append(forPaths && i + 1 < pattern.Length ? "(?:.*[/\\\\])?" : ".*");
+                            result.Append(forPaths && i + 1 < pattern.Length ? "(?:.*/)?" : ".*");
                         }
                         else
                         {
@@ -393,14 +397,20 @@ public class PermissionEvaluator : IPermissionEvaluator
                     }
                     else
                     {
-                        // in a path, * matches anything except separators
-                        result.Append(forPaths ? "[^/\\\\]*" : ".*");
+                        // in a path, * matches anything except the separator (a path arrives with its separators as '/')
+                        result.Append(forPaths ? "[^/]*" : ".*");
                     }
                     break;
 
                 case '?':
                     // in a path, ? matches any single character except a separator
-                    result.Append(forPaths ? "[^/\\\\]" : ".");
+                    result.Append(forPaths ? "[^/]" : ".");
+                    break;
+
+                case '\\' when forPaths:
+                    // Path patterns separate names with '/'. A lone '\' matches no path, on any system: it must not turn a
+                    // rule about "sub\**" into one about names that merely look as if they were in "sub".
+                    result.Append("(?!)");
                     break;
 
                 case '.':
@@ -438,7 +448,6 @@ public class PermissionEvaluator : IPermissionEvaluator
             return string.Empty;
         }
 
-        // Normalize path separators to forward slashes for consistent matching
-        return path.Replace('\\', '/').TrimStart('/');
+        return InRuleSpelling(path).TrimStart('/');
     }
 }
