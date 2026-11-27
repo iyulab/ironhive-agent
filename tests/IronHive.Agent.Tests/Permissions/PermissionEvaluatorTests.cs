@@ -122,6 +122,9 @@ public class PermissionEvaluatorTests
     [InlineData("src\\nested\\file.cs", "src/**/file.cs")]
     public void PathSeparators_WindowsAndUnixAreEquivalent(string path, string pattern)
     {
+        // Only Windows opens a backslash as a separator; elsewhere it is part of a file name.
+        Assert.SkipUnless(OperatingSystem.IsWindows() || !path.Contains('\\'), "A backslash separates names on Windows only.");
+
         // Arrange
         var config = new PermissionConfig
         {

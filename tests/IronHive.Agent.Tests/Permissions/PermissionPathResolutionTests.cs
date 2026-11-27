@@ -46,7 +46,8 @@ public class PermissionPathResolutionTests
             "src/a.cs",
             "./src/a.cs",
             "docs/../src/a.cs",
-            "src\\a.cs",
+            // Only Windows opens a backslash as a separator; elsewhere "src\\a.cs" names another file.
+            OperatingSystem.IsWindows() ? "src\\a.cs" : "src/./a.cs",
             Path.Combine(Root, "src", "a.cs"),
         };
 
