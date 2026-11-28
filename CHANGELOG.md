@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0, a minor release may contain
 breaking changes, and each one is marked **Breaking** with a migration note.
 
-## [Unreleased]
+## [0.86.0] - 2026-11-28
 
 ### Fixed
 - **Breaking by observation: on Linux, an `allow` path rule matches letter case exactly.** Path rules ignored case on every system, while `SRC` and `src` are two folders there: an allow for `src/**` admitted a write to `SRC/planted.txt`, which created that other folder, and an `ExternalDirectory` allow did the same outside the working directory. `ask` and `deny` path rules keep ignoring case (the stricter reading), command and tool-name rules are unchanged, and Windows and macOS judge as before (a case-sensitive macOS volume is not detected). Migration: where an allow rule on Linux was meant to cover another spelling, write that spelling.
