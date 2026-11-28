@@ -78,6 +78,23 @@ public sealed class BackslashInNameTests : IDisposable
         OnlySub(allowed).EvaluateEdit("""sub/ab\cd""").Action.Should().Be(PermissionAction.Allow);
     }
 
+    // "**/" stands for whole folders. A backslash does not end one, so a name that holds it is not "file.cs" in a folder.
+    [Fact]
+    public void Whole_folders_in_a_pattern_end_at_a_slash_only()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), NotOnWindows);
+        var evaluator = new PermissionEvaluator(new PermissionConfig
+        {
+            WorkingDirectory = _root,
+            Read = [new PermissionRule { Pattern = "src/**/file.cs", Action = PermissionAction.Allow }],
+            DefaultAction = PermissionAction.Deny,
+        });
+
+        // The positive control: a file really named "file.cs" in a folder under "src".
+        evaluator.EvaluateRead("src/a/file.cs").Action.Should().Be(PermissionAction.Allow);
+        evaluator.EvaluateRead("""src/evil\file.cs""").Action.Should().Be(PermissionAction.Deny);
+    }
+
     // A rule written with backslashes never spoke about a path in "sub", and must not start to speak about the names that
     // only look as if they were there.
     [Theory]
